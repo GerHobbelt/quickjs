@@ -1,0 +1,30 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/wangweipeng/quickjs/example/example.c
+../quickjs/quickjs-libc.h
+/Users/wangweipeng/quickjs/quickjs/quickjs-libc.h
+
+/Users/wangweipeng/quickjs/main.c
+example/example.c
+/Users/wangweipeng/quickjs/example/example.c
+
+/Users/wangweipeng/quickjs/quickjs/quickjs-libc.h
+stdio.h
+-
+stdlib.h
+-
+quickjs.h
+/Users/wangweipeng/quickjs/quickjs/quickjs.h
+
+/Users/wangweipeng/quickjs/quickjs/quickjs.h
+stdio.h
+-
+stdint.h
+-
+

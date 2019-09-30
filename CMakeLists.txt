@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(quickjspp)
+project(quickjs)
 
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -9,8 +9,5 @@ if(CMAKE_COMPILER_IS_GNUCC)
 endif()
 
 add_subdirectory(quickjs)
-add_executable(qjs qjs.cpp)
+add_executable(qjs main.c)
 target_link_libraries(qjs quickjs)
-
-enable_testing()
-add_subdirectory(test)
