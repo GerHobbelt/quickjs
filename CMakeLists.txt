@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.8)
 project(quickjs)
 
 set(CMAKE_CXX_STANDARD 17)
-#set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 if(CMAKE_COMPILER_IS_GNUCC)
     add_compile_options(-Wall -Wno-unused-parameter)
