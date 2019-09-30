@@ -1,7 +1,0 @@
-/Users/wangweipeng/quickjs/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/Users/wangweipeng/quickjs/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/wangweipeng/quickjs/cmake-build-debug/CMakeFiles/qjs.dir
-/Users/wangweipeng/quickjs/cmake-build-debug/quickjs/CMakeFiles/rebuild_cache.dir
-/Users/wangweipeng/quickjs/cmake-build-debug/quickjs/CMakeFiles/edit_cache.dir
-/Users/wangweipeng/quickjs/cmake-build-debug/quickjs/CMakeFiles/quickjs-dumpleaks.dir
-/Users/wangweipeng/quickjs/cmake-build-debug/quickjs/CMakeFiles/quickjs.dir

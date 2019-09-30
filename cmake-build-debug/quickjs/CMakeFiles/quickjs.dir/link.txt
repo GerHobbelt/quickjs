@@ -1,2 +1,0 @@
-/usr/bin/ar qc libquickjs.a  CMakeFiles/quickjs.dir/quickjs.c.o CMakeFiles/quickjs.dir/libunicode.c.o CMakeFiles/quickjs.dir/libregexp.c.o CMakeFiles/quickjs.dir/cutils.c.o CMakeFiles/quickjs.dir/quickjs-libc.c.o CMakeFiles/quickjs.dir/libbf.c.o
-/usr/bin/ranlib libquickjs.a

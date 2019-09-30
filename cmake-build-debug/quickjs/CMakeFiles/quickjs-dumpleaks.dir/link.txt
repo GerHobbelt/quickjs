@@ -1,2 +1,0 @@
-/usr/bin/ar qc libquickjs-dumpleaks.a  CMakeFiles/quickjs-dumpleaks.dir/quickjs.c.o CMakeFiles/quickjs-dumpleaks.dir/libunicode.c.o CMakeFiles/quickjs-dumpleaks.dir/libregexp.c.o CMakeFiles/quickjs-dumpleaks.dir/cutils.c.o CMakeFiles/quickjs-dumpleaks.dir/quickjs-libc.c.o CMakeFiles/quickjs-dumpleaks.dir/libbf.c.o
-/usr/bin/ranlib libquickjs-dumpleaks.a
