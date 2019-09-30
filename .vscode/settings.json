@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "quickjs-libc.h": "c",
-        "signal.h": "c",
-        "time.h": "c",
-        "c_api_example.h": "c",
-        "cmath": "c"
-    }
-}
