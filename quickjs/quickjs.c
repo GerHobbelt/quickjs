@@ -4153,8 +4153,8 @@ static int add_shape_property(JSContext *ctx, JSShape **psh,
 
     /* update the shape hash */
     if (sh->is_hashed) {
-        js_shape_hash_unlink(rt, sh);
-        new_shape_hash = shape_hash(shape_hash(sh->hash, atom), prop_flags);
+        js_shape_hash_unlink(rt, sh); //先把hash的链表解除
+        new_shape_hash = shape_hash(shape_hash(sh->hash, atom), prop_flags); //求一个新的哈希值
     }
 
     if (unlikely(sh->prop_count >= sh->prop_size)) {
@@ -4169,6 +4169,7 @@ static int add_shape_property(JSContext *ctx, JSShape **psh,
     }
     if (sh->is_hashed) {
         sh->hash = new_shape_hash;
+        //重新把哈希值插入
         js_shape_hash_link(rt, sh);
     }
     /* Initialize the new shape property.
