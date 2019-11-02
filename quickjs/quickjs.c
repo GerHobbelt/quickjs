@@ -18662,8 +18662,8 @@ typedef struct JSFunctionDef {
     int home_object_var_idx;
     BOOL need_home_object;
     
-    int scope_level;    /* index into fd->scopes if the current lexical scope */
-    int scope_first;    /* index into vd->vars of first lexically scoped variable */
+    int scope_level;    /* index into fd->scopes if the current lexical scope 编译器当前所在的socpe的索引 */
+    int scope_first;    /* index into vd->vars of first lexically scoped variable 当前scope的变量所在的索引 */
     int scope_size;     /* allocated size of fd->scopes array */
     int scope_count;    /* number of entries used in the fd->scopes array */
     JSVarScope *scopes;
