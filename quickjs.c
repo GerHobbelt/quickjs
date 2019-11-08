@@ -22,6 +22,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include "config.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -53420,6 +53423,28 @@ JSValue js_debugger_build_backtrace(JSContext *ctx, const uint8_t *cur_pc)
     return ret;
 }
 
+char* normalize_filename( const char* filename ) {
+	static char _filename[512];
+	char* pf = _filename;
+
+	while( *filename ) {
+		if( *filename=='\\' || *filename=='/' ) {
+			*pf++ = '\\';
+			*pf++ = '\\';
+
+			while( *filename=='\\' || *filename=='/' ) {
+				filename++;
+			}
+		}
+		else {
+			*pf++ = *filename++;
+		}
+	}
+
+	*pf = 0;
+	return _filename;
+}
+
 int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty, const uint8_t *cur_pc) {
     JSValue path_data = JS_UNDEFINED;
     if (!ctx->rt->current_stack_frame)
@@ -53439,7 +53464,9 @@ int js_debugger_check_breakpoint(JSContext *ctx, uint32_t current_dirty, const u
     uint32_t dirty = b->debugger.dirty;
     b->debugger.dirty = current_dirty;
 
-    const char *filename = JS_AtomToCString(ctx, b->debug.filename);
+    const char *_filename = JS_AtomToCString(ctx, b->debug.filename);
+    const char* filename = normalize_filename( _filename );
+
     path_data = js_debugger_file_breakpoints(ctx, filename);
     JS_FreeCString(ctx, filename);
     if (JS_IsUndefined(path_data))
