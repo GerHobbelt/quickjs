@@ -32246,6 +32246,7 @@ static void skip_shebang(JSParseState *s)
 }
 
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
+// js_eval -> js_eval_internal -> __JS_EvalInternal
 static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
                                  const char *input, size_t input_len,
                                  const char *filename, int flags, int scope_idx)
@@ -32258,7 +32259,9 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
     JSFunctionBytecode *b;
     JSFunctionDef *fd;
     JSModuleDef *m;
+    
 
+    // 初始化了 s
     js_parse_init(ctx, s, input, input_len, filename);
     skip_shebang(s);
 
@@ -32293,10 +32296,11 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
             js_mode |= JS_MODE_STRICT;
         }
     }
+    // 创建了 JSFunctionDef
     fd = js_new_function_def(ctx, NULL, TRUE, FALSE, filename, 1);
     if (!fd)
         goto fail1;
-    s->cur_func = fd;
+    s->cur_func = fd; // JSParseState 是 JSFunctionDef 的 父层级
     fd->eval_type = eval_type;
     fd->has_this_binding = (eval_type != JS_EVAL_TYPE_DIRECT);
     fd->backtrace_barrier = ((flags & JS_EVAL_FLAG_BACKTRACE_BARRIER) != 0);
@@ -32312,7 +32316,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
         fd->arguments_allowed = TRUE;
     }
     fd->js_mode = js_mode;
-    fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
+    fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_); // fd 赋值， 函数名
     if (b) {
         if (add_closure_variables(ctx, fd, b, scope_idx))
             goto fail;
@@ -32323,6 +32327,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
 
     push_scope(s); /* body scope */
 
+    // 这里应该是解析函数的核心
     err = js_parse_program(s);
     if (err) {
     fail:
@@ -32356,6 +32361,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
 }
 
 /* the indirection is needed to make 'eval' optional */
+// 需要使用间接来使“eval”为可选. 这是一个static内部函数
 static JSValue JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
                                const char *input, size_t input_len,
                                const char *filename, int flags, int scope_idx)
@@ -32385,6 +32391,7 @@ static JSValue JS_EvalObject(JSContext *ctx, JSValueConst this_obj,
 
 }
 
+// 执行代码入口 参数input是代码内容. JS_Eval是一个接口函数，因为没有static
 JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
                 const char *filename, int eval_flags)
 {
@@ -51922,7 +51929,7 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
     JSVarRef **var_refs;
     JSFunctionBytecode *b;
     JSFunctionDef *fd;
-
+    // 初始化 s
     js_parse_init(ctx, s, input, input_len, filename);
     skip_shebang(s);
 
@@ -51935,10 +51942,11 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
     var_refs = p->u.func.var_refs;
     js_mode = b->js_mode;
 
+    // 获取了一个新的 JSFunctionDef
     fd = js_new_function_def(ctx, NULL, TRUE, FALSE, filename, 1);
     if (!fd)
         goto fail1;
-    s->cur_func = fd;
+    s->cur_func = fd; // s 作为 JSFunctionDef 的父层级
     fd->eval_type = JS_EVAL_TYPE_DIRECT;
     fd->has_this_binding = 0;
     fd->new_target_allowed = b->new_target_allowed;
