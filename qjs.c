@@ -310,6 +310,8 @@ int main(int argc, char **argv)
     
     /* cannot use getopt because we want to pass the command line to
        the script */
+    // 无法使用getopt , 因为我们要把命令传递给脚本
+    // 参数解析
     optind = 1;
     while (optind < argc && *argv[optind] == '-') {
         char *arg = argv[optind] + 1;
@@ -431,13 +433,16 @@ int main(int argc, char **argv)
 #endif
     
     /* loader for ES6 modules */
+    // 加载系统模块
     JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 
+    // 
     if (dump_unhandled_promise_rejection) {
         JS_SetHostPromiseRejectionTracker(rt, js_std_promise_rejection_tracker,
                                           NULL);
     }
     
+    // 执行文件，执行代码段[核心部分]
     if (!empty_run) {
 #ifdef CONFIG_BIGNUM
         if (load_jscalc) {
@@ -447,10 +452,12 @@ int main(int argc, char **argv)
         js_std_add_helpers(ctx, argc - optind, argv + optind);
 
         /* system modules */
+        // 加载系统库 std , os
         js_init_module_std(ctx, "std");
         js_init_module_os(ctx, "os");
 
         /* make 'std' and 'os' visible to non module code */
+        // 加载std和os
         if (load_std) {
             const char *str = "import * as std from 'std';\n"
                 "import * as os from 'os';\n"
@@ -478,6 +485,7 @@ int main(int argc, char **argv)
         js_std_loop(ctx);
     }
     
+    // 释放内存
     if (dump_memory) {
         JSMemoryUsage stats;
         JS_ComputeMemoryUsage(rt, &stats);
