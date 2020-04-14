@@ -19130,7 +19130,7 @@ static JSValue js_async_generator_function_call(JSContext *ctx, JSValueConst fun
 }
 
 /* JS parser */
-
+// token列表，分清楚token和opcode
 enum {
     TOK_NUMBER = -128,
     TOK_STRING,
@@ -19923,6 +19923,7 @@ static __exception int js_parse_regexp(JSParseState *s)
     return -1;
 }
 
+// 没想到这个函数这么大，分清token和opcode
 static __exception int next_token(JSParseState *s)
 {
     const uint8_t *p;
@@ -31445,6 +31446,7 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
     }
 }
 
+// 解析指令
 static __exception int js_parse_directives(JSParseState *s)
 {
     char str[20];
@@ -31461,7 +31463,7 @@ static __exception int js_parse_directives(JSParseState *s)
         snprintf(str, sizeof str, "%.*s",
                  (int)(s->buf_ptr - s->token.ptr - 2), s->token.ptr + 1);
 
-        if (next_token(s))
+        if (next_token(s))//next
             return -1;
 
         has_semi = FALSE;
@@ -32133,6 +32135,7 @@ static __exception int js_parse_function_decl(JSParseState *s,
                                    NULL);
 }
 
+// 运行函数 JSParseState
 static __exception int js_parse_program(JSParseState *s)
 {
     JSFunctionDef *fd = s->cur_func;
@@ -32141,6 +32144,7 @@ static __exception int js_parse_program(JSParseState *s)
     if (next_token(s))
         return -1;
 
+    // 这里是核心，解析指令
     if (js_parse_directives(s))
         return -1;
 
