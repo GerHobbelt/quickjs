@@ -1,3 +1,3 @@
-rm -rf .obj
+make clean
 make libquickjs.so
 
