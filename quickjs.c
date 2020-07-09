@@ -22553,6 +22553,15 @@ static __exception int js_parse_object_literal(JSParseState *s)
     return -1;
 }
 
+static __exception int js_parse_optional_type(JSParseState *s)
+{
+    if (s->token.val == ':') { /*function return type*/
+        if (next_token(s) || js_parse_expect(s, TOK_IDENT))
+            return -1;
+    }
+    return 0;
+}
+
 static __exception int js_parse_postfix_expr(JSParseState *s,
                                              BOOL accept_lparen);
 
@@ -22962,6 +22971,9 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
                 emit_atom(s, name);
                 emit_u16(s, s->cur_func->scope_level);
             }
+
+            if (js_parse_optional_type(s))
+                goto fail;
 
             if (s->token.val == '=') {
                 if (next_token(s))
@@ -25572,7 +25584,7 @@ static __exception int js_parse_var(JSParseState *s, BOOL in_accepted, int tok,
                 js_parse_error(s, "'let' is not a valid lexical identifier");
                 goto var_error;
             }
-            if (next_token(s))
+            if (next_token(s) || js_parse_optional_type(s))
                 goto var_error;
             if (js_define_var(s, name, tok))
                 goto var_error;
@@ -27985,6 +27997,20 @@ static __exception JSAtom js_parse_from_clause(JSParseState *s)
     return module_name;
 }
 
+static __exception int js_parse_export_type(JSParseState *s)
+{
+    if (s->token.val == TOK_IDENT && s->token.u.ident.atom == JS_ATOM_type) {
+        if(next_token(s)
+                || js_parse_expect(s, TOK_IDENT)
+                || js_parse_expect(s, '=')
+                || js_parse_expect(s, TOK_IDENT)
+                || js_parse_expect_semi(s))
+            return -1;
+        return 1;
+    }
+    return 0;
+}
+
 static __exception int js_parse_export(JSParseState *s)
 {
     JSContext *ctx = s->ctx;
@@ -27996,6 +28022,10 @@ static __exception int js_parse_export(JSParseState *s)
 
     if (next_token(s))
         return -1;
+
+    i = js_parse_export_type(s);
+    if (i < 0) return i;
+    if (i > 0) return 0; 
 
     tok = s->token.val;
     if (tok == TOK_CLASS) {
@@ -28318,6 +28348,10 @@ static __exception int js_parse_source_element(JSParseState *s)
     } else if (s->token.val == TOK_EXPORT && fd->module) {
         if (js_parse_export(s))
             return -1;
+    } else if (s->token.val == TOK_EXPORT) {
+        tok = js_parse_export_type(s);
+        if (tok < 0) return tok;
+        return 0; 
     } else if (s->token.val == TOK_IMPORT && fd->module &&
                ((tok = peek_token(s, FALSE)) != '(' && tok != '.'))  {
         /* the peek_token is needed to avoid confusion with ImportCall
@@ -32633,7 +32667,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                 idx = add_arg(ctx, fd, name);
                 if (idx < 0)
                     goto fail;
-                if (next_token(s))
+                if (next_token(s) || js_parse_optional_type(s))
                     goto fail;
                 if (rest) {
                     emit_op(s, OP_rest);
@@ -32723,7 +32757,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
         }
     }
 
-    if (next_token(s))
+    if (next_token(s) || js_parse_optional_type(s))
         goto fail;
 
     /* generator function: yield after the parameters are evaluated */

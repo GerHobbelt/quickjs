@@ -168,6 +168,7 @@ DEF(groups, "groups")
 DEF(status, "status")
 DEF(reason, "reason")
 DEF(globalThis, "globalThis")
+DEF(type, "type") /*for pseudo typescript export type*/
 #ifdef CONFIG_BIGNUM
 DEF(bigint, "bigint")
 DEF(bigfloat, "bigfloat")
