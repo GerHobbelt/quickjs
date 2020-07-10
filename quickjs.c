@@ -28351,7 +28351,9 @@ static __exception int js_parse_source_element(JSParseState *s)
     } else if (s->token.val == TOK_EXPORT) {
         tok = js_parse_export_type(s);
         if (tok < 0) return tok;
-        return 0; 
+        if (tok > 0) return 0;
+        js_parse_error(s, "identifier 'type' expected");
+        return -1;
     } else if (s->token.val == TOK_IMPORT && fd->module &&
                ((tok = peek_token(s, FALSE)) != '(' && tok != '.'))  {
         /* the peek_token is needed to avoid confusion with ImportCall
