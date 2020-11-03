@@ -1,0 +1,2 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc libquickjs.a  CMakeFiles/quickjs.dir/quickjs.c.o CMakeFiles/quickjs.dir/libunicode.c.o CMakeFiles/quickjs.dir/libregexp.c.o CMakeFiles/quickjs.dir/cutils.c.o CMakeFiles/quickjs.dir/quickjs-libc.c.o CMakeFiles/quickjs.dir/libbf.c.o
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib libquickjs.a

@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="quickjs"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;CMake Files\quickjs\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="rebuild_cache">
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="qjs">
+				<Option output="/Users/mac/Documents/debug-quickjs/quickjs/qjs" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 qjs"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="qjs/fast">
+				<Option output="/Users/mac/Documents/debug-quickjs/quickjs/qjs" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 qjs/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="quickjs-dumpleaks">
+				<Option output="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libquickjs-dumpleaks.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs/quickjs"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCONFIG_VERSION=&quot;2019-09-18&quot;"/>
+					<Add option="-D_GNU_SOURCE"/>
+					<Add option="-DCONFIG_BIGNUM"/>
+					<Add option="-DDUMP_LEAKS=1"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 quickjs-dumpleaks"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="quickjs-dumpleaks/fast">
+				<Option output="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libquickjs-dumpleaks.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs/quickjs"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCONFIG_VERSION=&quot;2019-09-18&quot;"/>
+					<Add option="-D_GNU_SOURCE"/>
+					<Add option="-DCONFIG_BIGNUM"/>
+					<Add option="-DDUMP_LEAKS=1"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 quickjs-dumpleaks/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="quickjs">
+				<Option output="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libquickjs.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs/quickjs"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCONFIG_VERSION=&quot;2019-09-18&quot;"/>
+					<Add option="-D_GNU_SOURCE"/>
+					<Add option="-DCONFIG_BIGNUM"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 quickjs"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="quickjs/fast">
+				<Option output="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libquickjs.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/mac/Documents/debug-quickjs/quickjs/quickjs"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCONFIG_VERSION=&quot;2019-09-18&quot;"/>
+					<Add option="-D_GNU_SOURCE"/>
+					<Add option="-DCONFIG_BIGNUM"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 quickjs/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/Users/mac/Documents/debug-quickjs/quickjs/quickjs/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/main.c">
+			<Option target="qjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/cutils.c">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/cutils.h">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libbf.c">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libbf.h">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libregexp.c">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libregexp.h">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libunicode.c">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/libunicode.h">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/quickjs-libc.c">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/quickjs-libc.h">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/quickjs.c">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/quickjs.h">
+			<Option target="quickjs-dumpleaks"/>
+			<Option target="quickjs"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/Users/mac/Documents/debug-quickjs/quickjs/quickjs/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\quickjs\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>
