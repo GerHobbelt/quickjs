@@ -2339,8 +2339,7 @@ static JSAtom js_get_atom_index(JSRuntime *rt, JSAtomStruct *p)
     return i;
 }
 
-/* string case (internal). Return JS_ATOM_NULL if error. 'str' is
-   freed. */
+// 根据str生成atom，然后free掉str string case (internal). Return JS_ATOM_NULL if error. 'str' is freed.
 static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
 {
     uint32_t h, h1, i;
@@ -2501,9 +2500,11 @@ static JSAtom __JS_NewAtomInit(JSRuntime *rt, const char *str, int len,
                                int atom_type)
 {
     JSString *p;
+    // 分配JSString空间
     p = js_alloc_string_rt(rt, len, 0);
     if (!p)
         return JS_ATOM_NULL;
+    // 初始化string
     memcpy(p->u.str8, str, len);
     p->u.str8[len] = '\0';
     return __JS_NewAtom(rt, p, atom_type);
@@ -2607,6 +2608,7 @@ JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len)
 {
     JSValue val;
 
+    // 查找atom，如果就直接返回
     if (len == 0 || !is_digit(*str)) {
         JSAtom atom = __JS_FindAtom(ctx->rt, str, len, JS_ATOM_TYPE_STRING);
         if (atom)
@@ -3513,7 +3515,7 @@ static JSValue string_buffer_end(StringBuffer *s)
     return JS_MKPTR(JS_TAG_STRING, str);
 }
 
-/* create a string from a UTF-8 buffer */
+// 从buffer创建一个JSValue, JSValue在这里是string类型 * create a string from a UTF-8 buffer */
 JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
 {
     const uint8_t *p, *p_end, *p_start, *p_next;
@@ -3533,6 +3535,7 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
         /* ASCII string */
         return js_new_string8(ctx, (const uint8_t *)buf, buf_len);
     } else {
+        // 非ASCII字符串
         if (string_buffer_init(ctx, b, buf_len))
             goto fail;
         string_buffer_write8(b, p_start, len1);
@@ -19252,6 +19255,7 @@ static __exception int js_parse_regexp(JSParseState *s)
     return -1;
 }
 
+// 词法分析
 static __exception int next_token(JSParseState *s)
 {
     const uint8_t *p;
@@ -19384,6 +19388,7 @@ static __exception int next_token(JSParseState *s)
             }
         }
         goto def_token;
+    //解析标识符
     case 'a' ... 'z':
     case 'A' ... 'Z':
     case '_':
@@ -19393,15 +19398,17 @@ static __exception int next_token(JSParseState *s)
         ident_has_escape = FALSE;
     has_ident:
         q = buf;
+        // 通过循将标识符放入buf中，buf大小为4096，所以标识符最多占4096个字节
         for(;;) {
             const uint8_t *p1 = p;
-
+            // ascii码
             if (c < 128) {
                 *q++ = c;
             } else {
                 q += unicode_to_utf8((uint8_t*)q, c);
             }
             c = *p1++;
+            // \u unicode编码
             if (c == '\\' && *p1 == 'u') {
                 c = lre_parse_escape(&p1, TRUE);
                 ident_has_escape = TRUE;
@@ -19418,6 +19425,8 @@ static __exception int next_token(JSParseState *s)
             }
         }
         *q = '\0';
+        // ident指identifier
+        // 生成标识符对应的atom
         s->token.u.ident.atom = JS_NewAtomLen(s->ctx, buf, q - buf);
         s->token.u.ident.has_escape = ident_has_escape;
         s->token.u.ident.is_reserved = FALSE;
@@ -19440,7 +19449,7 @@ static __exception int next_token(JSParseState *s)
                       s->token.u.ident.is_reserved = TRUE;
                       s->token.val = TOK_IDENT;
                   } else {
-                      /* The keywords atoms are pre allocated */
+                      // 关键字 The keywords atoms are pre allocated */
                       s->token.val = s->token.u.ident.atom - 1 + TOK_FIRST_KEYWORD;
                   }
         } else {
@@ -30739,6 +30748,7 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
     js_free_rt(rt, b);
 }
 
+// 不懂
 static __exception int js_parse_directives(JSParseState *s)
 {
     char str[20];
@@ -30931,6 +30941,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     BOOL has_opt_arg;
     BOOL create_func_var = FALSE;
 
+    // 是否是函数表达是 let add = function() {}
     is_expr = (func_type != JS_PARSE_FUNC_STATEMENT &&
                func_type != JS_PARSE_FUNC_VAR);
 
@@ -30944,6 +30955,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                 return -1;
             func_kind = JS_FUNC_ASYNC;
         }
+        // 获取函数名
         if (next_token(s))
             return -1;
         if (s->token.val == '*') {
@@ -30952,6 +30964,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
             func_kind |= JS_FUNC_GENERATOR;
         }
 
+        // todo
         if (s->token.val == TOK_IDENT) {
             if (s->token.u.ident.is_reserved ||
                 (s->token.u.ident.atom == JS_ATOM_yield &&
@@ -30963,6 +30976,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                 return js_parse_error_reserved_identifier(s);
             }
         }
+
         if (s->token.val == TOK_IDENT ||
             (((s->token.val == TOK_YIELD && !(fd->js_mode & JS_MODE_STRICT)) ||
              (s->token.val == TOK_AWAIT && !s->is_module)) &&
@@ -30982,6 +30996,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
         func_name = JS_DupAtom(ctx, func_name);
     }
 
+    // todo
     if (fd->is_eval && fd->eval_type == JS_EVAL_TYPE_MODULE &&
         (func_type == JS_PARSE_FUNC_STATEMENT || func_type == JS_PARSE_FUNC_VAR)) {
         JSHoistedDef *hf;
@@ -30994,6 +31009,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
         }
     }
 
+    // todo
     if (func_type == JS_PARSE_FUNC_VAR) {
         /* Create lexical name here so function closure contains it */
         if (!(fd->js_mode & JS_MODE_STRICT)
@@ -31037,23 +31053,30 @@ static __exception int js_parse_function_decl2(JSParseState *s,
         JS_FreeAtom(ctx, func_name);
         return -1;
     }
+    // 是否有父函数
     if (pfd)
         *pfd = fd;
     s->cur_func = fd;
     fd->func_name = func_name;
     /* XXX: test !fd->is_generator is always false */
+    // 是否有prototype
     fd->has_prototype = (func_type == JS_PARSE_FUNC_STATEMENT ||
                          func_type == JS_PARSE_FUNC_VAR ||
                          func_type == JS_PARSE_FUNC_EXPR) &&
                         func_kind == JS_FUNC_NORMAL;
+    // 是否是class中的方法
     fd->has_home_object = (func_type == JS_PARSE_FUNC_METHOD ||
                            func_type == JS_PARSE_FUNC_GETTER ||
                            func_type == JS_PARSE_FUNC_SETTER ||
                            func_type == JS_PARSE_FUNC_CLASS_CONSTRUCTOR ||
                            func_type == JS_PARSE_FUNC_DERIVED_CLASS_CONSTRUCTOR);
+    // 是否可以用argumnets,箭头函数没有arguments
     fd->has_arguments_binding = (func_type != JS_PARSE_FUNC_ARROW);
+    // 是否bind this
     fd->has_this_binding = fd->has_arguments_binding;
+    // 是否是子类的构造函数
     fd->is_derived_class_constructor = (func_type == JS_PARSE_FUNC_DERIVED_CLASS_CONSTRUCTOR);
+    // 是否是箭头函数
     if (func_type == JS_PARSE_FUNC_ARROW) {
         fd->new_target_allowed = fd->parent->new_target_allowed;
         fd->super_call_allowed = fd->parent->super_call_allowed;
@@ -31072,20 +31095,24 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     fd->func_kind = func_kind;
     fd->func_type = func_type;
 
+    // todo
     if (func_type == JS_PARSE_FUNC_CLASS_CONSTRUCTOR ||
         func_type == JS_PARSE_FUNC_DERIVED_CLASS_CONSTRUCTOR) {
         /* error if not invoked as a constructor */
         emit_op(s, OP_check_ctor);
     }
 
+    // todo
     if (func_type == JS_PARSE_FUNC_CLASS_CONSTRUCTOR) {
         emit_class_field_init(s);
     }
     
     /* parse arguments */
+    // 简单的arguments，不包含对象析构，[] , {}
     fd->has_simple_parameter_list = TRUE;
     has_opt_arg = FALSE;
     if (func_type == JS_PARSE_FUNC_ARROW && s->token.val == TOK_IDENT) {
+        // todo
         JSAtom name;
         if (s->token.u.ident.is_reserved) {
             js_parse_error_reserved_identifier(s);
@@ -31099,11 +31126,13 @@ static __exception int js_parse_function_decl2(JSParseState *s,
         if (js_parse_expect(s, '('))
             goto fail;
 
+        // 解析参数
         while (s->token.val != ')') {
             JSAtom name;
             BOOL rest = FALSE;
             int idx;
 
+            // 省略号 ...
             if (s->token.val == TOK_ELLIPSIS) {
                 fd->has_simple_parameter_list = FALSE;
                 rest = TRUE;
@@ -31130,16 +31159,20 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                    The next pass will generate the capture if required.
                  */
                 emit_op(s, OP_close_var_object);
+            // 标识符
             } else if (s->token.val == TOK_IDENT) {
+                // 保留字
                 if (s->token.u.ident.is_reserved) {
                     js_parse_error_reserved_identifier(s);
                     goto fail;
                 }
                 name = s->token.u.ident.atom;
+                // yield
                 if (name == JS_ATOM_yield && fd->func_kind == JS_FUNC_GENERATOR) {
                     js_parse_error_reserved_identifier(s);
                     goto fail;
                 }
+                // 添加argument
                 idx = add_arg(ctx, fd, name);
                 if (idx < 0)
                     goto fail;
@@ -31248,10 +31281,11 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     fd->in_function_body = TRUE;
     push_scope(s);  /* enter body scope: fd->scope_level = 1 */
 
+    // () => 
     if (s->token.val == TOK_ARROW) {
         if (next_token(s))
             goto fail;
-
+        // () => 或者 () => ()
         if (s->token.val != '{') {
             if (js_parse_function_check_names(s, fd, func_name))
                 goto fail;
@@ -31280,14 +31314,16 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     if (js_parse_expect(s, '{'))
         goto fail;
 
+    // strict mode 或者 strip mode
     if (js_parse_directives(s))
         goto fail;
 
-    /* in strict_mode, check function and argument names */
+    // strict mode 检查function和参数名称  in strict_mode, check function and argument names
     if (js_parse_function_check_names(s, fd, func_name))
         goto fail;
 
     while (s->token.val != '}') {
+        // 解析body
         if (js_parse_source_element(s))
             goto fail;
     }
@@ -31299,6 +31335,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
             goto fail;
     }
 
+    // eat }
     if (next_token(s)) {
         /* consume the '}' */
         goto fail;
@@ -31415,6 +31452,7 @@ done:
     return -1;
 }
 
+// 解析函数声明
 static __exception int js_parse_function_decl(JSParseState *s,
                                               JSParseFunctionEnum func_type,
                                               JSFunctionKindEnum func_kind,
@@ -31427,6 +31465,7 @@ static __exception int js_parse_function_decl(JSParseState *s,
                                    NULL);
 }
 
+// 从代码生成opcode
 static __exception int js_parse_program(JSParseState *s)
 {
     JSFunctionDef *fd = s->cur_func;
