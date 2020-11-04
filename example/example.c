@@ -56,7 +56,7 @@ void run_c_api_main() {
     int eval_flags;
     eval_flags = JS_EVAL_TYPE_GLOBAL;
 
-    const char *jspath = "./example/hello1.js";
+    const char *jspath = "./example/hello.js";
     eval_file(ctx, jspath, eval_flags);
 
     js_std_free_handlers(rt);

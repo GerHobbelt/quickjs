@@ -448,7 +448,9 @@ typedef enum {
 
 typedef struct JSVarDef {
     JSAtom var_name;
+    // 变量所在作用域在scopes中的索引
     int scope_level;   /* index into fd->scopes of this variable lexical scope */
+    // 下一个变量索引
     int scope_next;    /* index into fd->vars of the next variable in the
                         * same or enclosing lexical scope */
     uint8_t is_func_var : 1; /* used for the function self reference */
@@ -18612,54 +18614,82 @@ typedef enum JSParseExportEnum {
 typedef struct JSFunctionDef {
     JSContext *ctx;
     struct JSFunctionDef *parent;
+    // 当前函数在父作用域里面常量的索引，cpool: constant pool
     int parent_cpool_idx; /* index in the constant pool of the parent
                              or -1 if none */
+    // 当前函数所在作用域在父函数的作用域列表中的索引。一个函数会有多个嵌套的块作用域
     int parent_scope_level; /* scope level in parent at point of definition */
+    // 子函数链表
     struct list_head child_list; /* list of JSFunctionDef.link */
     struct list_head link;
 
+    // 当前函数是eval函数定义的
     BOOL is_eval; /* TRUE if eval code */
     int eval_type; /* only valid if is_eval = TRUE */
     BOOL is_global_var; /* TRUE if variables are not defined locally:
                            eval global, eval module or non strict eval */
+    // 是否是函数表达式
     BOOL is_func_expr; /* TRUE if function expression */
+    // 当前函数是否在class内定义，包括get set method constructor等等
     BOOL has_home_object; /* TRUE if the home object is available */
+    // 是否有prototype，只有普通函数有，class内的函数没有
     BOOL has_prototype; /* true if a prototype field is necessary */
     BOOL has_simple_parameter_list;
+    // 是否是强制模式的函数
     BOOL has_use_strict; /* to reject directive in special cases */
+    // 函数里面是否调用过eval
     BOOL has_eval_call; /* true if the function contains a call to eval() */
+    // 是否参数绑定，只有箭头函数才有此属性 bind(obj, arg1, arg2, ...)
     BOOL has_arguments_binding; /* true if the 'arguments' binding is
                                    available in the function */
+    // 函数内的this或者new.target是否能用
     BOOL has_this_binding; /* true if the 'this' and new.target binding are
                               available in the function */
+    // 是否能使用new.target
     BOOL new_target_allowed; /* true if the 'new.target' does not
                                 throw a syntax error */
+    // 是否能使用super，只有类里的函数才能用super
     BOOL super_call_allowed; /* true if super() is allowed */
     BOOL super_allowed; /* true if super. or super[] is allowed */
+    // 是否能使用arguments,箭头函数里不能使用arguments
     BOOL arguments_allowed; /* true if the 'arguments' identifier is allowed */
+    // 函数是否是子类的函数
     BOOL is_derived_class_constructor;
+    // 是否在函数body里面定义, 在参数列表中也可以定义函数
     BOOL in_function_body;
     JSFunctionKindEnum func_kind : 8;
     JSParseFunctionEnum func_type : 8;
     uint8_t js_mode; /* bitmap of JS_MODE_x */
+    // 函数名字
     JSAtom func_name; /* JS_ATOM_NULL if no name */
 
+    // 函数内的变量列表
     JSVarDef *vars;
     int var_size; /* allocated size for vars[] */
     int var_count;
+    // 函数的参数列表
     JSVarDef *args;
     int arg_size; /* allocated size for args[] */
     int arg_count; /* number of arguments */
+    // function的length属性，表示函数参数的长度
     int defined_arg_count;
     int var_object_idx; /* -1 if none */
+    // arguments在vars中的索引
     int arguments_var_idx; /* -1 if none */
+    // 函数名字在vars中的索引
     int func_var_idx; /* variable containing the current function (-1
                          if none, only used if is_func_expr is true) */
+    // 函数返回值在vars中的索引
     int eval_ret_idx; /* variable containing the return value of the eval, -1 if none */
+    // this在vars中的索引
     int this_var_idx; /* variable containg the 'this' value, -1 if none */
+    // new.target在vars中的索引
     int new_target_var_idx; /* variable containg the 'new.target' value, -1 if none */
+    // 当前函数在vars中的索引，在class method中调用super需要拿到当前函数，然后通过当前函数拿到super
     int this_active_func_var_idx; /* variable containg the 'this.active_func' value, -1 if none */
+    // home_object索引
     int home_object_var_idx;
+    // 私有属性需要一个home_object才能正常运行
     BOOL need_home_object;
     
     int scope_level;    /* index into fd->scopes if the current lexical scope 编译器当前所在的socpe的索引 */
@@ -18683,7 +18713,7 @@ typedef struct JSFunctionDef {
     int label_count;
     BlockEnv *top_break; /* break/continue label stack */
 
-    /* constant pool (strings, functions, numbers) */
+    // * constant pool (strings, functions, numbers) */
     JSValue *cpool;
     uint32_t cpool_count;
     uint32_t cpool_size;
@@ -18708,6 +18738,7 @@ typedef struct JSFunctionDef {
     int line_num;
     DynBuf pc2line;
 
+    // 函数源代码
     char *source;  /* raw source, utf-8 encoded */
     int source_len;
 
@@ -30453,20 +30484,28 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     int function_size, byte_code_offset, cpool_offset;
     int closure_var_offset, vardefs_offset;
 
-    /* recompute scope linkage */
+    // 将链表头设置为-1
     for (scope = 0; scope < fd->scope_count; scope++) {
         fd->scopes[scope].first = -1;
     }
     for (idx = 0; idx < fd->var_count; idx++) {
         JSVarDef *vd = &fd->vars[idx];
+        //将scope_next设置为变量作用域头部
         vd->scope_next = fd->scopes[vd->scope_level].first;
+        //将变量放到所属作用域头部
         fd->scopes[vd->scope_level].first = idx;
     }
     for (scope = 2; scope < fd->scope_count; scope++) {
         JSVarScope *sd = &fd->scopes[scope];
+        // 如果作用域头部为-1，表示该作用域没有变量，则将作用域头部域父作用域头部连接，避免作用域链断掉
         if (sd->first == -1)
             sd->first = fd->scopes[sd->parent].first;
     }
+    // 将作用域变量的最后一j加入到其父作用域的头部
+    // 初始化完毕后，作用域和变量的链接即可连接起来
+    // 这样寻找作用域内变量的时候通过作用域的头部访问变量
+    // 然后通过变量的scope_next访问作用域的以及父作用域的变量
+    // 以此从作用域搜索变量。
     for (idx = 0; idx < fd->var_count; idx++) {
         JSVarDef *vd = &fd->vars[idx];
         if (vd->scope_next == -1 && vd->scope_level > 1) {
@@ -30482,13 +30521,13 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     if (fd->has_eval_call)
         add_eval_variables(ctx, fd);
 
-    /* add the module global variables in the closure */
+    // 如果是在module中定义的函数，将module中的函数添加到闭包中
     if (fd->module) {
         if (add_module_variables(ctx, fd))
             goto fail;
     }
 
-    /* first create all the child functions */
+    // 子函数创建
     list_for_each_safe(el, el1, &fd->child_list) {
         JSFunctionDef *fd1;
         int cpool_idx;
@@ -30515,6 +30554,8 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     }
 #endif
 
+    // 此函数的目的是分析当前函数的byte_code，即opcode
+    // 然后根据opcode生成新的opencode赋值给byte_code,为编译器的优化阶段
     if (resolve_variables(ctx, fd))
         goto fail;
 
@@ -30533,6 +30574,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     if (resolve_labels(ctx, fd))
         goto fail;
 
+    //计算函数栈大小
     if (compute_stack_size(ctx, fd, &stack_size) < 0)
         goto fail;
 
@@ -31505,6 +31547,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
     JSParseState s1, *s = &s1;
     int err, js_mode, eval_type;
     JSValue fun_obj, ret_val;
+    // 模拟栈
     JSStackFrame *sf;
     JSVarRef **var_refs;
     JSFunctionBytecode *b;
@@ -31563,7 +31606,9 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
         fd->arguments_allowed = TRUE;
     }
     fd->js_mode = js_mode;
+    // 将fd->func_name设置成eval
     fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
+    //进入时忽略
     if (b) {
         if (add_closure_variables(ctx, fd, b, scope_idx))
             goto fail;
@@ -31574,6 +31619,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
 
     push_scope(s); /* body scope */
 
+    // 编译成字节码
     err = js_parse_program(s);
     if (err) {
     fail:
@@ -31582,7 +31628,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
         goto fail1;
     }
 
-    /* create the function object and all the enclosed functions */
+    // 根据编译后的字节码，初始化函数的子函数，作用域变量，函数类型，变量等等
     fun_obj = js_create_function(ctx, fd);
     if (JS_IsException(fun_obj))
         goto fail1;
@@ -31596,6 +31642,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
     if (flags & JS_EVAL_FLAG_COMPILE_ONLY) {
         ret_val = fun_obj;
     } else {
+        // 执行程序
         ret_val = JS_EvalFunctionInternal(ctx, fun_obj, this_obj, var_refs, sf);
     }
     return ret_val;
