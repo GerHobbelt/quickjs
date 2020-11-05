@@ -20002,6 +20002,7 @@ static void emit_u32(JSParseState *s, uint32_t val)
     dbuf_put_u32(&s->cur_func->byte_code, val);
 }
 
+//将操作码放入byte_code
 static void emit_op(JSParseState *s, uint8_t val)
 {
     JSFunctionDef *fd = s->cur_func;
@@ -22877,6 +22878,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, BOOL accept_lparen
                 if (next_token(s))  /* update line number before emitting code */
                     return -1;
             do_get_var:
+                //将操作码, 变量名字, scope_level放入fd->byte_code;
                 emit_op(s, OP_scope_get_var);
                 emit_u32(s, name);
                 emit_u16(s, s->cur_func->scope_level);
@@ -23226,9 +23228,11 @@ static __exception int js_parse_postfix_expr(JSParseState *s, BOOL accept_lparen
                 }
             }
             call_type = FUNC_CALL_NORMAL;
+        // 解析成员访问表达式
         } else if (s->token.val == '.') {
             if (next_token(s))
                 return -1;
+            // 访问私有成员变量
             if (s->token.val == TOK_PRIVATE_NAME) {
                 /* private class field */
                 if (get_prev_opcode(fd) == OP_get_super) {
@@ -23238,9 +23242,11 @@ static __exception int js_parse_postfix_expr(JSParseState *s, BOOL accept_lparen
                 emit_atom(s, s->token.u.ident.atom);
                 emit_u16(s, s->cur_func->scope_level);
             } else {
+                // 成员必须是标识符
                 if (!token_is_ident(s->token.val)) {
                     return js_parse_error(s, "expecting field name");
                 }
+                // todo
                 if (get_prev_opcode(fd) == OP_get_super) {
                     JSValue val;
                     int ret;
@@ -23251,6 +23257,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, BOOL accept_lparen
                         return -1;
                     emit_op(s, OP_get_super_value);
                 } else {
+                    // 将操作码, 属性名放入byte_code
                     emit_op(s, OP_get_field);
                     emit_atom(s, s->token.u.ident.atom);
                 }
@@ -31139,6 +31146,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                 if (next_token(s))
                     goto fail;
             }
+            // todo
             if (s->token.val == '[' || s->token.val == '{') {
                 fd->has_simple_parameter_list = FALSE;
                 if (rest) {
@@ -31185,6 +31193,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                     emit_u16(s, idx);
                     fd->has_simple_parameter_list = FALSE;
                     has_opt_arg = TRUE;
+                // 默认参数
                 } else if (s->token.val == '=') {
                     fd->has_simple_parameter_list = FALSE;
                     has_opt_arg = TRUE;
@@ -31271,7 +31280,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     if (next_token(s))
         goto fail;
 
-    /* generator function: yield after the parameters are evaluated */
+    // todo /* generator function: yield after the parameters are evaluated */
     if (func_kind == JS_FUNC_GENERATOR ||
         func_kind == JS_FUNC_ASYNC_GENERATOR)
         emit_op(s, OP_initial_yield);
@@ -31281,7 +31290,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     fd->in_function_body = TRUE;
     push_scope(s);  /* enter body scope: fd->scope_level = 1 */
 
-    // () => 
+    // 解析参数后面部分 () => 
     if (s->token.val == TOK_ARROW) {
         if (next_token(s))
             goto fail;

@@ -233,6 +233,7 @@ static inline uint64_t bswap64(uint64_t v)
 /* XXX: should take an extra argument to pass slack information to the caller */
 typedef void *DynBufReallocFunc(void *opaque, void *ptr, size_t size);
 
+// dynamic buffer ?? 不确定
 typedef struct DynBuf {
     uint8_t *buf;
     size_t size;
