@@ -1,3 +1,7 @@
 let a = 0
-a = 1
-console.log(a)
+function add(a, b) {
+  let c = 2;
+  c = 1;
+}
+
+var a = 0;

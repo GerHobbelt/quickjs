@@ -18626,10 +18626,10 @@ typedef struct JSFunctionDef {
     struct list_head child_list; /* list of JSFunctionDef.link */
     struct list_head link;
 
-    // 当前函数是eval函数定义的
+    // 
     BOOL is_eval; /* TRUE if eval code */
     int eval_type; /* only valid if is_eval = TRUE */
-    BOOL is_global_var; /* TRUE if variables are not defined locally:
+    BOOL is_global_var; /* js 文件也会被看作一个函数, module和入口文件的is_global_var为True  TRUE if variables are not defined locally:
                            eval global, eval module or non strict eval */
     // 是否是函数表达式
     BOOL is_func_expr; /* TRUE if function expression */
@@ -20456,11 +20456,13 @@ static int define_var(JSParseState *s, JSFunctionDef *fd, JSAtom name,
     case JS_VAR_DEF_FUNCTION_DECL:
     case JS_VAR_DEF_NEW_FUNCTION_DECL:
         idx = find_lexical_decl(ctx, fd, name, fd->scope_first, TRUE);
+        // 检测变量重复定义
         if (idx >= 0) {
             if (idx < GLOBAL_VAR_OFFSET) {
                 if (fd->vars[idx].scope_level == fd->scope_level) {
                     /* same scope: in non strict mode, functions
                        can be redefined (annex B.3.3.4). */
+                    // 非严格模式下同一scope function可以重定义
                     if (!(!(fd->js_mode & JS_MODE_STRICT) &&
                           var_def_type == JS_VAR_DEF_FUNCTION_DECL &&
                           fd->vars[idx].var_kind == JS_VAR_FUNCTION_DECL)) {
@@ -20470,6 +20472,7 @@ static int define_var(JSParseState *s, JSFunctionDef *fd, JSAtom name,
                     goto redef_lex_error;
                 }
             } else {
+                // todo
                 if (fd->scope_level == 1) {
                 redef_lex_error:
                     /* redefining a scoped var in the same scope: error */
@@ -20485,14 +20488,16 @@ static int define_var(JSParseState *s, JSFunctionDef *fd, JSAtom name,
              fd->func_type == JS_PARSE_FUNC_METHOD ||
              fd->scope_level == 1) &&
             find_arg(ctx, fd, name) >= 0) {
-            /* lexical variable redefines a parameter name */
+            // let const 重复定义参数名称* lexical variable redefines a parameter name */
             return js_parse_error(s, "invalid redefinition of parameter name");
         }
 
+        // 在子作用域中查找var变量，因为var是函数作用域，所以这里不能定义let const
         if (find_var_in_child_scope(ctx, fd, name, fd->scope_level) >= 0) {
             return js_parse_error(s, "invalid redefinition of a variable");
         }
         
+        // 如果是全局变量，则要查找变量提升的变量
         if (fd->is_global_var) {
             JSHoistedDef *hf;
             hf = find_hoisted_def(fd, name);
@@ -20534,6 +20539,7 @@ static int define_var(JSParseState *s, JSFunctionDef *fd, JSAtom name,
         break;
 
     case JS_VAR_DEF_VAR:
+        // let const 定义后不能定义var
         if (find_lexical_decl(ctx, fd, name, fd->scope_first,
                               FALSE) >= 0) {
        invalid_lexical_redefinition:
