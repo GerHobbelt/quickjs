@@ -512,7 +512,24 @@ int main(int argc, char **argv)
             interactive = 1;
         } else {
             const char *filename;
+#if defined(_WIN32)
+            // fopen allows forward slashes (/)
+            char fn[PATH_MAX];
+            char *p;
+            if (strlen(argv[optind]) < PATH_MAX) {
+                strcpy(fn, argv[optind]);
+                for (p=fn; *p; p++) {
+                    if(*p == '\\') {
+                        *p = '/';
+                    }
+                }
+            } else {
+                filename = argv[optind];
+            }
+            filename = fn;
+#else
             filename = argv[optind];
+#endif
             if (eval_file(ctx, filename, module))
                 goto fail;
         }
