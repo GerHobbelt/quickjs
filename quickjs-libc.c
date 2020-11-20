@@ -457,8 +457,49 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
+#if !defined(NO_WIN32_DLL)
+    JSModuleDef *m;
+    HMODULE hModule;
+    JSInitModuleFunc *init;
+    char *filename;
+    char *p;
+
+    filename = js_malloc(ctx, strlen(module_name) + 4);
+    if (!filename)
+        return NULL;
+
+    strcpy(filename, "./");
+    strcpy(filename + 2, module_name);
+    strcpy(filename + 2 + strlen(module_name) - 3, ".dll");
+    for (p=filename; *p; p++)
+        if(*p == '/')
+            *p = '\\';
+
+    hModule = LoadLibraryA(filename);
+    if (hModule == NULL) {
+        JS_ThrowReferenceError(ctx, "could not load module filename '%s' as shared library (as '%s')",
+                               module_name, filename);
+        return NULL;
+    }
+    init = (JSInitModuleFunc *)GetProcAddress(hModule, "js_init_module");
+    if (init == NULL) {
+        FreeLibrary(hModule);
+        JS_ThrowReferenceError(ctx, "could not load module filename '%s': js_init_module not found",
+                            module_name);
+        return NULL;
+    }
+    m = init(ctx, module_name);
+    if (!m) {
+        FreeLibrary(hModule);
+        JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
+                               module_name);
+        return NULL;
+    }
+    return m;
+#else
     JS_ThrowReferenceError(ctx, "shared library modules are not supported yet");
     return NULL;
+#endif
 }
 #else
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
@@ -486,6 +527,12 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
     if (filename != module_name)
         js_free(ctx, filename);
     if (!hd) {
+        char *msg = dlerror();
+        if (msg) {
+            JS_ThrowReferenceError(ctx, "could not load module filename '%s' as shared library, due to %s",
+                                   module_name, msg);
+            goto fail;
+        }
         JS_ThrowReferenceError(ctx, "could not load module filename '%s' as shared library",
                                module_name);
         goto fail;
@@ -493,6 +540,12 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
 
     init = dlsym(hd, "js_init_module");
     if (!init) {
+        char *msg = dlerror();
+        if (msg) {
+            JS_ThrowReferenceError(ctx, "could not load module filename '%s': js_init_module not found, due to %s",
+                                   module_name, msg);
+            goto fail;
+        }
         JS_ThrowReferenceError(ctx, "could not load module filename '%s': js_init_module not found",
                                module_name);
         goto fail;
