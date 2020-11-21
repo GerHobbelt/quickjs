@@ -50,8 +50,8 @@ prefix=/usr/local
 # include the code for BigInt/BigFloat/BigDecimal and math mode
 CONFIG_BIGNUM=y
 
-CFLAGS_DEBUG=-g
-LDFLAGS_DEBUG=$(CFLAGS_DEBUG)
+CFLAG_DEBUG=-g
+LDFLAG_DEBUG=$(CFLAG_DEBUG)
 
 OBJDIR=.obj
 
@@ -69,7 +69,7 @@ endif
 ifdef CONFIG_CLANG
   HOST_CC=clang
   CC=$(CROSS_PREFIX)clang
-  CFLAGS=$(CFLAGS_DEBUG) -Wall -MMD -MF $(OBJDIR)/$(@F).d
+  CFLAGS=$(CFLAG_DEBUG) -Wall -MMD -MF $(OBJDIR)/$(@F).d
   CFLAGS += -Wextra
   CFLAGS += -Wno-sign-compare
   CFLAGS += -Wno-missing-field-initializers
@@ -90,7 +90,7 @@ ifdef CONFIG_CLANG
 else
   HOST_CC=gcc
   CC=$(CROSS_PREFIX)gcc
-  CFLAGS=$(CFLAGS_DEBUG) -Wall -MMD -MF $(OBJDIR)/$(@F).d
+  CFLAGS=$(CFLAG_DEBUG) -Wall -MMD -MF $(OBJDIR)/$(@F).d
   CFLAGS += -Wno-array-bounds -Wno-format-truncation
   ifdef CONFIG_LTO
     AR=$(CROSS_PREFIX)gcc-ar
@@ -115,7 +115,7 @@ CFLAGS_DEBUG=$(CFLAGS) -O0
 CFLAGS_SMALL=$(CFLAGS) -Os
 CFLAGS_OPT=$(CFLAGS) -O2
 CFLAGS_NOLTO:=$(CFLAGS_OPT)
-LDFLAGS=$(LDFLAGS_DEBUG)
+LDFLAGS=$(LDFLAG_DEBUG)
 ifdef CONFIG_LTO
 CFLAGS_SMALL+=-flto
 CFLAGS_OPT+=-flto
