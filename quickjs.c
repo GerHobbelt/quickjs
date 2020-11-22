@@ -68,7 +68,9 @@
 /* define to include Atomics.* operations which depend on the OS
    threads */
 #if !defined(EMSCRIPTEN)
+#if !defined(NO_WORKER)
 #define CONFIG_ATOMICS
+#endif
 #endif
 
 #if !defined(EMSCRIPTEN)

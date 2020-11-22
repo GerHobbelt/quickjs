@@ -109,6 +109,9 @@ endif
 ifdef CONFIG_WIN32
 DEFINES+=-D__USE_MINGW_ANSI_STDIO # for standard snprintf behavior
 endif
+ifdef NO_WORKER
+DEFINES+=-DNO_WORKER
+endif
 
 CFLAGS+=$(DEFINES)
 CFLAGS_DEBUG=$(CFLAGS) -O0
@@ -180,7 +183,11 @@ endif
 HOST_LIBS=-lm -ldl -lpthread
 LIBS=-lm
 ifndef CONFIG_WIN32
+ifdef NO_WORKER
+LIBS+=-ldl
+else
 LIBS+=-ldl -lpthread
+endif
 endif
 
 $(OBJDIR):
