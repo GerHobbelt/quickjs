@@ -673,7 +673,7 @@ static int unicode_decomp_char(uint32_t *res, uint32_t c, BOOL is_compat1)
             idx_min = idx + 1;
         } else {
             is_compat = v & 1;
-            if (is_compat1 < is_compat)
+            if ((uint32_t) is_compat1 < is_compat)
                 break;
             type = (v >> (32 - 18 - 7 - 6)) & 0x3f;
             return unicode_decomp_entry(res, c, idx, code, len, type);
@@ -884,7 +884,7 @@ int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
         return -1;
     }
     buf = (int *)dbuf->buf;
-    buf_len = dbuf->size / sizeof(int);
+    buf_len = (int) ( dbuf->size / sizeof(int) );
         
     sort_cc(buf, buf_len);
     
@@ -961,7 +961,7 @@ int unicode_script(CharRange *cr,
     const uint8_t *p, *p_end;
     uint32_t c, c1, b, n, v, v_len, i, type;
     CharRange cr1_s, *cr1;
-    CharRange cr2_s, *cr2 = &cr2_s;
+    CharRange cr2_s={0}, *cr2 = &cr2_s;
     BOOL is_common;
     
     script_idx = unicode_find_name(unicode_script_name_table, script_name);

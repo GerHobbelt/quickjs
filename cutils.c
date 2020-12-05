@@ -50,7 +50,7 @@ void pstrcpy(char *buf, int buf_size, const char *str)
 char *pstrcat(char *buf, int buf_size, const char *s)
 {
     int len;
-    len = strlen(buf);
+    len = (int) strlen(buf);
     if (len < buf_size)
         pstrcpy(buf + len, buf_size - len, s);
     return buf;
@@ -166,8 +166,12 @@ int dbuf_putstr(DynBuf *s, const char *str)
     return dbuf_put(s, (const uint8_t *)str, strlen(str));
 }
 
+#if defined(_MSC_VER)
+int dbuf_printf(DynBuf *s, const char *fmt, ...)
+#else
 int __attribute__((format(printf, 2, 3))) dbuf_printf(DynBuf *s,
                                                       const char *fmt, ...)
+#endif
 {
     va_list ap;
     char buf[128];
@@ -235,7 +239,7 @@ int unicode_to_utf8(uint8_t *buf, unsigned int c)
         }
         *q++ = (c & 0x3f) | 0x80;
     }
-    return q - buf;
+    return (int) ( q - buf );
 }
 
 static const unsigned int utf8_min_code[5] = {
@@ -297,7 +301,7 @@ int unicode_from_utf8(const uint8_t *p, int max_len, const uint8_t **pp)
             return -1;
         c = (c << 6) | (b & 0x3f);
     }
-    if (c < utf8_min_code[l - 1])
+    if (c < (int) utf8_min_code[l - 1])
         return -1;
     *pp = p;
     return c;

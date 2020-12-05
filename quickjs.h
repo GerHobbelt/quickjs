@@ -195,9 +195,9 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 #else /* !JS_NAN_BOXING */
 
 typedef union JSValueUnion {
+    void *ptr;
     int32_t int32;
     double float64;
-    void *ptr;
 } JSValueUnion;
 
 typedef struct JSValue {
@@ -215,8 +215,18 @@ typedef struct JSValue {
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+
+#if defined(_MSC_VER) && defined(__cplusplus)
+#define JS_MKVAL(tag, val) [&](){ JSValue tmp { { (void *)(intptr_t)val }, tag }; return tmp; }()
+#define JS_MKPTR(tag, p) [&](){ JSValue tmp { { p }, tag }; return tmp; }()
+#elif defined(_MSC_VER)
+#define JS_VALUE_CANNOT_BE_CAST 1
+#define JS_MKVAL(tag, val) (JSValue){ { (void *)(intptr_t)(val) }, tag }
+#define JS_MKPTR(tag, p) (JSValue){ { p }, tag }
+#else
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
 #define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
+#endif
 
 #define JS_TAG_IS_FLOAT64(tag) ((unsigned)(tag) == JS_TAG_FLOAT64)
 
@@ -517,9 +527,9 @@ static js_force_inline JSValue JS_NewInt64(JSContext *ctx, int64_t val)
 {
     JSValue v;
     if (val == (int32_t)val) {
-        v = JS_NewInt32(ctx, val);
+        v = JS_NewInt32(ctx, (int32_t)val);
     } else {
-        v = __JS_NewFloat64(ctx, val);
+        v = __JS_NewFloat64(ctx, (double) val);
     }
     return v;
 }
@@ -563,6 +573,12 @@ static inline JS_BOOL JS_IsNumber(JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
     return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag);
+}
+
+static inline JS_BOOL JS_IsInteger(JSValueConst v)
+{
+    int tag = JS_VALUE_GET_TAG(v);
+    return tag == JS_TAG_INT ;
 }
 
 static inline JS_BOOL JS_IsBigInt(JSContext *ctx, JSValueConst v)
@@ -662,7 +678,11 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
+#if defined(JS_VALUE_CANNOT_BE_CAST)
+    return v;
+#else
     return (JSValue)v;
+#endif
 }
 
 static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
@@ -671,7 +691,11 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
+#if defined(JS_VALUE_CANNOT_BE_CAST)
+    return v;
+#else
     return (JSValue)v;
+#endif
 }
 
 int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
@@ -965,8 +989,8 @@ typedef struct JSCFunctionListEntry {
     int16_t magic;
     union {
         struct {
-            uint8_t length; /* XXX: should move outside union */
-            uint8_t cproto; /* XXX: should move outside union */
+            uint32_t length; /* XXX: should move outside union */
+            uint32_t cproto; /* XXX: should move outside union */
             JSCFunctionType cfunc;
         } func;
         struct {
@@ -1037,6 +1061,12 @@ int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
 
 #undef js_unlikely
 #undef js_force_inline
+
+/*GPAC patched*/
+int JS_AtomIsArrayIndex(JSContext *ctx, uint32_t *pval, JSAtom atom);
+
+void *JS_GetOpaque_Nocheck(JSValueConst obj);
+/*end GPAC patched*/
 
 #ifdef __cplusplus
 } /* extern "C" { */
