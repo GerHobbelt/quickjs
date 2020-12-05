@@ -47,7 +47,9 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
-#if defined(__APPLE__)
+#if defined(__FreeBSD__)
+typedef sig_t sighandler_t;
+#elif defined(__APPLE__)
 typedef sig_t sighandler_t;
 #if !defined(environ)
 #include <crt_externs.h>
@@ -2779,7 +2781,7 @@ static char **build_envp(JSContext *ctx, JSValueConst obj)
 /* execvpe is not available on non GNU systems */
 static int my_execvpe(const char *filename, char **argv, char **envp)
 {
-    char *path, *p, *p_next, *p1;
+    const char *path, *p, *p_next, *p1;
     char buf[PATH_MAX];
     size_t filename_len, path_len;
     BOOL eacces_error;
