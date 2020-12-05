@@ -25,6 +25,9 @@
 ifeq ($(shell uname -s),Darwin)
 CONFIG_DARWIN=y
 endif
+ifeq ($(shell uname -s),FreeBSD)
+CONFIG_FREEBSD=y
+endif
 ifeq ($(OS),Windows_NT)
 CONFIG_WIN32=y
 endif
@@ -38,6 +41,11 @@ CONFIG_LTO=y
 #CONFIG_M32=y
 
 ifdef CONFIG_DARWIN
+# use clang instead of gcc
+CONFIG_CLANG=y
+CONFIG_DEFAULT_AR=y
+endif
+ifdef CONFIG_FREEBSD
 # use clang instead of gcc
 CONFIG_CLANG=y
 CONFIG_DEFAULT_AR=y
