@@ -71,7 +71,7 @@
 
 /* define to include Atomics.* operations which depend on the OS
    threads */
-#if !defined(EMSCRIPTEN) && !defined(_MSC_VER) && !defined(GPAC_CONFIG_ANDROID)
+#if !defined(EMSCRIPTEN) && !defined(_MSC_VER) && !defined(GPAC_CONFIG_ANDROID) && !defined(__MINGW32__) && !defined(__CYGWIN__)
 #define CONFIG_ATOMICS
 #endif
 
@@ -211,7 +211,7 @@ typedef enum JSErrorEnum {
 #define JS_STACK_SIZE_MAX 65534
 #define JS_STRING_LEN_MAX ((1 << 30) - 1)
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(__GNUC__)
 #define __exception /* */
 typedef int64_t ssize_t;
 #else
@@ -30457,9 +30457,9 @@ typedef struct CodeContext {
     JSAtom atom;
 } CodeContext;
 
-#define M2(op1, op2)            ((op1) | ((op2) << 8))
-#define M3(op1, op2, op3)       ((op1) | ((op2) << 8) | ((op3) << 16))
-#define M4(op1, op2, op3, op4)  ((op1) | ((op2) << 8) | ((op3) << 16) | ((op4) << 24))
+#define M2(op1, op2)            ((op1) | (((uint32_t) op2) << 8))
+#define M3(op1, op2, op3)       ((op1) | (((uint32_t) op2) << 8) | (((uint32_t) op3) << 16))
+#define M4(op1, op2, op3, op4)  ((op1) | (((uint32_t) op2) << 8) | (((uint32_t) op3) << 16) | (((uint32_t) op4) << 24))
 
 static BOOL code_match(CodeContext *s, int pos, ...)
 {
@@ -31517,7 +31517,9 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
                 put_short_code(&bc_out, op, argc);
                 break;
             }
+#if 0
             goto no_change;
+#endif
 
         case OP_return:
         case OP_return_undef:
@@ -32610,8 +32612,10 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
             }
         } else {
             b->vardefs = (void *)((uint8_t*)b + vardefs_offset);
-            memcpy(b->vardefs, fd->args, fd->arg_count * sizeof(fd->args[0]));
-            memcpy(b->vardefs + fd->arg_count, fd->vars, fd->var_count * sizeof(fd->vars[0]));
+            if (fd->arg_count)
+                memcpy(b->vardefs, fd->args, fd->arg_count * sizeof(fd->args[0]));
+            if (fd->var_count)
+                memcpy(b->vardefs + fd->arg_count, fd->vars, fd->var_count * sizeof(fd->vars[0]));
         }
         b->var_count = fd->var_count;
         b->arg_count = fd->arg_count;
