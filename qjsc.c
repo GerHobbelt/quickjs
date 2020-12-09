@@ -27,10 +27,18 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
-#include <unistd.h>
 #include <errno.h>
 #if !defined(_WIN32)
 #include <sys/wait.h>
+#include <unistd.h>
+#include "getopt.h"
+#else
+#include <process.h>
+#if defined(__GNUC__)
+#include <getopt.h>
+#else
+#include "win/getopt.h"
+#endif
 #endif
 
 #include "cutils.h"
@@ -628,7 +636,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     outfile = fo;
-    
+    JS_Initialize();
     rt = JS_NewRuntime();
     ctx = JS_NewContext(rt);
 #ifdef CONFIG_BIGNUM
@@ -748,6 +756,7 @@ int main(int argc, char **argv)
     
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    JS_Finalize();
 
     fclose(fo);
 
