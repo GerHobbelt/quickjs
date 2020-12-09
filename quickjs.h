@@ -28,6 +28,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+  #define JS_EXPORT __declspec(dllexport)
+#else
+  #define JS_EXPORT /* nothing */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -293,7 +299,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 #define JS_PROP_NO_ADD           (1 << 16) /* internal use */
 #define JS_PROP_NO_EXOTIC        (1 << 17) /* internal use */
 
-#define JS_DEFAULT_STACK_SIZE (256 * 1024)
+#define JS_DEFAULT_STACK_SIZE (2048 * 1024)
 
 /* JS_Eval() flags */
 #define JS_EVAL_TYPE_GLOBAL   (0 << 0) /* global code (default) */
@@ -330,6 +336,10 @@ typedef struct JSMallocFunctions {
 } JSMallocFunctions;
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
+
+/* These pair of function should be called at the very beginning and the very end */
+void JS_Initialize(void);
+void JS_Finalize(void);
 
 JSRuntime *JS_NewRuntime(void);
 /* info lifetime must exceed that of rt */
