@@ -1,6 +1,6 @@
 # quickjs-cpp
 
-C demo for QuickJS
+quickjs阅读笔记
 
 Ref: [QuickJS Document](https://bellard.org/quickjs/quickjs.html)
 
