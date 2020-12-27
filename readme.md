@@ -2,6 +2,8 @@
 
 quickjs阅读笔记
 
+fork from https://github.com/bigteech/quickjs
+
 Ref: [QuickJS Document](https://bellard.org/quickjs/quickjs.html)
 
 ## Build
