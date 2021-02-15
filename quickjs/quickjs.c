@@ -20439,6 +20439,10 @@ typedef enum {
     JS_VAR_DEF_VAR,
 } JSVarDefEnum;
 
+/*
+    params ${name} 变量名字
+    params ${var_def_type} 变量类型
+*/
 static int define_var(JSParseState *s, JSFunctionDef *fd, JSAtom name,
                       JSVarDefEnum var_def_type)
 {
@@ -20447,6 +20451,7 @@ static int define_var(JSParseState *s, JSFunctionDef *fd, JSAtom name,
     int idx;
 
     switch (var_def_type) {
+    // 处理with
     case JS_VAR_DEF_WITH:
         idx = add_scope_var(ctx, fd, name, JS_VAR_NORMAL);
         break;
@@ -22186,6 +22191,7 @@ static __exception int js_define_var(JSParseState *s, JSAtom name, int tok)
     JSFunctionDef *fd = s->cur_func;
     JSVarDefEnum var_def_type;
     
+    // 检查变量名是否合法
     if (name == JS_ATOM_yield && fd->func_kind == JS_FUNC_GENERATOR) {
         return js_parse_error(s, "yield is a reserved identifier");
     }
@@ -24118,18 +24124,23 @@ static __exception int js_parse_var(JSParseState *s, BOOL in_accepted, int tok,
     JSFunctionDef *fd = s->cur_func;
     JSAtom name = JS_ATOM_NULL;
 
+    // a = 1;
     for (;;) {
         if (s->token.val == TOK_IDENT) {
             if (s->token.u.ident.is_reserved) {
                 return js_parse_error_reserved_identifier(s);
             }
+            // name = a;
             name = JS_DupAtom(ctx, s->token.u.ident.atom);
+            // 变量名不能是let，因为let不是保留字所以这里要再判断一下
             if (name == JS_ATOM_let && (tok == TOK_LET || tok == TOK_CONST)) {
                 js_parse_error(s, "'let' is not a valid lexical identifier");
                 goto var_error;
             }
+            // cur tok: =
             if (next_token(s))
                 goto var_error;
+            // js_define_var(s, a, TOK_LET)
             if (js_define_var(s, name, tok))
                 goto var_error;
             if (export_flag) {

@@ -1,3 +1,11 @@
+/*
+ * @Author: your name
+ * @Date: 2020-11-08 10:50:49
+ * @LastEditTime: 2021-02-13 15:37:03
+ * @LastEditors: your name
+ * @Description: In User Settings Edit
+ * @FilePath: /quickjs/example/example.c
+ */
 #include "../quickjs/quickjs-libc.h"
 
 static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
@@ -56,7 +64,7 @@ void run_c_api_main() {
     int eval_flags;
     eval_flags = JS_EVAL_TYPE_GLOBAL;
 
-    const char *jspath = "/Users/mac/Documents/debug-quickjs/quickjs/example/hello.js";
+    const char *jspath = "/Users/lyx/Documents/quickjs/example/hello.js";
     eval_file(ctx, jspath, eval_flags);
 
     js_std_free_handlers(rt);
