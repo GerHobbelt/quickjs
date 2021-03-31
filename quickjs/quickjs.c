@@ -30517,10 +30517,12 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     int function_size, byte_code_offset, cpool_offset;
     int closure_var_offset, vardefs_offset;
 
-    // 将链表头设置为-1
+    // scope.first是作用域中的第一个变量在fd->vars中的索引(最后定义的变量为第一个变量)
+    // vd->next指向上一个变量在fd->vars中的索引
     for (scope = 0; scope < fd->scope_count; scope++) {
         fd->scopes[scope].first = -1;
     }
+    // 初始化同一作用域下的变量链表
     for (idx = 0; idx < fd->var_count; idx++) {
         JSVarDef *vd = &fd->vars[idx];
         //将scope_next设置为变量作用域头部
@@ -30534,7 +30536,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
         if (sd->first == -1)
             sd->first = fd->scopes[sd->parent].first;
     }
-    // 将作用域变量的最后一j加入到其父作用域的头部
+    // 将作用域中的最后一个变量加入到其父作用域的头部
     // 初始化完毕后，作用域和变量的链接即可连接起来
     // 这样寻找作用域内变量的时候通过作用域的头部访问变量
     // 然后通过变量的scope_next访问作用域的以及父作用域的变量
