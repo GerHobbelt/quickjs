@@ -95,7 +95,7 @@ import * as os from "os";
             'type':       'bright_magenta',
             'identifier': 'bright_green',
             'error':      'red',
-            'result':     'bright_white',
+            'result':     'bright_blue',
             'error_msg':  'bright_red',
         };
     }
@@ -750,6 +750,8 @@ import * as os from "os";
         "\x12":     alert,                  /* ^R - reverse-search */
         "\x13":     alert,                  /* ^S - search */
         "\x14":     transpose_chars,        /* ^T - transpose */
+        "\x15":     backward_kill_line,     /* ^U - backward_kill_line */
+        "\x17":     backward_kill_word,     /* ^W - backward_kill_word */
         "\x18":     reset,                  /* ^X - cancel */
         "\x19":     yank,                   /* ^Y - yank */
         "\x1bOA":   previous_history,       /* ^[OA - up */
