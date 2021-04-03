@@ -20239,6 +20239,7 @@ static int find_lexical_decl(JSContext *ctx, JSFunctionDef *fd, JSAtom name,
 static int push_scope(JSParseState *s) {
     if (s->cur_func) {
         JSFunctionDef *fd = s->cur_func;
+        // scope 使用个数, scope_size是scope总个数，包括没用过的
         int scope = fd->scope_count;
         /* XXX: should check for scope overflow */
         if ((fd->scope_count + 1) > fd->scope_size) {
@@ -20262,6 +20263,7 @@ static int push_scope(JSParseState *s) {
             fd->scope_size = new_size;
         }
         fd->scope_count++;
+        // scope_level是当前scope的深度，scope是从0开始的，所以这里的count就是下一个level
         fd->scopes[scope].parent = fd->scope_level;
         fd->scopes[scope].first = fd->scope_first;
         emit_op(s, OP_enter_scope);
@@ -24170,8 +24172,10 @@ static __exception int js_parse_var(JSParseState *s, BOOL in_accepted, int tok,
                     put_lvalue(s, opcode, scope, name1, label, FALSE);
                     emit_op(s, OP_drop);
                 } else {
+                    // 解析表达式, 结果赋值给变量
                     if (js_parse_assign_expr(s, in_accepted))
                         goto var_error;
+                    // todo
                     set_object_name(s, name);
                     emit_op(s, (tok == TOK_CONST || tok == TOK_LET) ?
                         OP_scope_put_var_init : OP_scope_put_var);
@@ -24658,6 +24662,8 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
             int label_cont, label_break;
             BlockEnv break_entry;
 
+            // label continue
+            // label break
             label_cont = new_label(s);
             label_break = new_label(s);
 
