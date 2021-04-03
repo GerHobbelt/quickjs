@@ -20306,6 +20306,7 @@ static void close_scopes(JSParseState *s, int scope, int scope_stop)
 }
 
 /* return the variable index or -1 if error */
+// 在变量数组里添加一个变量，并返回其索引值
 static int add_var(JSContext *ctx, JSFunctionDef *fd, JSAtom name)
 {
     JSVarDef *vd;
@@ -20333,6 +20334,7 @@ static int add_var(JSContext *ctx, JSFunctionDef *fd, JSAtom name)
     return fd->var_count - 1;
 }
 
+// 在当前作用域中添加变量，把scope.first设置为当新添加的变量
 static int add_scope_var(JSContext *ctx, JSFunctionDef *fd, JSAtom name,
                          JSVarKindEnum var_kind)
 {
