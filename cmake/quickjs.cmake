@@ -30,7 +30,15 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/quickjs.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
   ${QUICKJS_SOURCE_DIR}/quickjs-port.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport.c
 )
+if("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+  target_sources(quickjs PRIVATE ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-win.c)
+elseif()
+  target_sources(quickjs PRIVATE ${QUICKJS_SOURCE_DIR}/quickjs-debugger-transport-unix.c)
+endif()
+
 qjs_setup_common_flags(quickjs)
 if("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
   target_compile_options(quickjs PRIVATE -wd4244 -wd4996 -wd4018 -wd4146 -wd4013)
