@@ -1,0 +1,130 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "quickjs",
+            "request": "launch",
+            "name": "Launch QuickJS",
+            "runtimeExecutable": "${workspaceFolder}/build/MSVC-Release-win32-x86/qjs",
+//            "runtimeExecutable": "${workspaceFolder}/build/MSVC-Release-win32-x86/qjs",
+            // "trace": true,
+            "program": "${workspaceFolder}/test.js"
+        },
+        {
+            "name": "quickjs cpp Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x86/qjs",
+            "args": [
+                "test.js"
+            ],
+            "cwd": "${workspaceFolder}",
+            "externalConsole": true,
+            "environment": [
+                {
+                    "name": "QUICKJS_DEBUG_ADDRESS",
+                    "value": "127.0.0.1:5555"
+                }
+            ]
+        },
+        {
+            "type": "quickjs",
+            "request": "attach",
+            "name": "Attach QuickJS",
+            "localRoot": "${workspaceFolder}/",
+            "mode": "listen",
+            "port": 5555
+        },
+        {
+            "name": "(win32/gdb) x64 启动单个测试用例",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Debug-win32-x64/run-test262",
+            "args": ["-c", "test262.conf", "-f", "test262/test/built-ins/Number/prototype/toExponential/return-values.js"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/CI-Tools/msys64/mingw64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(Windows) 启动 GCC x64",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GCC-Release-win32-x64/run-test262",
+            "args": ["-u", "-c", "test262.conf", "-a"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/CI-Tools/msys64/mingw64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(Windows) 启动 MSVC x64",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x64/run-test262",
+            "args": ["-u", "-c", "test262.conf", "-a"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "name": "(Windows) 启动 MSVC x86",
+            "type": "cppvsdbg",
+            "request": "launch",
+            // "program": "${workspaceFolder}/build/MSVC-Debug-win32-x86/run-test262",
+            "program": "${workspaceFolder}/build/MSVC-Release-win32-x86/run-test262",
+            "args": ["-u", "-c", "test262.conf", "-a"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "name": "(Windows) 启动单个测试用例",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x86/run-test262",
+            "args": ["-c", "test262.conf", "-f", "test262/test/built-ins/Number/prototype/toExponential/return-values.js"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "name": "(Windows) 启动 qjs",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MSVC-Debug-win32-x64/qjs.exe",
+            // "args": ["tests/test_worker.js"],
+            // "args": ["--bignum", "--qjscalc", "tests/test_qjscalc.js"],
+            "args": ["--bignum", "--qjscalc", "build/MSVC-Debug-win32-x64/tests/combined.js"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        }
+
+    ]
+}
