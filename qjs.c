@@ -366,6 +366,7 @@ int main(int argc, char **argv)
                 continue;
             }
             if (opt == 'e' || !strcmp(longopt, "eval")) {
+                dump_unhandled_promise_rejection = 1;
                 if (*arg) {
                     expr = arg;
                     break;
@@ -512,7 +513,13 @@ int main(int argc, char **argv)
         }
 
         if (expr) {
-            if (eval_buf(ctx, expr, strlen(expr), "<cmdline>", 0))
+            int eval_flags;
+            size_t buf_len = strlen(expr);
+            if (!module || (module < 0 && !JS_DetectModule(expr, buf_len)))
+                eval_flags = JS_EVAL_TYPE_GLOBAL;
+            else
+                eval_flags = JS_EVAL_TYPE_MODULE;
+            if (eval_buf(ctx, expr, buf_len, "<cmdline>", eval_flags))
                 goto fail;
         } else
         if (optind >= argc) {
