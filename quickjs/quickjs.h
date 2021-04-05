@@ -184,12 +184,14 @@ static inline int JS_VALUE_GET_NORM_TAG(JSValue v)
 
 #else /* !JS_NAN_BOXING */
 
+// js value 要么是int32 要么是 float64 要么是 string类型
 typedef union JSValueUnion {
     int32_t int32;
     double float64;
     void *ptr;
 } JSValueUnion;
 
+// 通过tag来确定JSValue的类型
 typedef struct JSValue {
     JSValueUnion u;
     int64_t tag;

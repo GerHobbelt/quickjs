@@ -1,4 +1,0 @@
-/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -G "CodeBlocks - Unix Makefiles" /Users/mac/Documents/debug-quickjs/quickjs
--- Configuring done
--- Generating done
--- Build files have been written to: /Users/mac/Documents/debug-quickjs/quickjs
