@@ -3964,6 +3964,7 @@ static void js_shape_hash_link(JSRuntime *rt, JSShape *sh)
 {
     uint32_t h;
     h = get_shape_hash(sh->hash, rt->shape_hash_bits);
+    // 如果出现hash碰撞就将hash连接起来
     sh->shape_hash_next = rt->shape_hash[h];
     rt->shape_hash[h] = sh;
     rt->shape_hash_count++;
@@ -4199,7 +4200,10 @@ static JSShape *find_hashed_shape_proto(JSRuntime *rt, JSObject *proto)
     JSShape *sh1;
     uint32_t h, h1;
 
+    // 对JSObject hash实际是对JSObject的地址进行hash
+    // hash值只要能对应到object即可
     h = shape_initial_hash(proto);
+    // 将hash值约束在shape_hash_bits范围内
     h1 = get_shape_hash(h, rt->shape_hash_bits);
     for(sh1 = rt->shape_hash[h1]; sh1 != NULL; sh1 = sh1->shape_hash_next) {
         if (sh1->hash == h &&
@@ -4285,6 +4289,7 @@ static __maybe_unused void JS_DumpShapes(JSRuntime *rt)
     printf("}\n");
 }
 
+// 根据shape创建新的object，其中shape代表object的原型对象
 static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID class_id)
 {
     JSObject *p;
@@ -4387,17 +4392,21 @@ static JSObject *get_proto_obj(JSValueConst proto_val)
 }
 
 /* WARNING: proto must be an object or JS_NULL */
+// 参数：contex, 原型对象, 类类型
 JSValue JS_NewObjectProtoClass(JSContext *ctx, JSValueConst proto_val,
                                JSClassID class_id)
 {
     JSShape *sh;
     JSObject *proto;
 
+    // 根据原型的JSValue获取原型对象
     proto = get_proto_obj(proto_val);
+    // 获取原型对象的shape
     sh = find_hashed_shape_proto(ctx->rt, proto);
     if (likely(sh)) {
         sh = js_dup_shape(sh);
     } else {
+        // 根据 JSObject生成新的JSShape
         sh = js_new_shape(ctx, proto);
         if (!sh)
             return JS_EXCEPTION;
