@@ -4738,16 +4738,23 @@ static force_inline JSShapeProperty *find_own_property(JSProperty **ppr,
     JSShapeProperty *pr, *prop;
     intptr_t h;
     sh = p->shape;
+    // 根据查找的属性名求出hash，prop_hash_mask为掩码，是属性的数量
     h = (uintptr_t)atom & sh->prop_hash_mask;
-    h = sh->prop_hash_end[-h - 1];
-    prop = get_shape_prop(sh);
+    // 根据查找属性的hash得到最后一个哈希值等于h的属性。访问prop_hash_end即可得到
+    // prop_hash_end是只是个占位符，表示最后一个hash的后一个指针位置
+    h = sh->prop_hash_end[-h - 1]; // h表示该prop在 p->prop中的位置
+    prop = get_shape_prop(sh);  // return p->shape
+    // 根据prop_hash_end里面存放的值。找到最后一个属性在sh->prop的索引
     while (h) {
         pr = &prop[h - 1];
+        // 用此索引在sh->prop中得到prop值,并比较得到的prop的属性名称atom与待查找的atom相比较。
         if (likely(pr->atom == atom)) {
             *ppr = &p->prop[h - 1];
             /* the compiler should be able to assume that pr != NULL here */
             return pr;
         }
+        // 比较结果不同说明哈希碰撞，即有不同名字的属性，算出了一样的哈希值。
+        // 这个时候通过找到的prop的hash_next得到具有相同哈希的属性的下一个。
         h = pr->hash_next;
     }
     *ppr = NULL;

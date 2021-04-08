@@ -1,1 +1,4 @@
-console.log(1);
+let a = {
+  a: 1,
+};
+a.a = 2;
