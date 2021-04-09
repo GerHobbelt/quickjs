@@ -7398,6 +7398,7 @@ JSValue JS_GetPropertyStr(JSContext *ctx, JSValueConst this_obj,
 
 /* Note: the property value is not initialized. Return NULL if memory
    error. */
+// 为Object p添加新的属性, prop
 static JSProperty *add_property(JSContext *ctx,
                                 JSObject *p, JSAtom prop, int prop_flags)
 {
@@ -7406,6 +7407,8 @@ static JSProperty *add_property(JSContext *ctx,
     sh = p->shape;
     if (sh->is_hashed) {
         /* try to find an existing shape */
+        // 查找是否存在添加属性prop，prop_flags的shape
+        // 如果找到了就直接用
         new_sh = find_hashed_shape_prop(ctx->rt, sh, prop, prop_flags);
         if (new_sh) {
             /* matching shape found: use it */
@@ -7434,6 +7437,7 @@ static JSProperty *add_property(JSContext *ctx,
         }
     }
     assert(p->shape->header.ref_count == 1);
+    // 给shape添加prop, 通过hash识别不同的shape
     if (add_shape_property(ctx, &p->shape, p, prop, prop_flags))
         return NULL;
     return &p->prop[p->shape->prop_count - 1];
@@ -8298,6 +8302,7 @@ static int JS_CreateProperty(JSContext *ctx, JSObject *p,
     } else {
         prop_flags = flags & JS_PROP_C_W_E;
     }
+    // p: object, prop: 属性名字
     pr = add_property(ctx, p, prop, prop_flags);
     if (unlikely(!pr))
         return -1;
@@ -8403,6 +8408,7 @@ static int js_update_property_flags(JSContext *ctx, JSObject *p,
    define_own_property callback.
    return -1 (exception), FALSE or TRUE.
 */
+// 定义Object属性
 int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
                       JSAtom prop, JSValueConst val,
                       JSValueConst getter, JSValueConst setter, int flags)
@@ -8659,6 +8665,7 @@ int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
         }
     }
 
+    // p是object, prop是属性名字, value是属性值
     return JS_CreateProperty(ctx, p, prop, val, getter, setter, flags);
 }
 
