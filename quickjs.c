@@ -34685,12 +34685,18 @@ static int JS_WriteSharedArrayBuffer(BCWriterState *s, JSValueConst obj)
     return 0;
 }
 
+// goto removed
 static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
 {
     uint32_t tag;
 
     if (js_check_stack_overflow(s->ctx->rt, 0)) {
         JS_ThrowStackOverflow(s->ctx);
+        return -1;
+    }
+
+    int inner_invalid_tag(BCWriterState *s, uint32_t tag) {
+        JS_ThrowInternalError(s->ctx, "unsupported tag (%d)", tag);
         return -1;
     }
 
@@ -34726,15 +34732,15 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
         break;
     case JS_TAG_FUNCTION_BYTECODE:
         if (!s->allow_bytecode)
-            goto invalid_tag;
+            return inner_invalid_tag(s, tag);
         if (JS_WriteFunctionTag(s, obj))
-            goto fail;
+            return -1;
         break;
     case JS_TAG_MODULE:
         if (!s->allow_bytecode)
-            goto invalid_tag;
+            return inner_invalid_tag(s, tag);
         if (JS_WriteModule(s, obj))
-            goto fail;
+            return -1;
         break;
     case JS_TAG_OBJECT:
         {
@@ -34749,12 +34755,12 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
                     break;
                 } else {
                     if (js_object_list_add(s->ctx, &s->object_list, p))
-                        goto fail;
+                        return -1;
                 }
             } else {
                 if (p->tmp_mark) {
                     JS_ThrowTypeError(s->ctx, "circular reference");
-                    goto fail;
+                    return -1;
                 }
                 p->tmp_mark = 1;
             }
@@ -34770,7 +34776,7 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
                 break;
             case JS_CLASS_SHARED_ARRAY_BUFFER:
                 if (!s->allow_sab)
-                    goto invalid_tag;
+                    return inner_invalid_tag(s, tag);
                 ret = JS_WriteSharedArrayBuffer(s, obj);
                 break;
             case JS_CLASS_DATE:
@@ -34800,7 +34806,7 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
             }
             p->tmp_mark = 0;
             if (ret)
-                goto fail;
+                return -1;
         }
         break;
 #ifdef CONFIG_BIGNUM
@@ -34808,18 +34814,19 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
     case JS_TAG_BIG_FLOAT:
     case JS_TAG_BIG_DECIMAL:
         if (JS_WriteBigNum(s, obj))
-            goto fail;
+            return -1;
         break;
 #endif
     default:
-    invalid_tag:
+        return inner_invalid_tag(s, tag);
+    /*invalid_tag:
         JS_ThrowInternalError(s->ctx, "unsupported tag (%d)", tag);
-        goto fail;
+        return -1;*/
     }
     return 0;
 
- fail:
-    return -1;
+/* fail:
+    return -1;*/
 }
 
 /* create the atom table */
