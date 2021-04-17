@@ -28691,10 +28691,10 @@ static __exception int js_parse_import(JSParseState *s)
             if (js_parse_expect(s, '}'))
                 return -1;
         }
-    /*end_import_clause:
+    //end_import_clause:
         module_name = js_parse_from_clause(s);
         if (module_name == JS_ATOM_NULL)
-            return -1;*/
+            return -1;
     }
     idx = add_req_module_entry(ctx, m, module_name);
     JS_FreeAtom(ctx, module_name);
