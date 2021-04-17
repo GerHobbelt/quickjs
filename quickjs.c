@@ -28579,6 +28579,7 @@ static int add_import(JSParseState *s, JSModuleDef *m,
     return 0;
 }
 
+// goto removed
 static __exception int js_parse_import(JSParseState *s)
 {
     JSContext *ctx = s->ctx;
@@ -28588,6 +28589,12 @@ static __exception int js_parse_import(JSParseState *s)
 
     if (next_token(s))
         return -1;
+
+    int inner_fail(JSContext *ctx, JSAtom *local_name, JSAtom *import_name) {
+        JS_FreeAtom(ctx, local_name);
+        JS_FreeAtom(ctx, import_name);
+        return -1;
+    }
 
     first_import = m->import_entries_count;
     if (s->token.val == TOK_STRING) {
@@ -28607,13 +28614,17 @@ static __exception int js_parse_import(JSParseState *s)
             local_name = JS_DupAtom(ctx, s->token.u.ident.atom);
             import_name = JS_ATOM_default;
             if (next_token(s))
-                goto fail;
+                return inner_fail(ctx, local_name, import_name);
             if (add_import(s, m, local_name, import_name))
-                goto fail;
+                return inner_fail(ctx, local_name, import_name);
             JS_FreeAtom(ctx, local_name);
 
-            if (s->token.val != ',')
-                goto end_import_clause;
+            if (s->token.val != ',') {
+                module_name = js_parse_from_clause(s);
+                if (module_name == JS_ATOM_NULL)
+                    return -1;
+                // goto end_import_clause;
+            }
             if (next_token(s))
                 return -1;
         }
@@ -28633,9 +28644,9 @@ static __exception int js_parse_import(JSParseState *s)
             local_name = JS_DupAtom(ctx, s->token.u.ident.atom);
             import_name = JS_ATOM__star_;
             if (next_token(s))
-                goto fail;
+                return inner_fail(ctx, local_name, import_name);
             if (add_import(s, m, local_name, import_name))
-                goto fail;
+                return inner_fail(ctx, local_name, import_name);
             JS_FreeAtom(ctx, local_name);
         } else if (s->token.val == '{') {
             if (next_token(s))
@@ -28649,26 +28660,27 @@ static __exception int js_parse_import(JSParseState *s)
                 import_name = JS_DupAtom(ctx, s->token.u.ident.atom);
                 local_name = JS_ATOM_NULL;
                 if (next_token(s))
-                    goto fail;
+                    return inner_fail(ctx, local_name, import_name);
                 if (token_is_pseudo_keyword(s, JS_ATOM_as)) {
                     if (next_token(s))
-                        goto fail;
+                        return inner_fail(ctx, local_name, import_name);
                     if (!token_is_ident(s->token.val)) {
                         js_parse_error(s, "identifier expected");
-                        goto fail;
+                        return inner_fail(ctx, local_name, import_name);
                     }
                     local_name = JS_DupAtom(ctx, s->token.u.ident.atom);
                     if (next_token(s)) {
-                    fail:
+                        return inner_fail(ctx, local_name, import_name);
+                    /*fail:
                         JS_FreeAtom(ctx, local_name);
                         JS_FreeAtom(ctx, import_name);
-                        return -1;
+                        return -1;*/
                     }
                 } else {
                     local_name = JS_DupAtom(ctx, import_name);
                 }
                 if (add_import(s, m, local_name, import_name))
-                    goto fail;
+                    return inner_fail(ctx, local_name, import_name);
                 JS_FreeAtom(ctx, local_name);
                 JS_FreeAtom(ctx, import_name);
                 if (s->token.val != ',')
@@ -28679,10 +28691,10 @@ static __exception int js_parse_import(JSParseState *s)
             if (js_parse_expect(s, '}'))
                 return -1;
         }
-    end_import_clause:
+    /*end_import_clause:
         module_name = js_parse_from_clause(s);
         if (module_name == JS_ATOM_NULL)
-            return -1;
+            return -1;*/
     }
     idx = add_req_module_entry(ctx, m, module_name);
     JS_FreeAtom(ctx, module_name);
