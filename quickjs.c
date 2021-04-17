@@ -27861,6 +27861,7 @@ static JSVarRef *js_create_module_var(JSContext *ctx, BOOL is_lexical)
     return var_ref;
 }
 
+// goto removed
 /* Create the <eval> function associated with the module */
 static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
 {
@@ -27885,8 +27886,10 @@ static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
     p->u.func.var_refs = NULL;
     if (b->closure_var_count) {
         var_refs = js_mallocz(ctx, sizeof(var_refs[0]) * b->closure_var_count);
-        if (!var_refs)
-            goto fail;
+        if (!var_refs) {
+            JS_FreeValue(ctx, func_obj);
+            return -1;
+        }
         p->u.func.var_refs = var_refs;
 
         /* create the global variables. The other variables are
@@ -27896,8 +27899,10 @@ static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
             JSVarRef *var_ref;
             if (cv->is_local) {
                 var_ref = js_create_module_var(ctx, cv->is_lexical);
-                if (!var_ref)
-                    goto fail;
+                if (!var_ref){
+                    JS_FreeValue(ctx, func_obj);
+                    return -1;
+                }
 #ifdef DUMP_MODULE_RESOLVE
                 printf("local %d: %p\n", i, var_ref);
 #endif
@@ -27908,9 +27913,6 @@ static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
     m->func_obj = func_obj;
     JS_FreeValue(ctx, bfunc);
     return 0;
- fail:
-    JS_FreeValue(ctx, func_obj);
-    return -1;
 }
 
 /* must be done before js_link_module() because of cyclic references */
