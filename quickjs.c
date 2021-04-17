@@ -35711,6 +35711,7 @@ static JSValue JS_ReadObjectTag(BCReaderState *s)
     return JS_EXCEPTION;
 }
 
+// goto removed
 static JSValue JS_ReadArray(BCReaderState *s, int tag)
 {
     JSContext *ctx = s->ctx;
@@ -35720,38 +35721,41 @@ static JSValue JS_ReadArray(BCReaderState *s, int tag)
     int ret, prop_flags;
     BOOL is_template;
 
-    obj = JS_NewArray(ctx);
-    if (BC_add_object_ref(s, obj))
-        goto fail;
-    is_template = (tag == BC_TAG_TEMPLATE_OBJECT);
-    if (bc_get_leb128(s, &len))
-        goto fail;
-    for(i = 0; i < len; i++) {
-        val = JS_ReadObjectRec(s);
-        if (JS_IsException(val))
-            goto fail;
-        if (is_template)
-            prop_flags = JS_PROP_ENUMERABLE;
-        else
-            prop_flags = JS_PROP_C_W_E;
-        ret = JS_DefinePropertyValueUint32(ctx, obj, i, val,
-                                           prop_flags);
-        if (ret < 0)
-            goto fail;
-    }
-    if (is_template) {
-        val = JS_ReadObjectRec(s);
-        if (JS_IsException(val))
-            goto fail;
-        if (!JS_IsUndefined(val)) {
-            ret = JS_DefinePropertyValue(ctx, obj, JS_ATOM_raw, val, 0);
+    fail: for (;;) {
+
+        obj = JS_NewArray(ctx);
+        if (BC_add_object_ref(s, obj))
+            break fail;
+        is_template = (tag == BC_TAG_TEMPLATE_OBJECT);
+        if (bc_get_leb128(s, &len))
+            break fail;
+        for(i = 0; i < len; i++) {
+            val = JS_ReadObjectRec(s);
+            if (JS_IsException(val))
+                break fail;
+            if (is_template)
+                prop_flags = JS_PROP_ENUMERABLE;
+            else
+                prop_flags = JS_PROP_C_W_E;
+            ret = JS_DefinePropertyValueUint32(ctx, obj, i, val,
+                                               prop_flags);
             if (ret < 0)
-                goto fail;
+                break fail;
         }
-        JS_PreventExtensions(ctx, obj);
+        if (is_template) {
+            val = JS_ReadObjectRec(s);
+            if (JS_IsException(val))
+                break fail;
+            if (!JS_IsUndefined(val)) {
+                ret = JS_DefinePropertyValue(ctx, obj, JS_ATOM_raw, val, 0);
+                if (ret < 0)
+                    break fail;
+            }
+            JS_PreventExtensions(ctx, obj);
+        }
+        return obj;
     }
-    return obj;
- fail:
+// fail:
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
