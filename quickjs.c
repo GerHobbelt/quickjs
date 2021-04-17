@@ -10994,12 +10994,12 @@ static inline int JS_ToUint32Free(JSContext *ctx, uint32_t *pres, JSValue val)
     return JS_ToInt32Free(ctx, (int32_t *)pres, val);
 }
 
+// goto removed
 static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
 {
     uint32_t tag;
     int res;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
     case JS_TAG_INT:
@@ -11007,10 +11007,6 @@ static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
     case JS_TAG_NULL:
     case JS_TAG_UNDEFINED:
         res = JS_VALUE_GET_INT(val);
-#ifdef CONFIG_BIGNUM
-    int_clamp:
-#endif
-        res = max_int(0, min_int(255, res));
         break;
     case JS_TAG_FLOAT64:
         {
@@ -11039,7 +11035,6 @@ static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
             bf_delete(r);
             JS_FreeValue(ctx, val);
         }
-        goto int_clamp;
 #endif
     default:
         val = JS_ToNumberFree(ctx, val);
@@ -11047,9 +11042,9 @@ static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
             *pres = 0;
             return -1;
         }
-        goto redo;
+        return JS_ToUint8ClampFree(ctx, pres, val);
     }
-    *pres = res;
+    *pres = max_int(0, min_int(255, res));
     return 0;
 }
 
