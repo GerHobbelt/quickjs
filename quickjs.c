@@ -35671,6 +35671,7 @@ static JSValue JS_ReadModule(BCReaderState *s)
     return JS_EXCEPTION;
 }
 
+// goto removed
 static JSValue JS_ReadObjectTag(BCReaderState *s)
 {
     JSContext *ctx = s->ctx;
@@ -35679,30 +35680,33 @@ static JSValue JS_ReadObjectTag(BCReaderState *s)
     JSAtom atom;
     JSValue val;
     int ret;
-    
-    obj = JS_NewObject(ctx);
-    if (BC_add_object_ref(s, obj))
-        goto fail;
-    if (bc_get_leb128(s, &prop_count))
-        goto fail;
-    for(i = 0; i < prop_count; i++) {
-        if (bc_get_atom(s, &atom))
-            goto fail;
+
+    fail: for (;;) {
+
+        obj = JS_NewObject(ctx);
+        if (BC_add_object_ref(s, obj))
+            break fail;
+        if (bc_get_leb128(s, &prop_count))
+            break fail;
+        for(i = 0; i < prop_count; i++) {
+            if (bc_get_atom(s, &atom))
+                break fail;
 #ifdef DUMP_READ_OBJECT
-        bc_read_trace(s, "propname: "); print_atom(s->ctx, atom); printf("\n");
+            bc_read_trace(s, "propname: "); print_atom(s->ctx, atom); printf("\n");
 #endif
-        val = JS_ReadObjectRec(s);
-        if (JS_IsException(val)) {
+            val = JS_ReadObjectRec(s);
+            if (JS_IsException(val)) {
+                JS_FreeAtom(ctx, atom);
+                break fail;
+            }
+            ret = JS_DefinePropertyValue(ctx, obj, atom, val, JS_PROP_C_W_E);
             JS_FreeAtom(ctx, atom);
-            goto fail;
+            if (ret < 0)
+                break fail;
         }
-        ret = JS_DefinePropertyValue(ctx, obj, atom, val, JS_PROP_C_W_E);
-        JS_FreeAtom(ctx, atom);
-        if (ret < 0)
-            goto fail;
+        return obj;
     }
-    return obj;
- fail:
+// fail:
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
