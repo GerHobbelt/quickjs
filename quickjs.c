@@ -3918,6 +3918,7 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
     return string_buffer_end(b);
 }
 
+// goto removed
 static JSValue JS_ConcatString3(JSContext *ctx, const char *str1,
                                 JSValue str2, const char *str3)
 {
@@ -3925,26 +3926,25 @@ static JSValue JS_ConcatString3(JSContext *ctx, const char *str1,
     int len1, len3;
     JSString *p;
 
-    if (unlikely(JS_VALUE_GET_TAG(str2) != JS_TAG_STRING)) {
-        str2 = JS_ToStringFree(ctx, str2);
-        if (JS_IsException(str2))
-            goto fail;
+    while (true) { // goto replacement
+        if (unlikely(JS_VALUE_GET_TAG(str2) != JS_TAG_STRING)) {
+            str2 = JS_ToStringFree(ctx, str2);
+            if (JS_IsException(str2)) break;
+        }
+        p = JS_VALUE_GET_STRING(str2);
+        len1 = strlen(str1);
+        len3 = strlen(str3);
+
+        if (string_buffer_init2(ctx, b, len1 + p->len + len3, p->is_wide_char))
+            break;
+
+        string_buffer_write8(b, (const uint8_t *)str1, len1);
+        string_buffer_concat(b, p, 0, p->len);
+        string_buffer_write8(b, (const uint8_t *)str3, len3);
+
+        JS_FreeValue(ctx, str2);
+        return string_buffer_end(b);
     }
-    p = JS_VALUE_GET_STRING(str2);
-    len1 = strlen(str1);
-    len3 = strlen(str3);
-
-    if (string_buffer_init2(ctx, b, len1 + p->len + len3, p->is_wide_char))
-        goto fail;
-
-    string_buffer_write8(b, (const uint8_t *)str1, len1);
-    string_buffer_concat(b, p, 0, p->len);
-    string_buffer_write8(b, (const uint8_t *)str3, len3);
-
-    JS_FreeValue(ctx, str2);
-    return string_buffer_end(b);
-
- fail:
     JS_FreeValue(ctx, str2);
     return JS_EXCEPTION;
 }
