@@ -30615,6 +30615,7 @@ static BOOL code_match(CodeContext *s, int pos, ...)
     return ret;
 }
 
+// goto removed
 static void instantiate_hoisted_definitions(JSContext *ctx, JSFunctionDef *s, DynBuf *bc)
 {
     int i, idx, label_next = -1;
@@ -30694,7 +30695,9 @@ static void instantiate_hoisted_definitions(JSContext *ctx, JSFunctionDef *s, Dy
                 dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
                 dbuf_putc(bc, flags);
                 
-                goto done_global_var;
+                //goto done_global_var;
+                JS_FreeAtom(ctx, hf->var_name);
+                continue;
             } else {
                 if (hf->is_lexical) {
                     flags |= DEFINE_GLOBAL_LEX_VAR;
@@ -30731,7 +30734,7 @@ static void instantiate_hoisted_definitions(JSContext *ctx, JSFunctionDef *s, Dy
                 dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
             }
         }
-    done_global_var:
+    // done_global_var:
         JS_FreeAtom(ctx, hf->var_name);
     }
 
