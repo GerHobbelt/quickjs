@@ -29186,6 +29186,7 @@ static void dump_byte_code(JSContext *ctx, int pass,
     js_free(ctx, bits);
 }
 
+// goto removed
 static __maybe_unused void dump_pc2line(JSContext *ctx, const uint8_t *buf, int len,
                                                  int line_num)
 {
@@ -29205,13 +29206,16 @@ static __maybe_unused void dump_pc2line(JSContext *ctx, const uint8_t *buf, int 
         op = *p++;
         if (op == 0) {
             v = unicode_from_utf8(p, p_end - p, &p_next);
-            if (v < 0)
-                goto fail;
+            if (v < 0) {
+                // goto fail;
+                printf("invalid pc2line encode pos=%d\n", (int)(p - buf));
+                return;
+            }
             pc += v;
             p = p_next;
             v = unicode_from_utf8(p, p_end - p, &p_next);
             if (v < 0) {
-            fail:
+            // fail:
                 printf("invalid pc2line encode pos=%d\n", (int)(p - buf));
                 return;
             }
