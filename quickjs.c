@@ -7591,11 +7591,11 @@ static int __exception JS_GetOwnPropertyNamesInternal(JSContext *ctx,
         if (p->fast_array) {
             if (flags & JS_GPN_STRING_MASK) {
                 len = p->u.array.count;
-            }
+            } else break;
         } else if (p->class_id == JS_CLASS_STRING) {
             if (flags & JS_GPN_STRING_MASK) {
                 len = js_string_obj_get_length(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
-            }
+            } else break;
         } else {
             /* Note: exotic keys are not reordered and comes after the object own properties. */
             for(i = 0; i < exotic_count; i++) {
