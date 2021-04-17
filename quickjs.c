@@ -32357,6 +32357,7 @@ static __exception int ss_check(JSContext *ctx, StackSizeState *s,
     return 0;
 }
 
+// goto removed (unfinished)
 static __exception int compute_stack_size(JSContext *ctx,
                                           JSFunctionDef *fd,
                                           int *pstack_size)
@@ -32431,7 +32432,8 @@ static __exception int compute_stack_size(JSContext *ctx,
         case OP_throw:
         case OP_throw_error:
         case OP_ret:
-            goto done_insn;
+            //goto done_insn;
+            continue;
         case OP_goto:
             diff = get_u32(bc_buf + pos + 1);
             pos_next = pos + 1 + diff;
@@ -32488,7 +32490,7 @@ static __exception int compute_stack_size(JSContext *ctx,
         }
         if (ss_check(ctx, s, pos_next, op, stack_len))
             goto fail;
-    done_insn: ;
+    // done_insn: ;
     }
     js_free(ctx, s->stack_level_tab);
     js_free(ctx, s->pc_stack);
