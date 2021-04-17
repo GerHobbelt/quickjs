@@ -28391,7 +28391,7 @@ static __exception int js_parse_export(JSParseState *s)
     if (next_token(s))
         return -1;
 
-    int inner_fail(JSContext *ctx, JSAtom local_name, JSAtom JSAtom export_name) {
+    int inner_fail(JSContext *ctx, JSAtom local_name, JSAtom export_name) {
         JS_FreeAtom(ctx, local_name);
         JS_FreeAtom(ctx, export_name);
         return -1;
