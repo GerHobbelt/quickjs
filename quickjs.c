@@ -6939,6 +6939,7 @@ static JSValue JS_GetPrototypeFree(JSContext *ctx, JSValue obj)
 }
 
 /* return TRUE, FALSE or (-1) in case of exception */
+// goto removed
 static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
                                    JSValueConst obj)
 {
@@ -6962,8 +6963,8 @@ static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
     if (JS_VALUE_GET_TAG(obj_proto) != JS_TAG_OBJECT) {
         if (!JS_IsException(obj_proto))
             JS_ThrowTypeError(ctx, "operand 'prototype' property is not an object");
-        ret = -1;
-        goto done;
+        JS_FreeValue(ctx, obj_proto);
+        return -1;
     }
     proto = JS_VALUE_GET_OBJ(obj_proto);
     p = JS_VALUE_GET_OBJ(val);
@@ -7007,7 +7008,6 @@ static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
             break;
         }
     }
-done:
     JS_FreeValue(ctx, obj_proto);
     return ret;
 }
