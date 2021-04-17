@@ -7653,55 +7653,58 @@ int JS_GetOwnPropertyNames(JSContext *ctx, JSPropertyEnum **ptab,
 /* Return -1 if exception,
    FALSE if the property does not exist, TRUE if it exists. If TRUE is
    returned, the property descriptor 'desc' is filled present. */
+// goto removed
 static int JS_GetOwnPropertyInternal(JSContext *ctx, JSPropertyDescriptor *desc,
                                      JSObject *p, JSAtom prop)
 {
     JSShapeProperty *prs;
     JSProperty *pr;
 
-retry:
-    prs = find_own_property(&pr, p, prop);
-    if (prs) {
-        if (desc) {
-            desc->flags = prs->flags & JS_PROP_C_W_E;
-            desc->getter = JS_UNDEFINED;
-            desc->setter = JS_UNDEFINED;
-            desc->value = JS_UNDEFINED;
-            if (unlikely(prs->flags & JS_PROP_TMASK)) {
-                if ((prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET) {
-                    desc->flags |= JS_PROP_GETSET;
-                    if (pr->u.getset.getter)
-                        desc->getter = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, pr->u.getset.getter));
-                    if (pr->u.getset.setter)
-                        desc->setter = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, pr->u.getset.setter));
-                } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF) {
-                    JSValue val = *pr->u.var_ref->pvalue;
-                    if (unlikely(JS_IsUninitialized(val))) {
+    while (true) { // goto replacement
+        prs = find_own_property(&pr, p, prop);
+        if (prs) {
+            if (desc) {
+                desc->flags = prs->flags & JS_PROP_C_W_E;
+                desc->getter = JS_UNDEFINED;
+                desc->setter = JS_UNDEFINED;
+                desc->value = JS_UNDEFINED;
+                if (unlikely(prs->flags & JS_PROP_TMASK)) {
+                    if ((prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET) {
+                        desc->flags |= JS_PROP_GETSET;
+                        if (pr->u.getset.getter)
+                            desc->getter = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, pr->u.getset.getter));
+                        if (pr->u.getset.setter)
+                            desc->setter = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, pr->u.getset.setter));
+                    } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF) {
+                        JSValue val = *pr->u.var_ref->pvalue;
+                        if (unlikely(JS_IsUninitialized(val))) {
+                            JS_ThrowReferenceErrorUninitialized(ctx, prs->atom);
+                            return -1;
+                        }
+                        desc->value = JS_DupValue(ctx, val);
+                    } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT) {
+                        /* Instantiate property and retry */
+                        if (JS_AutoInitProperty(ctx, p, prop, pr, prs))
+                            return -1;
+                        continue;
+                    }
+                } else {
+                    desc->value = JS_DupValue(ctx, pr->u.value);
+                }
+            } else {
+                /* for consistency, send the exception even if desc is NULL */
+                if (unlikely((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF)) {
+                    if (unlikely(JS_IsUninitialized(*pr->u.var_ref->pvalue))) {
                         JS_ThrowReferenceErrorUninitialized(ctx, prs->atom);
                         return -1;
                     }
-                    desc->value = JS_DupValue(ctx, val);
                 } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT) {
-                    /* Instantiate property and retry */
-                    if (JS_AutoInitProperty(ctx, p, prop, pr, prs))
-                        return -1;
-                    goto retry;
+                    /* nothing to do: delay instantiation until actual value and/or attributes are read */
                 }
-            } else {
-                desc->value = JS_DupValue(ctx, pr->u.value);
             }
-        } else {
-            /* for consistency, send the exception even if desc is NULL */
-            if (unlikely((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF)) {
-                if (unlikely(JS_IsUninitialized(*pr->u.var_ref->pvalue))) {
-                    JS_ThrowReferenceErrorUninitialized(ctx, prs->atom);
-                    return -1;
-                }
-            } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT) {
-                /* nothing to do: delay instantiation until actual value and/or attributes are read */
-            }
+            return TRUE;
         }
-        return TRUE;
+        break;
     }
     if (p->is_exotic) {
         if (p->fast_array) {
