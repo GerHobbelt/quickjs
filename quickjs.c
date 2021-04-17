@@ -34872,6 +34872,7 @@ static int JS_WriteObjectAtoms(BCWriterState *s)
     return -1;*/
 }
 
+// goto removed
 uint8_t *JS_WriteObject2(JSContext *ctx, size_t *psize, JSValueConst obj,
                          int flags, uint8_t ***psab_tab, size_t *psab_tab_len)
 {
@@ -34891,21 +34892,20 @@ uint8_t *JS_WriteObject2(JSContext *ctx, size_t *psize, JSValueConst obj,
         s->first_atom = 1;
     js_dbuf_init(ctx, &s->dbuf);
     js_object_list_init(&s->object_list);
-    
-    if (JS_WriteObjectRec(s, obj))
-        goto fail;
-    if (JS_WriteObjectAtoms(s))
-        goto fail;
-    js_object_list_end(ctx, &s->object_list);
-    js_free(ctx, s->atom_to_idx);
-    js_free(ctx, s->idx_to_atom);
-    *psize = s->dbuf.size;
-    if (psab_tab)
-        *psab_tab = s->sab_tab;
-    if (psab_tab_len)
-        *psab_tab_len = s->sab_tab_len;
-    return s->dbuf.buf;
- fail:
+
+    if (!JS_WriteObjectRec(s, obj)) {
+        if (!JS_WriteObjectAtoms(s)) {
+            js_object_list_end(ctx, &s->object_list);
+            js_free(ctx, s->atom_to_idx);
+            js_free(ctx, s->idx_to_atom);
+            *psize = s->dbuf.size;
+            if (psab_tab)
+                *psab_tab = s->sab_tab;
+            if (psab_tab_len)
+                *psab_tab_len = s->sab_tab_len;
+            return s->dbuf.buf;
+        }
+    }
     js_object_list_end(ctx, &s->object_list);
     js_free(ctx, s->atom_to_idx);
     js_free(ctx, s->idx_to_atom);
