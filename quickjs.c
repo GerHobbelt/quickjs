@@ -34423,6 +34423,7 @@ static int JS_WriteBigNum(BCWriterState *s, JSValueConst obj)
 
 static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj);
 
+// goto removed
 static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
 {
     JSFunctionBytecode *b = JS_VALUE_GET_PTR(obj);
@@ -34489,7 +34490,7 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
     }
     
     if (JS_WriteFunctionBytecode(s, b->byte_code_buf, b->byte_code_len))
-        goto fail;
+        return -1;
     
     if (b->has_debug) {
         bc_put_atom(s, b->debug.filename);
@@ -34500,11 +34501,11 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
     
     for(i = 0; i < b->cpool_count; i++) {
         if (JS_WriteObjectRec(s, b->cpool[i]))
-            goto fail;
+            return -1;
     }
     return 0;
- fail:
-    return -1;
+/* fail:
+    return -1;*/
 }
 
 static int JS_WriteModule(BCWriterState *s, JSValueConst obj)
