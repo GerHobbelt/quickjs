@@ -28162,25 +28162,23 @@ JSValue JS_GetImportMeta(JSContext *ctx, JSModuleDef *m)
     return JS_DupValue(ctx, obj);
 }
 
+// goto removed
 static JSValue js_import_meta(JSContext *ctx)
 {
     JSAtom filename;
     JSModuleDef *m;
     
     filename = JS_GetScriptOrModuleName(ctx, 0);
-    if (filename == JS_ATOM_NULL)
-        goto fail;
-
-    /* XXX: inefficient, need to add a module or script pointer in
-       JSFunctionBytecode */
-    m = js_find_loaded_module(ctx, filename);
-    JS_FreeAtom(ctx, filename);
-    if (!m) {
-    fail:
-        JS_ThrowTypeError(ctx, "import.meta not supported in this context");
-        return JS_EXCEPTION;
+    if (filename != JS_ATOM_NULL) {
+        /* XXX: inefficient, need to add a module or script pointer in
+           JSFunctionBytecode */
+        m = js_find_loaded_module(ctx, filename);
+        JS_FreeAtom(ctx, filename);
+        if (m)
+            return JS_GetImportMeta(ctx, m);
     }
-    return JS_GetImportMeta(ctx, m);
+    JS_ThrowTypeError(ctx, "import.meta not supported in this context");
+    return JS_EXCEPTION;
 }
 
 /* used by os.Worker() and import() */
