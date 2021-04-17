@@ -3967,6 +3967,7 @@ JSValue JS_NewAtomString(JSContext *ctx, const char *str)
 /* return (NULL, 0) if exception. */
 /* return pointer into a JSString with a live ref_count */
 /* cesu8 determines if non-BMP1 codepoints are encoded as 1 or 2 utf-8 sequences */
+// goto removed
 const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BOOL cesu8)
 {
     JSValue val;
@@ -3974,91 +3975,89 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BO
     int pos, len, c, c1;
     uint8_t *q;
 
-    if (JS_VALUE_GET_TAG(val1) != JS_TAG_STRING) {
-        val = JS_ToString(ctx, val1);
-        if (JS_IsException(val))
-            goto fail;
-    } else {
-        val = JS_DupValue(ctx, val1);
-    }
-
-    str = JS_VALUE_GET_STRING(val);
-    len = str->len;
-    if (!str->is_wide_char) {
-        const uint8_t *src = str->u.str8;
-        int count;
-
-        /* count the number of non-ASCII characters */
-        /* Scanning the whole string is required for ASCII strings,
-           and computing the number of non-ASCII bytes is less expensive
-           than testing each byte, hence this method is faster for ASCII
-           strings, which is the most common case.
-         */
-        count = 0;
-        for (pos = 0; pos < len; pos++) {
-            count += src[pos] >> 7;
+    while (true) { // goto replacement
+        if (JS_VALUE_GET_TAG(val1) != JS_TAG_STRING) {
+            val = JS_ToString(ctx, val1);
+            if (JS_IsException(val)) break;
+        } else {
+            val = JS_DupValue(ctx, val1);
         }
-        if (count == 0) {
-            if (plen)
-                *plen = len;
-            return (const char *)src;
-        }
-        str_new = js_alloc_string(ctx, len + count, 0);
-        if (!str_new)
-            goto fail;
-        q = str_new->u.str8;
-        for (pos = 0; pos < len; pos++) {
-            c = src[pos];
-            if (c < 0x80) {
-                *q++ = c;
-            } else {
-                *q++ = (c >> 6) | 0xc0;
-                *q++ = (c & 0x3f) | 0x80;
+
+        str = JS_VALUE_GET_STRING(val);
+        len = str->len;
+        if (!str->is_wide_char) {
+            const uint8_t *src = str->u.str8;
+            int count;
+
+            /* count the number of non-ASCII characters */
+            /* Scanning the whole string is required for ASCII strings,
+               and computing the number of non-ASCII bytes is less expensive
+               than testing each byte, hence this method is faster for ASCII
+               strings, which is the most common case.
+             */
+            count = 0;
+            for (pos = 0; pos < len; pos++) {
+                count += src[pos] >> 7;
             }
-        }
-    } else {
-        const uint16_t *src = str->u.str16;
-        /* Allocate 3 bytes per 16 bit code point. Surrogate pairs may
-           produce 4 bytes but use 2 code points.
-         */
-        str_new = js_alloc_string(ctx, len * 3, 0);
-        if (!str_new)
-            goto fail;
-        q = str_new->u.str8;
-        pos = 0;
-        while (pos < len) {
-            c = src[pos++];
-            if (c < 0x80) {
-                *q++ = c;
-            } else {
-                if (c >= 0xd800 && c < 0xdc00) {
-                    if (pos < len && !cesu8) {
-                        c1 = src[pos];
-                        if (c1 >= 0xdc00 && c1 < 0xe000) {
-                            pos++;
-                            /* surrogate pair */
-                            c = (((c & 0x3ff) << 10) | (c1 & 0x3ff)) + 0x10000;
+            if (count == 0) {
+                if (plen)
+                    *plen = len;
+                return (const char *)src;
+            }
+            str_new = js_alloc_string(ctx, len + count, 0);
+            if (!str_new) break;
+            q = str_new->u.str8;
+            for (pos = 0; pos < len; pos++) {
+                c = src[pos];
+                if (c < 0x80) {
+                    *q++ = c;
+                } else {
+                    *q++ = (c >> 6) | 0xc0;
+                    *q++ = (c & 0x3f) | 0x80;
+                }
+            }
+        } else {
+            const uint16_t *src = str->u.str16;
+            /* Allocate 3 bytes per 16 bit code point. Surrogate pairs may
+               produce 4 bytes but use 2 code points.
+             */
+            str_new = js_alloc_string(ctx, len * 3, 0);
+            if (!str_new) break;
+            q = str_new->u.str8;
+            pos = 0;
+            while (pos < len) {
+                c = src[pos++];
+                if (c < 0x80) {
+                    *q++ = c;
+                } else {
+                    if (c >= 0xd800 && c < 0xdc00) {
+                        if (pos < len && !cesu8) {
+                            c1 = src[pos];
+                            if (c1 >= 0xdc00 && c1 < 0xe000) {
+                                pos++;
+                                /* surrogate pair */
+                                c = (((c & 0x3ff) << 10) | (c1 & 0x3ff)) + 0x10000;
+                            } else {
+                                /* Keep unmatched surrogate code points */
+                                /* c = 0xfffd; */ /* error */
+                            }
                         } else {
                             /* Keep unmatched surrogate code points */
                             /* c = 0xfffd; */ /* error */
                         }
-                    } else {
-                        /* Keep unmatched surrogate code points */
-                        /* c = 0xfffd; */ /* error */
                     }
+                    q += unicode_to_utf8(q, c);
                 }
-                q += unicode_to_utf8(q, c);
             }
         }
-    }
 
-    *q = '\0';
-    str_new->len = q - str_new->u.str8;
-    JS_FreeValue(ctx, val);
-    if (plen)
-        *plen = str_new->len;
-    return (const char *)str_new->u.str8;
- fail:
+        *q = '\0';
+        str_new->len = q - str_new->u.str8;
+        JS_FreeValue(ctx, val);
+        if (plen)
+            *plen = str_new->len;
+        return (const char *)str_new->u.str8;
+    }
     if (plen)
         *plen = 0;
     return NULL;
