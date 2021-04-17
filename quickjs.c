@@ -35793,35 +35793,39 @@ static JSValue JS_ReadArray(BCReaderState *s, int tag)
     int ret, prop_flags;
     BOOL is_template;
 
-    fail: for (;;) {
+     for (;;) {
 
         obj = JS_NewArray(ctx);
         if (BC_add_object_ref(s, obj))
-            break fail;
+            break;
         is_template = (tag == BC_TAG_TEMPLATE_OBJECT);
         if (bc_get_leb128(s, &len))
-            break fail;
+            break;
         for(i = 0; i < len; i++) {
             val = JS_ReadObjectRec(s);
-            if (JS_IsException(val))
-                break fail;
+            if (JS_IsException(val)) {
+                JS_FreeValue(ctx, obj);
+                return JS_EXCEPTION;
+            }
             if (is_template)
                 prop_flags = JS_PROP_ENUMERABLE;
             else
                 prop_flags = JS_PROP_C_W_E;
             ret = JS_DefinePropertyValueUint32(ctx, obj, i, val,
                                                prop_flags);
-            if (ret < 0)
-                break fail;
+            if (ret < 0) {
+                JS_FreeValue(ctx, obj);
+                return JS_EXCEPTION;
+            }
         }
         if (is_template) {
             val = JS_ReadObjectRec(s);
             if (JS_IsException(val))
-                break fail;
+                break;
             if (!JS_IsUndefined(val)) {
                 ret = JS_DefinePropertyValue(ctx, obj, JS_ATOM_raw, val, 0);
                 if (ret < 0)
-                    break fail;
+                    break;
             }
             JS_PreventExtensions(ctx, obj);
         }
