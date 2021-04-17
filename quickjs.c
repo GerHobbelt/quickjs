@@ -27955,7 +27955,7 @@ static int js_create_module_function(JSContext *ctx, JSModuleDef *m)
     return 0;
 }    
 
-    
+// goto removed
 /* Prepare a module to be executed by resolving all the imported
    variables. */
 static int js_link_module(JSContext *ctx, JSModuleDef *m)
@@ -27982,7 +27982,7 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     for(i = 0; i < m->req_module_entries_count; i++) {
         JSReqModuleEntry *rme = &m->req_module_entries[i];
         if (js_link_module(ctx, rme->module) < 0)
-            goto fail;
+            return -1;
     }
 
 #ifdef DUMP_MODULE_RESOLVE
@@ -28003,7 +28003,7 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
             ret = js_resolve_export(ctx, &res_m, &res_me, m1, me->local_name);
             if (ret != JS_RESOLVE_RES_FOUND) {
                 js_resolve_export_throw_error(ctx, ret, m, me->export_name);
-                goto fail;
+                return -1;
             }
         }
     }
@@ -28039,7 +28039,7 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
                 /* name space import */
                 val = js_get_module_ns(ctx, m1);
                 if (JS_IsException(val))
-                    goto fail;
+                    return -1;
                 set_value(ctx, &var_refs[mi->var_idx]->value, val);
 #ifdef DUMP_MODULE_RESOLVE
                 printf("namespace\n");
@@ -28054,7 +28054,7 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
                                         &res_me, m1, mi->import_name);
                 if (ret != JS_RESOLVE_RES_FOUND) {
                     js_resolve_export_throw_error(ctx, ret, m1, mi->import_name);
-                    goto fail;
+                    return -1;
                 }
                 if (res_me->local_name == JS_ATOM__star_) {
                     JSValue val;
@@ -28063,11 +28063,11 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
                     m2 = res_m->req_module_entries[res_me->u.req_module_idx].module;
                     val = js_get_module_ns(ctx, m2);
                     if (JS_IsException(val))
-                        goto fail;
+                        return -1;
                     var_ref = js_create_module_var(ctx, TRUE);
                     if (!var_ref) {
                         JS_FreeValue(ctx, val);
-                        goto fail;
+                        return -1;
                     }
                     set_value(ctx, &var_ref->value, val);
                     var_refs[mi->var_idx] = var_ref;
@@ -28104,7 +28104,7 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
         /* initialize the global variables */
         ret_val = JS_Call(ctx, m->func_obj, JS_TRUE, 0, NULL);
         if (JS_IsException(ret_val))
-            goto fail;
+            return -1;
         JS_FreeValue(ctx, ret_val);
     }
 
@@ -28112,8 +28112,6 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     printf("done instantiate\n");
 #endif
     return 0;
- fail:
-    return -1;
 }
 
 /* return JS_ATOM_NULL if the name cannot be found. Only works with
