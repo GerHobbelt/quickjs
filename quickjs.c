@@ -3860,6 +3860,7 @@ static JSValue string_buffer_end(StringBuffer *s)
 }
 
 /* create a string from a UTF-8 buffer */
+// goto removed
 JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
 {
     const uint8_t *p, *p_end, *p_start, *p_next;
@@ -3878,9 +3879,10 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
     if (p == p_end) {
         /* ASCII string */
         return js_new_string8(ctx, (const uint8_t *)buf, buf_len);
+    } else if (string_buffer_init(ctx, b, buf_len)){
+        string_buffer_free(b);
+        return JS_EXCEPTION;
     } else {
-        if (string_buffer_init(ctx, b, buf_len))
-            goto fail;
         string_buffer_write8(b, p_start, len1);
         while (p < p_end) {
             if (*p < 128) {
@@ -3914,10 +3916,6 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
         }
     }
     return string_buffer_end(b);
-
- fail:
-    string_buffer_free(b);
-    return JS_EXCEPTION;
 }
 
 static JSValue JS_ConcatString3(JSContext *ctx, const char *str1,
