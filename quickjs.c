@@ -6795,6 +6795,7 @@ static inline __exception int js_poll_interrupts(JSContext *ctx)
 }
 
 /* return -1 (exception) or TRUE/FALSE */
+// goto removed
 static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
                                    JSValueConst proto_val,
                                    BOOL throw_flag)
@@ -6802,18 +6803,16 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
     JSObject *proto, *p, *p1;
     JSShape *sh;
 
-    if (throw_flag) {
-        if (JS_VALUE_GET_TAG(obj) == JS_TAG_NULL ||
-            JS_VALUE_GET_TAG(obj) == JS_TAG_UNDEFINED)
-            goto not_obj;
-    } else {
-        if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
-            goto not_obj;
+    if ((throw_flag &&
+        (JS_VALUE_GET_TAG(obj) == JS_TAG_NULL ||
+         JS_VALUE_GET_TAG(obj) == JS_TAG_UNDEFINED)) ||
+         JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT) {
+        JS_ThrowTypeErrorNotAnObject(ctx);
+        return -1;
     }
     p = JS_VALUE_GET_OBJ(obj);
     if (JS_VALUE_GET_TAG(proto_val) != JS_TAG_OBJECT) {
         if (JS_VALUE_GET_TAG(proto_val) != JS_TAG_NULL) {
-        not_obj:
             JS_ThrowTypeErrorNotAnObject(ctx);
             return -1;
         }
