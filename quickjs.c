@@ -27222,21 +27222,21 @@ int JS_AddModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name)
         return 0;
 }
 
+// goto removed
 int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
                        JSValue val)
 {
     JSExportEntry *me;
     JSAtom name;
     name = JS_NewAtom(ctx, export_name);
-    if (name == JS_ATOM_NULL)
-        goto fail;
-    me = find_export_entry(ctx, m, name);
-    JS_FreeAtom(ctx, name);
-    if (!me)
-        goto fail;
-    set_value(ctx, me->u.local.var_ref->pvalue, val);
-    return 0;
- fail:
+    if (name != JS_ATOM_NULL) {
+        me = find_export_entry(ctx, m, name);
+        JS_FreeAtom(ctx, name);
+        if (me) {
+            set_value(ctx, me->u.local.var_ref->pvalue, val);
+            return 0;
+        }
+    }
     JS_FreeValue(ctx, val);
     return -1;
 }
