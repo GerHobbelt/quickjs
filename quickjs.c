@@ -28590,7 +28590,7 @@ static __exception int js_parse_import(JSParseState *s)
     if (next_token(s))
         return -1;
 
-    int inner_fail(JSContext *ctx, JSAtom *local_name, JSAtom *import_name) {
+    int inner_fail(JSContext *ctx, JSAtom local_name, JSAtom import_name) {
         JS_FreeAtom(ctx, local_name);
         JS_FreeAtom(ctx, import_name);
         return -1;
