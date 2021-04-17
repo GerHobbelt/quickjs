@@ -31300,6 +31300,7 @@ static BOOL code_has_label(CodeContext *s, int pos, int label)
     return FALSE;
 }
 
+// goto removed
 /* return the target label, following the OP_goto jumps
    the first opcode at destination is stored in *pop
  */
@@ -31331,13 +31332,16 @@ static int find_jump_target(JSFunctionDef *s, int label, int *pop, int *pline)
                     op = OP_return_undef;
                 /* fall thru */
             default:
-                goto done;
+                // goto done;
+                *pop = op;
+                update_label(s, label, +1);
+                return label;
             }
             break;
         }
     }
     /* cycle detected, could issue a warning */
- done:
+// done:
     *pop = op;
     update_label(s, label, +1);
     return label;
