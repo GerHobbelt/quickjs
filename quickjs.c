@@ -4715,14 +4715,17 @@ static __maybe_unused void JS_DumpShapes(JSRuntime *rt)
     printf("}\n");
 }
 
+// goto removed
 static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID class_id)
 {
     JSObject *p;
 
     js_trigger_gc(ctx->rt, sizeof(JSObject));
     p = js_malloc(ctx, sizeof(JSObject));
-    if (unlikely(!p))
-        goto fail;
+    if (unlikely(!p)){
+        js_free_shape(ctx->rt, sh);
+        return JS_EXCEPTION;
+    }
     p->class_id = class_id;
     p->extensible = TRUE;
     p->free_mark = 0;
@@ -4738,7 +4741,6 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     p->prop = js_malloc(ctx, sizeof(JSProperty) * sh->prop_size);
     if (unlikely(!p->prop)) {
         js_free(ctx, p);
-    fail:
         js_free_shape(ctx->rt, sh);
         return JS_EXCEPTION;
     }
