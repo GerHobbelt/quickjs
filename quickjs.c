@@ -30478,6 +30478,7 @@ typedef struct CodeContext {
 #define M3(op1, op2, op3)       ((op1) | ((op2) << 8) | ((op3) << 16))
 #define M4(op1, op2, op3, op4)  ((op1) | ((op2) << 8) | ((op3) << 16) | ((op4) << 24))
 
+// goto removed
 static BOOL code_match(CodeContext *s, int pos, ...)
 {
     const uint8_t *tab = s->bc_buf;
@@ -30497,13 +30498,19 @@ static BOOL code_match(CodeContext *s, int pos, ...)
             break;
         }
         for (;;) {
-            if (pos >= s->bc_len)
-                goto done;
+            if (pos >= s->bc_len) {
+                // goto done;
+                va_end(ap);
+                return ret;
+            }
             op = tab[pos];
             len = opcode_info[op].size;
             pos_next = pos + len;
-            if (pos_next > s->bc_len)
-                goto done;
+            if (pos_next > s->bc_len) {
+                // goto done;
+                va_end(ap);
+                return ret;
+            }
             if (op == OP_line_num) {
                 line_num = get_u32(tab + pos + 1);
                 pos = pos_next;
@@ -30533,8 +30540,11 @@ static BOOL code_match(CodeContext *s, int pos, ...)
                 if (arg == -1) {
                     s->idx = idx;
                 } else {
-                    if (arg != idx)
-                        goto done;
+                    if (arg != idx) {
+                        // goto done;
+                        va_end(ap);
+                        return ret;
+                    }
                 }
                 break;
             }
@@ -30549,8 +30559,11 @@ static BOOL code_match(CodeContext *s, int pos, ...)
                 if (arg == -1) {
                     s->idx = idx;
                 } else {
-                    if (arg != idx)
-                        goto done;
+                    if (arg != idx) {
+                        // goto done;
+                        va_end(ap);
+                        return ret;
+                    }
                 }
                 break;
             }
@@ -30597,7 +30610,7 @@ static BOOL code_match(CodeContext *s, int pos, ...)
         }
         pos = pos_next;
     }
- done:
+ //done:
     va_end(ap);
     return ret;
 }
