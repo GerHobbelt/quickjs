@@ -2738,7 +2738,7 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
         }
     }
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (rt->atom_free_index == 0) {
             /* allow new atom entries */
             uint32_t new_size, start;
@@ -3926,7 +3926,7 @@ static JSValue JS_ConcatString3(JSContext *ctx, const char *str1,
     int len1, len3;
     JSString *p;
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (unlikely(JS_VALUE_GET_TAG(str2) != JS_TAG_STRING)) {
             str2 = JS_ToStringFree(ctx, str2);
             if (JS_IsException(str2)) break;
@@ -3975,7 +3975,7 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BO
     int pos, len, c, c1;
     uint8_t *q;
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (JS_VALUE_GET_TAG(val1) != JS_TAG_STRING) {
             val = JS_ToString(ctx, val1);
             if (JS_IsException(val)) break;
@@ -6481,7 +6481,7 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
     BOOL backtrace_barrier;
     
     js_dbuf_init(ctx, &dbuf);
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (filename) {
             dbuf_printf(&dbuf, "    at %s", filename);
             if (line_num != -1)
@@ -7237,7 +7237,7 @@ static int JS_DefinePrivateField(JSContext *ctx, JSValueConst obj,
     JSProperty *pr;
     JSAtom prop;
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) {
             JS_ThrowTypeErrorNotAnObject(ctx);
             break;
@@ -7295,7 +7295,7 @@ static int JS_SetPrivateField(JSContext *ctx, JSValueConst obj,
     JSProperty *pr;
     JSAtom prop;
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) {
             JS_ThrowTypeErrorNotAnObject(ctx);
             break;
@@ -7660,7 +7660,7 @@ static int JS_GetOwnPropertyInternal(JSContext *ctx, JSPropertyDescriptor *desc,
     JSShapeProperty *prs;
     JSProperty *pr;
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         prs = find_own_property(&pr, p, prop);
         if (prs) {
             if (desc) {
@@ -8065,7 +8065,7 @@ static int delete_property(JSContext *ctx, JSObject *p, JSAtom atom)
     uint32_t lpr_idx;
     intptr_t h, h1;
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         sh = p->shape;
         h1 = atom & sh->prop_hash_mask;
         h = prop_hash_end(sh)[-h1 - 1];
@@ -9083,7 +9083,7 @@ int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
     }
     p = JS_VALUE_GET_OBJ(this_obj);
 
-    while (true) { // goto replacement
+    for (;;) { // goto replacement
         if (prs = find_own_property(&pr, p, prop)) {
             /* the range of the Array length property is always tested before */
             if ((prs->flags & JS_PROP_LENGTH) && (flags & JS_PROP_HAS_VALUE)) {
