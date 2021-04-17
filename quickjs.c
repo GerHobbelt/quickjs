@@ -10216,6 +10216,7 @@ static JSValue js_string_to_bigdecimal(JSContext *ctx, const char *buf,
 
 /* return an exception in case of memory error. Return JS_NAN if
    invalid syntax */
+// goto removed
 #ifdef CONFIG_BIGNUM
 static JSValue js_atof2(JSContext *ctx, const char *str, const char **pp,
                         int radix, int flags, slimb_t *pexponent)
@@ -10224,13 +10225,22 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
                        int radix, int flags)
 #endif
 {
+    JSValue done(BOOL fail, BOOL buf_allocated, JSContext *ctx, char *buf,
+        const char **pp, const char *p, JSValue val) {
+        if (fail) val = JS_NAN;
+        if (buf_allocated) js_free_rt(ctx->rt, buf);
+        if (pp) *pp = p;
+        return val;
+    }
+
     const char *p, *p_start;
     int sep, is_neg;
     BOOL is_float, has_legacy_octal;
     int atod_type = flags & ATOD_TYPE_MASK;
-    char buf1[64], *buf;
+    char buf1[64], *buf = NULL;
     int i, j, len;
     BOOL buf_allocated = FALSE;
+    BOOL check_radix_prefix = TRUE;
     JSValue val;
     
     /* optional separator between digits */
@@ -10244,15 +10254,16 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         p++;
         p_start++;
         if (!(flags & ATOD_ACCEPT_PREFIX_AFTER_SIGN))
-            goto no_radix_prefix;
+            check_radix_prefix = FALSE;
     } else if (p[0] == '-') {
         p++;
         p_start++;
         is_neg = 1;
         if (!(flags & ATOD_ACCEPT_PREFIX_AFTER_SIGN))
-            goto no_radix_prefix;
+            check_radix_prefix = FALSE;
     }
-    if (p[0] == '0') {
+    if (check_radix_prefix && p[0] == '0') {
+        BOOL has_prefix = TRUE;
         if ((p[1] == 'x' || p[1] == 'X') &&
             (radix == 0 || radix == 16)) {
             p += 2;
@@ -10272,19 +10283,19 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
             sep = 256;
             for (i = 1; (p[i] >= '0' && p[i] <= '7'); i++)
                 continue;
-            if (p[i] == '8' || p[i] == '9')
-                goto no_prefix;
-            p += 1;
-            radix = 8;
+            if (p[i] == '8' || p[i] == '9') {
+                has_prefix = FALSE;
+            } else {
+                p += 1;
+                radix = 8;
+            }
         } else {
-            goto no_prefix;
+            has_prefix = FALSE;
         }
         /* there must be a digit after the prefix */
-        if (to_digit((uint8_t)*p) >= radix)
-            goto fail;
-    no_prefix: ;
+        if (has_prefix && to_digit((uint8_t)*p) >= radix)
+            return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
     } else {
- no_radix_prefix:
         if (!(flags & ATOD_INT_ONLY) &&
             (atod_type == ATOD_TYPE_FLOAT64 ||
              atod_type == ATOD_TYPE_BIG_FLOAT) &&
@@ -10294,7 +10305,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
                 bf_t *a;
                 val = JS_NewBigFloat(ctx);
                 if (JS_IsException(val))
-                    goto done;
+                    return done(FALSE, buf_allocated, ctx, buf, pp, p, val);
                 a = JS_GetBigFloat(val);
                 bf_set_inf(a, is_neg);
             } else
@@ -10305,7 +10316,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
                     d = -d;
                 val = JS_NewFloat64(ctx, d);
             }
-            goto done;
+            return done(FALSE, buf_allocated, ctx, buf, pp, p, val);
         }
     }
     if (radix == 0)
@@ -10323,7 +10334,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
             is_float = TRUE;
             p++;
             if (*p == sep)
-                goto fail;
+                return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
             while (to_digit((uint8_t)*p) < radix ||
                    (*p == sep && to_digit((uint8_t)p[1]) < radix))
                 p++;
@@ -10346,15 +10357,17 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         }
     }
     if (p == p_start)
-        goto fail;
+        return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
 
     buf = buf1;
     buf_allocated = FALSE;
     len = p - p_start;
     if (unlikely((len + 2) > sizeof(buf1))) {
         buf = js_malloc_rt(ctx->rt, len + 2); /* no exception raised */
-        if (!buf)
-            goto mem_error;
+        if (!buf) {
+            val = JS_ThrowOutOfMemory(ctx);
+            return done(FALSE, buf_allocated, ctx, buf, pp, p, val);
+        }
         buf_allocated = TRUE;
     }
     /* remove the separators and the radix prefixes */
@@ -10383,10 +10396,10 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
                 if (!is_float)
                     atod_type = ATOD_TYPE_BIG_INT;
                 if (has_legacy_octal)
-                    goto fail;
+                    return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
             } else {
                 if (is_float && radix != 10)
-                    goto fail;
+                    return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
             }
         }
     } else {
@@ -10395,10 +10408,10 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
                 if (!is_float)
                     atod_type = ATOD_TYPE_BIG_INT;
                 if (has_legacy_octal)
-                    goto fail;
+                    return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
             } else {
                 if (is_float && radix != 10)
-                    goto fail;
+                    return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
             }
         }
     }
@@ -10414,18 +10427,18 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         break;
     case ATOD_TYPE_BIG_INT:
         if (has_legacy_octal || is_float)
-            goto fail;
+            return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
         val = ctx->rt->bigint_ops.from_string(ctx, buf, radix, flags, NULL);
         break;
     case ATOD_TYPE_BIG_FLOAT:
         if (has_legacy_octal)
-            goto fail;
+            return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
         val = ctx->rt->bigfloat_ops.from_string(ctx, buf, radix, flags,
                                                 pexponent);
         break;
     case ATOD_TYPE_BIG_DECIMAL:
         if (radix != 10)
-            goto fail;
+            return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
         val = ctx->rt->bigdecimal_ops.from_string(ctx, buf, radix, flags, NULL);
         break;
     default:
@@ -10436,24 +10449,12 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         double d;
         (void)has_legacy_octal;
         if (is_float && radix != 10)
-            goto fail;
+            return done(TRUE, buf_allocated, ctx, buf, pp, p, val);
         d = js_strtod(buf, radix, is_float);
         val = JS_NewFloat64(ctx, d);
     }
 #endif
-    
-done:
-    if (buf_allocated)
-        js_free_rt(ctx->rt, buf);
-    if (pp)
-        *pp = p;
-    return val;
- fail:
-    val = JS_NAN;
-    goto done;
- mem_error:
-    val = JS_ThrowOutOfMemory(ctx);
-    goto done;
+    return done(FALSE, buf_allocated, ctx, buf, pp, p, val);
 }
 
 #ifdef CONFIG_BIGNUM
