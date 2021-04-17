@@ -1596,6 +1596,7 @@ static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
 }
 #endif
 
+// goto removed
 JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
 {
     JSRuntime *rt;
@@ -1634,13 +1635,13 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
 #endif
     init_list_head(&rt->job_list);
 
-    if (JS_InitAtoms(rt))
-        goto fail;
+    if (JS_InitAtoms(rt) ||
+        init_class_range(rt, js_std_class_def, JS_CLASS_OBJECT,
+            countof(js_std_class_def)) < 0) {
+        JS_FreeRuntime(rt);
+        return NULL;
+    }
 
-    /* create the object, array and function classes */
-    if (init_class_range(rt, js_std_class_def, JS_CLASS_OBJECT,
-                         countof(js_std_class_def)) < 0)
-        goto fail;
     rt->class_array[JS_CLASS_ARGUMENTS].exotic = &js_arguments_exotic_methods;
     rt->class_array[JS_CLASS_STRING].exotic = &js_string_exotic_methods;
     rt->class_array[JS_CLASS_MODULE_NS].exotic = &js_module_ns_exotic_methods;
@@ -1649,8 +1650,11 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
     rt->class_array[JS_CLASS_C_FUNCTION_DATA].call = js_c_function_data_call;
     rt->class_array[JS_CLASS_BOUND_FUNCTION].call = js_call_bound_function;
     rt->class_array[JS_CLASS_GENERATOR_FUNCTION].call = js_generator_function_call;
-    if (init_shape_hash(rt))
-        goto fail;
+
+    if (init_shape_hash(rt)) {
+        JS_FreeRuntime(rt);
+        return NULL;
+    }
 
     rt->stack_size = JS_DEFAULT_STACK_SIZE;
     JS_UpdateStackTop(rt);
@@ -1658,9 +1662,6 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
     rt->current_exception = JS_NULL;
 
     return rt;
- fail:
-    JS_FreeRuntime(rt);
-    return NULL;
 }
 
 void *JS_GetRuntimeOpaque(JSRuntime *rt)
