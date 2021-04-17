@@ -7849,22 +7849,22 @@ JSAtom JS_ValueToAtom(JSContext *ctx, JSValueConst val)
     return atom;
 }
 
+// goto replacement
 static JSValue JS_GetPropertyValue(JSContext *ctx, JSValueConst this_obj,
                                    JSValue prop)
 {
     JSAtom atom;
     JSValue ret;
 
-    if (likely(JS_VALUE_GET_TAG(this_obj) == JS_TAG_OBJECT &&
-               JS_VALUE_GET_TAG(prop) == JS_TAG_INT)) {
+    while (likely(JS_VALUE_GET_TAG(this_obj) == JS_TAG_OBJECT &&
+               JS_VALUE_GET_TAG(prop) == JS_TAG_INT)) { // goto replacement
         JSObject *p;
         uint32_t idx, len;
         /* fast path for array access */
         p = JS_VALUE_GET_OBJ(this_obj);
         idx = JS_VALUE_GET_INT(prop);
         len = (uint32_t)p->u.array.count;
-        if (unlikely(idx >= len))
-            goto slow_path;
+        if (unlikely(idx >= len)) break;
         switch(p->class_id) {
         case JS_CLASS_ARRAY:
         case JS_CLASS_ARGUMENTS:
@@ -7893,18 +7893,17 @@ static JSValue JS_GetPropertyValue(JSContext *ctx, JSValueConst this_obj,
         case JS_CLASS_FLOAT64_ARRAY:
             return __JS_NewFloat64(ctx, p->u.array.u.double_ptr[idx]);
         default:
-            goto slow_path;
+            break;
         }
-    } else {
-    slow_path:
-        atom = JS_ValueToAtom(ctx, prop);
-        JS_FreeValue(ctx, prop);
-        if (unlikely(atom == JS_ATOM_NULL))
-            return JS_EXCEPTION;
-        ret = JS_GetProperty(ctx, this_obj, atom);
-        JS_FreeAtom(ctx, atom);
-        return ret;
+        break;
     }
+    atom = JS_ValueToAtom(ctx, prop);
+    JS_FreeValue(ctx, prop);
+    if (unlikely(atom == JS_ATOM_NULL))
+        return JS_EXCEPTION;
+    ret = JS_GetProperty(ctx, this_obj, atom);
+    JS_FreeAtom(ctx, atom);
+    return ret;
 }
 
 JSValue JS_GetPropertyUint32(JSContext *ctx, JSValueConst this_obj,
