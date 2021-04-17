@@ -30825,6 +30825,7 @@ static int get_label_pos(JSFunctionDef *s, int label)
     return pos;
 }
 
+// goto removed
 /* convert global variable accesses to local variables or closure
    variables when necessary */
 static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
@@ -30861,11 +30862,13 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     dbuf_put_u32(&bc_out, JS_DupAtom(ctx, hf->var_name));
                     dbuf_putc(&bc_out, JS_THROW_VAR_REDECL);
                 }
-                goto next;
+                continue;
+                // goto next;
             }
             if (cv->var_name == JS_ATOM__var_ ||
                 cv->var_name == JS_ATOM__arg_var_)
-                goto next;
+                continue;
+                // goto next;
         }
         
         dbuf_putc(&bc_out, OP_check_define_var);
@@ -30876,7 +30879,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
         if (hf->cpool_idx >= 0)
             flags |= DEFINE_GLOBAL_FUNC_VAR;
         dbuf_putc(&bc_out, flags);
-    next: ;
+    // next: ;
     }
 
     line_num = 0; /* avoid warning */
@@ -30888,7 +30891,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
         case OP_line_num:
             line_num = get_u32(bc_buf + pos + 1);
             s->line_number_size++;
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_eval: /* convert scope index to adjusted variable index */
             {
@@ -30940,8 +30945,20 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                 var_name = get_u32(bc_buf + pos + 1);
                 scope = get_u16(bc_buf + pos + 5);
                 ret = resolve_scope_private_field(ctx, s, var_name, scope, op, &bc_out);
-                if (ret < 0)
-                    goto fail;
+                if (ret < 0) {
+                    // goto fail;
+                    /* continue the copy to keep the atom refcounts consistent */
+                    /* XXX: find a better solution ? */
+                    for (; pos < bc_len; pos = pos_next) {
+                        op = bc_buf[pos];
+                        len = opcode_info[op].size;
+                        pos_next = pos + len;
+                        dbuf_put(&bc_out, bc_buf + pos, len);
+                    }
+                    dbuf_free(&s->byte_code);
+                    s->byte_code = bc_out;
+                    return -1;
+                }
                 JS_FreeAtom(ctx, var_name);
             }
             break;
@@ -30960,7 +30977,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     break;
                 }
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
         case OP_drop:
             if (0) {
                 /* remove drops before return_undef */
@@ -30983,7 +31002,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     break;
                 }
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
         case OP_insert3:
             if (OPTIMIZE) {
                 /* Transformation: insert3 put_array_el|put_ref_value drop -> put_array_el|put_ref_value */
@@ -30999,7 +31020,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     break;
                 }
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_goto:
             s->jump_size++;
@@ -31025,7 +31048,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                 }
                 break;
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_label:
             {
@@ -31037,7 +31062,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                 ls = &s->label_slots[label];
                 ls->pos2 = bc_out.size + opcode_info[op].size;
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_enter_scope:
             {
@@ -31099,13 +31126,17 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                 if (name == JS_ATOM_NULL)
                     break;
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_if_false:
         case OP_if_true:
         case OP_catch:
             s->jump_size++;
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_dup:
             if (OPTIMIZE) {
@@ -31138,7 +31169,9 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     }
                 }
             }
-            goto no_change;
+            // goto no_change;
+            dbuf_put(&bc_out, bc_buf + pos, len);
+            break;
 
         case OP_nop:
             /* remove erased code */
@@ -31148,7 +31181,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
             break;
             
         default:
-        no_change:
+        // no_change:
             dbuf_put(&bc_out, bc_buf + pos, len);
             break;
         }
@@ -31162,7 +31195,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
         return -1;
     }
     return 0;
- fail:
+/* fail:
     /* continue the copy to keep the atom refcounts consistent */
     /* XXX: find a better solution ? */
     for (; pos < bc_len; pos = pos_next) {
@@ -31173,7 +31206,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
     }
     dbuf_free(&s->byte_code);
     s->byte_code = bc_out;
-    return -1;
+    return -1;*/
 }
 
 /* the pc2line table gives a line number for each PC value */
