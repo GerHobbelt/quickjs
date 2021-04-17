@@ -10639,12 +10639,12 @@ static JSValue JS_ToNumber(JSContext *ctx, JSValueConst val)
 }
 
 /* same as JS_ToNumber() but return 0 in case of NaN/Undefined */
+// goto removed
 static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
 {
     uint32_t tag;
     JSValue ret;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
     case JS_TAG_INT:
@@ -10695,9 +10695,8 @@ static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
 #endif
     default:
         val = JS_ToNumberFree(ctx, val);
-        if (JS_IsException(val))
-            return val;
-        goto redo;
+        if (JS_IsException(val)) ret = val;
+        else ret = JS_ToIntegerFree(ctx, val);
     }
     return ret;
 }
