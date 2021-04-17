@@ -9871,8 +9871,14 @@ void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id)
 /* don't try Symbol.toPrimitive */
 #define HINT_FORCE_ORDINARY (1 << 4)
 
+// goto removed
 static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
 {
+    int exception(JSContext *ctx, JSValue val) {
+        JS_FreeValue(ctx, val);
+        return JS_EXCEPTION;
+    }
+
     int i;
     BOOL force_ordinary;
 
@@ -9885,7 +9891,7 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
     if (!force_ordinary) {
         method = JS_GetProperty(ctx, val, JS_ATOM_Symbol_toPrimitive);
         if (JS_IsException(method))
-            goto exception;
+            return exception(ctx, val);
         /* ECMA says *If exoticToPrim is not undefined* but tests in
            test262 use null as a non callable converter */
         if (!JS_IsUndefined(method) && !JS_IsNull(method)) {
@@ -9907,7 +9913,7 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
             ret = JS_CallFree(ctx, method, val, 1, (JSValueConst *)&arg);
             JS_FreeValue(ctx, arg);
             if (JS_IsException(ret))
-                goto exception;
+                return exception(ctx, val);
             JS_FreeValue(ctx, val);
             if (JS_VALUE_GET_TAG(ret) != JS_TAG_OBJECT)
                 return ret;
@@ -9925,11 +9931,11 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
         }
         method = JS_GetProperty(ctx, val, method_name);
         if (JS_IsException(method))
-            goto exception;
+            return exception(ctx, val);
         if (JS_IsFunction(ctx, method)) {
             ret = JS_CallFree(ctx, method, val, 0, NULL);
             if (JS_IsException(ret))
-                goto exception;
+                return exception(ctx, val);
             if (JS_VALUE_GET_TAG(ret) != JS_TAG_OBJECT) {
                 JS_FreeValue(ctx, val);
                 return ret;
@@ -9940,9 +9946,7 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
         }
     }
     JS_ThrowTypeError(ctx, "toPrimitive");
-exception:
-    JS_FreeValue(ctx, val);
-    return JS_EXCEPTION;
+    return exception(ctx, val);
 }
 
 static JSValue JS_ToPrimitive(JSContext *ctx, JSValueConst val, int hint)
