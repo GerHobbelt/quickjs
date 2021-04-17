@@ -34508,6 +34508,7 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
     return -1;*/
 }
 
+// goto removed
 static int JS_WriteModule(BCWriterState *s, JSValueConst obj)
 {
     JSModuleDef *m = JS_VALUE_GET_PTR(obj);
@@ -34550,10 +34551,10 @@ static int JS_WriteModule(BCWriterState *s, JSValueConst obj)
     }
     
     if (JS_WriteObjectRec(s, m->func_obj))
-        goto fail;
+        return -1;
     return 0;
- fail:
-    return -1;
+/* fail:
+    return -1;*/
 }
 
 static int JS_WriteArray(BCWriterState *s, JSValueConst obj)
