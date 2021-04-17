@@ -34601,6 +34601,7 @@ static int JS_WriteArray(BCWriterState *s, JSValueConst obj)
     return -1;*/
 }
 
+// goto removed
 static int JS_WriteObjectTag(BCWriterState *s, JSValueConst obj)
 {
     JSObject *p = JS_VALUE_GET_OBJ(obj);
@@ -34623,21 +34624,21 @@ static int JS_WriteObjectTag(BCWriterState *s, JSValueConst obj)
                 (pr->flags & JS_PROP_ENUMERABLE)) {
                 if (pr->flags & JS_PROP_TMASK) {
                     JS_ThrowTypeError(s->ctx, "only value properties are supported");
-                    goto fail;
+                    return -1;
                 }
                 if (pass == 0) {
                     prop_count++;
                 } else {
                     bc_put_atom(s, atom);
                     if (JS_WriteObjectRec(s, p->prop[i].u.value))
-                        goto fail;
+                        return -1;
                 }
             }
         }
     }
     return 0;
- fail:
-    return -1;
+/* fail:
+    return -1;*/
 }
 
 static int JS_WriteTypedArray(BCWriterState *s, JSValueConst obj)
