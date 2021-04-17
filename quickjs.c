@@ -3147,6 +3147,7 @@ static BOOL JS_AtomIsArrayIndex(JSContext *ctx, uint32_t *pval, JSAtom atom)
 /* This test must be fast if atom is not a numeric index (e.g. a
    method name). Return JS_UNDEFINED if not a numeric
    index. JS_EXCEPTION can also be returned. */
+// goto removed
 static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)
 {
     JSRuntime *rt = ctx->rt;
@@ -3175,7 +3176,7 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)
             c = *r;
             /* -0 case is specific */
             if (c == '0' && len == 2)
-                goto minus_zero;
+                return __JS_NewFloat64(ctx, -0.0);
         }
         /* XXX: should test NaN, but the tests do not check it */
         if (!is_num(c)) {
@@ -3197,7 +3198,6 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)
             c = *r;
             /* -0 case is specific */
             if (c == '0' && len == 2) {
-            minus_zero:
                 return __JS_NewFloat64(ctx, -0.0);
             }
         }
