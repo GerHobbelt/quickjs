@@ -8318,6 +8318,7 @@ static void js_free_desc(JSContext *ctx, JSPropertyDescriptor *desc)
 
 /* generic (and slower) version of JS_SetProperty() for
  * Reflect.set(). 'obj' must be an object.  */
+// goto removed
 static int JS_SetPropertyGeneric(JSContext *ctx,
                                  JSValueConst obj, JSAtom prop,
                                  JSValue val, JSValueConst this_obj,
@@ -8364,7 +8365,8 @@ static int JS_SetPropertyGeneric(JSContext *ctx,
                 JS_FreeValue(ctx, desc.value);
                 if (!(desc.flags & JS_PROP_WRITABLE)) {
                     JS_FreeValue(ctx, obj1);
-                    goto read_only_error;
+                    JS_FreeValue(ctx, val);
+                    return JS_ThrowTypeErrorReadOnly(ctx, flags, prop);
                 }
             }
             break;
@@ -8400,7 +8402,6 @@ static int JS_SetPropertyGeneric(JSContext *ctx,
             JS_FreeValue(ctx, desc.value);
             if (!(desc.flags & JS_PROP_WRITABLE) ||
                 p->class_id == JS_CLASS_MODULE_NS) {
-            read_only_error:
                 JS_FreeValue(ctx, val);
                 return JS_ThrowTypeErrorReadOnly(ctx, flags, prop);
             }
