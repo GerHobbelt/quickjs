@@ -8056,6 +8056,7 @@ static no_inline __exception int convert_fast_array_to_array(JSContext *ctx,
     return 0;
 }
 
+// goto removed
 static int delete_property(JSContext *ctx, JSObject *p, JSAtom atom)
 {
     JSShape *sh;
@@ -8064,82 +8065,83 @@ static int delete_property(JSContext *ctx, JSObject *p, JSAtom atom)
     uint32_t lpr_idx;
     intptr_t h, h1;
 
- redo:
-    sh = p->shape;
-    h1 = atom & sh->prop_hash_mask;
-    h = prop_hash_end(sh)[-h1 - 1];
-    prop = get_shape_prop(sh);
-    lpr = NULL;
-    lpr_idx = 0;   /* prevent warning */
-    while (h != 0) {
-        pr = &prop[h - 1];
-        if (likely(pr->atom == atom)) {
-            /* found ! */
-            if (!(pr->flags & JS_PROP_CONFIGURABLE))
-                return FALSE;
-            /* realloc the shape if needed */
-            if (lpr)
-                lpr_idx = lpr - get_shape_prop(sh);
-            if (js_shape_prepare_update(ctx, p, &pr))
-                return -1;
-            sh = p->shape;
-            /* remove property */
-            if (lpr) {
-                lpr = get_shape_prop(sh) + lpr_idx;
-                lpr->hash_next = pr->hash_next;
-            } else {
-                prop_hash_end(sh)[-h1 - 1] = pr->hash_next;
-            }
-            sh->deleted_prop_count++;
-            /* free the entry */
-            pr1 = &p->prop[h - 1];
-            free_property(ctx->rt, pr1, pr->flags);
-            JS_FreeAtom(ctx, pr->atom);
-            /* put default values */
-            pr->flags = 0;
-            pr->atom = JS_ATOM_NULL;
-            pr1->u.value = JS_UNDEFINED;
-
-            /* compact the properties if too many deleted properties */
-            if (sh->deleted_prop_count >= 8 &&
-                sh->deleted_prop_count >= ((unsigned)sh->prop_count / 2)) {
-                compact_properties(ctx, p);
-            }
-            return TRUE;
-        }
-        lpr = pr;
-        h = pr->hash_next;
-    }
-
-    if (p->is_exotic) {
-        if (p->fast_array) {
-            uint32_t idx;
-            if (JS_AtomIsArrayIndex(ctx, &idx, atom) &&
-                idx < p->u.array.count) {
-                if (p->class_id == JS_CLASS_ARRAY ||
-                    p->class_id == JS_CLASS_ARGUMENTS) {
-                    /* Special case deleting the last element of a fast Array */
-                    if (idx == p->u.array.count - 1) {
-                        JS_FreeValue(ctx, p->u.array.u.values[idx]);
-                        p->u.array.count = idx;
-                        return TRUE;
-                    }
-                    if (convert_fast_array_to_array(ctx, p))
-                        return -1;
-                    goto redo;
-                } else {
+    while (true) { // goto replacement
+        sh = p->shape;
+        h1 = atom & sh->prop_hash_mask;
+        h = prop_hash_end(sh)[-h1 - 1];
+        prop = get_shape_prop(sh);
+        lpr = NULL;
+        lpr_idx = 0;   /* prevent warning */
+        while (h != 0) {
+            pr = &prop[h - 1];
+            if (likely(pr->atom == atom)) {
+                /* found ! */
+                if (!(pr->flags & JS_PROP_CONFIGURABLE))
                     return FALSE;
+                /* realloc the shape if needed */
+                if (lpr)
+                    lpr_idx = lpr - get_shape_prop(sh);
+                if (js_shape_prepare_update(ctx, p, &pr))
+                    return -1;
+                sh = p->shape;
+                /* remove property */
+                if (lpr) {
+                    lpr = get_shape_prop(sh) + lpr_idx;
+                    lpr->hash_next = pr->hash_next;
+                } else {
+                    prop_hash_end(sh)[-h1 - 1] = pr->hash_next;
+                }
+                sh->deleted_prop_count++;
+                /* free the entry */
+                pr1 = &p->prop[h - 1];
+                free_property(ctx->rt, pr1, pr->flags);
+                JS_FreeAtom(ctx, pr->atom);
+                /* put default values */
+                pr->flags = 0;
+                pr->atom = JS_ATOM_NULL;
+                pr1->u.value = JS_UNDEFINED;
+
+                /* compact the properties if too many deleted properties */
+                if (sh->deleted_prop_count >= 8 &&
+                    sh->deleted_prop_count >= ((unsigned)sh->prop_count / 2)) {
+                    compact_properties(ctx, p);
+                }
+                return TRUE;
+            }
+            lpr = pr;
+            h = pr->hash_next;
+        }
+
+        if (p->is_exotic) {
+            if (p->fast_array) {
+                uint32_t idx;
+                if (JS_AtomIsArrayIndex(ctx, &idx, atom) &&
+                    idx < p->u.array.count) {
+                    if (p->class_id == JS_CLASS_ARRAY ||
+                        p->class_id == JS_CLASS_ARGUMENTS) {
+                        /* Special case deleting the last element of a fast Array */
+                        if (idx == p->u.array.count - 1) {
+                            JS_FreeValue(ctx, p->u.array.u.values[idx]);
+                            p->u.array.count = idx;
+                            return TRUE;
+                        }
+                        if (convert_fast_array_to_array(ctx, p))
+                            return -1;
+                        continue;
+                    } else {
+                        return FALSE;
+                    }
+                }
+            } else {
+                const JSClassExoticMethods *em = ctx->rt->class_array[p->class_id].exotic;
+                if (em && em->delete_property) {
+                    return em->delete_property(ctx, JS_MKPTR(JS_TAG_OBJECT, p), atom);
                 }
             }
-        } else {
-            const JSClassExoticMethods *em = ctx->rt->class_array[p->class_id].exotic;
-            if (em && em->delete_property) {
-                return em->delete_property(ctx, JS_MKPTR(JS_TAG_OBJECT, p), atom);
-            }
         }
+        /* not found */
+        return TRUE;
     }
-    /* not found */
-    return TRUE;
 }
 
 static int call_setter(JSContext *ctx, JSObject *setter,
