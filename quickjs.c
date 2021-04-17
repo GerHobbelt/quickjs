@@ -10702,12 +10702,12 @@ static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
 }
 
 /* Note: the integer value is satured to 32 bits */
+// goto removed
 static int JS_ToInt32SatFree(JSContext *ctx, int *pres, JSValue val)
 {
     uint32_t tag;
     int ret;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
     case JS_TAG_INT:
@@ -10749,7 +10749,7 @@ static int JS_ToInt32SatFree(JSContext *ctx, int *pres, JSValue val)
             *pres = 0;
             return -1;
         }
-        goto redo;
+        return JS_ToInt32SatFree(ctx, pres, val);
     }
     *pres = ret;
     return 0;
