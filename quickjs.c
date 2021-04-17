@@ -10849,12 +10849,12 @@ int JS_ToInt64Clamp(JSContext *ctx, int64_t *pres, JSValueConst val,
 
 /* Same as JS_ToInt32Free() but with a 64 bit result. Return (<0, 0)
    in case of exception */
+// goto removed
 static int JS_ToInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
 {
     uint32_t tag;
     int64_t ret;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
     case JS_TAG_INT:
@@ -10903,7 +10903,7 @@ static int JS_ToInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
             *pres = 0;
             return -1;
         }
-        goto redo;
+        return JS_ToInt64Free(ctx, pres, val);
     }
     *pres = ret;
     return 0;
