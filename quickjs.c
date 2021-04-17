@@ -32537,6 +32537,7 @@ static int add_module_variables(JSContext *ctx, JSFunctionDef *fd)
     return 0;
 }
 
+// goto removed
 /* create a function object from a function definition. The function
    definition is freed. All the child functions are also created. It
    must be done this way to resolve all the variables. */
@@ -32584,8 +32585,11 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
 
     /* add the module global variables in the closure */
     if (fd->module) {
-        if (add_module_variables(ctx, fd))
-            goto fail;
+        if (add_module_variables(ctx, fd)) {
+            // goto fail;
+            js_free_function_def(ctx, fd);
+            return JS_EXCEPTION;
+        }
     }
 
     /* first create all the child functions */
@@ -32596,8 +32600,11 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
         fd1 = list_entry(el, JSFunctionDef, link);
         cpool_idx = fd1->parent_cpool_idx;
         func_obj = js_create_function(ctx, fd1);
-        if (JS_IsException(func_obj))
-            goto fail;
+        if (JS_IsException(func_obj)) {
+            // goto fail;
+            js_free_function_def(ctx, fd);
+            return JS_EXCEPTION;
+        }
         /* save it in the constant pool */
         assert(cpool_idx >= 0);
         fd->cpool[cpool_idx] = func_obj;
@@ -32615,8 +32622,11 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     }
 #endif
 
-    if (resolve_variables(ctx, fd))
-        goto fail;
+    if (resolve_variables(ctx, fd)) {
+        // goto fail;
+        js_free_function_def(ctx, fd);
+        return JS_EXCEPTION;
+    }
 
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 2)
     if (!(fd->js_mode & JS_MODE_STRIP)) {
@@ -32630,11 +32640,17 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     }
 #endif
 
-    if (resolve_labels(ctx, fd))
-        goto fail;
+    if (resolve_labels(ctx, fd)) {
+        // goto fail;
+        js_free_function_def(ctx, fd);
+        return JS_EXCEPTION;
+    }
 
-    if (compute_stack_size(ctx, fd, &stack_size) < 0)
-        goto fail;
+    if (compute_stack_size(ctx, fd, &stack_size) < 0) {
+        // goto fail;
+        js_free_function_def(ctx, fd);
+        return JS_EXCEPTION;
+    }
 
     if (fd->js_mode & JS_MODE_STRIP) {
         function_size = offsetof(JSFunctionBytecode, debug);
@@ -32653,8 +32669,11 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     function_size += fd->byte_code.size;
 
     b = js_mallocz(ctx, function_size);
-    if (!b)
-        goto fail;
+    if (!b) {
+        // goto fail;
+        js_free_function_def(ctx, fd);
+        return JS_EXCEPTION;
+    }
     b->header.ref_count = 1;
 
     b->byte_code_buf = (void *)((uint8_t*)b + byte_code_offset);
@@ -32760,9 +32779,9 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
 
     js_free(ctx, fd);
     return JS_MKPTR(JS_TAG_FUNCTION_BYTECODE, b);
- fail:
+/* fail:
     js_free_function_def(ctx, fd);
-    return JS_EXCEPTION;
+    return JS_EXCEPTION;*/
 }
 
 static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
