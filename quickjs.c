@@ -6394,6 +6394,7 @@ static int get_sleb128(int32_t *pval, const uint8_t *buf,
     return ret;
 }
 
+// goto removed
 static int find_line_num(JSContext *ctx, JSFunctionBytecode *b,
                          uint32_t pc_value)
 {
@@ -6416,12 +6417,11 @@ static int find_line_num(JSContext *ctx, JSFunctionBytecode *b,
             uint32_t val;
             ret = get_leb128(&val, p, p_end);
             if (ret < 0)
-                goto fail;
+                return b->debug.line_num;
             pc += val;
             p += ret;
             ret = get_sleb128(&v, p, p_end);
             if (ret < 0) {
-            fail:
                 /* should never happen */
                 return b->debug.line_num;
             }
