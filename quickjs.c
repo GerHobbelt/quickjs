@@ -28914,6 +28914,7 @@ static void print_lines(const char *source, int line, int line1) {
     }
 }
 
+// goto removed (unfinished)
 static void dump_byte_code(JSContext *ctx, int pass,
                            const uint8_t *tab, int len,
                            const JSVarDef *args, int arg_count,
@@ -28942,11 +28943,13 @@ static void dump_byte_code(JSContext *ctx, int pass,
             case OP_FMT_label8:
                 pos++;
                 addr = (int8_t)tab[pos];
-                goto has_addr;
+                // goto has_addr;
+                break;
             case OP_FMT_label16:
                 pos++;
                 addr = (int16_t)get_u16(tab + pos);
-                goto has_addr;
+                // goto has_addr;
+                break;
 #endif
             case OP_FMT_atom_label_u8:
             case OP_FMT_atom_label_u16:
@@ -28956,18 +28959,17 @@ static void dump_byte_code(JSContext *ctx, int pass,
             case OP_FMT_label_u16:
                 pos++;
                 addr = get_u32(tab + pos);
-                goto has_addr;
-            has_addr:
-                if (pass == 1)
-                    addr = label_slots[addr].pos;
-                if (pass == 2)
-                    addr = label_slots[addr].pos2;
-                if (pass == 3)
-                    addr += pos;
-                if (addr >= 0 && addr < len)
-                    bits[addr] |= 1;
+                // goto has_addr;
                 break;
             }
+            if (pass == 1)
+                addr = label_slots[addr].pos;
+            if (pass == 2)
+                addr = label_slots[addr].pos2;
+            if (pass == 3)
+                addr += pos;
+            if (addr >= 0 && addr < len)
+                bits[addr] |= 1;
         }
     }
     in_source = 0;
