@@ -7442,6 +7442,7 @@ static void js_free_prop_enum(JSContext *ctx, JSPropertyEnum *tab, uint32_t len)
 
 /* return < 0 in case if exception, 0 if OK. ptab and its atoms must
    be freed by the user. */
+// goto removed
 static int __exception JS_GetOwnPropertyNamesInternal(JSContext *ctx,
                                                       JSPropertyEnum **ptab,
                                                       uint32_t *plen,
@@ -7580,26 +7581,15 @@ static int __exception JS_GetOwnPropertyNamesInternal(JSContext *ctx,
         }
     }
 
-    if (p->is_exotic) {
+    while (p->is_exotic) { // goto replacement
         int len;
         if (p->fast_array) {
             if (flags & JS_GPN_STRING_MASK) {
                 len = p->u.array.count;
-                goto add_array_keys;
             }
         } else if (p->class_id == JS_CLASS_STRING) {
             if (flags & JS_GPN_STRING_MASK) {
                 len = js_string_obj_get_length(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
-            add_array_keys:
-                for(i = 0; i < len; i++) {
-                    tab_atom[num_index].atom = __JS_AtomFromUInt32(i);
-                    if (tab_atom[num_index].atom == JS_ATOM_NULL) {
-                        js_free_prop_enum(ctx, tab_atom, num_index);
-                        return -1;
-                    }
-                    tab_atom[num_index].is_enumerable = TRUE;
-                    num_index++;
-                }
             }
         } else {
             /* Note: exotic keys are not reordered and comes after the object own properties. */
@@ -7617,7 +7607,18 @@ static int __exception JS_GetOwnPropertyNamesInternal(JSContext *ctx,
                 }
             }
             js_free(ctx, tab_exotic);
+            break;
         }
+        for(i = 0; i < len; i++) {
+            tab_atom[num_index].atom = __JS_AtomFromUInt32(i);
+            if (tab_atom[num_index].atom == JS_ATOM_NULL) {
+                js_free_prop_enum(ctx, tab_atom, num_index);
+                return -1;
+            }
+            tab_atom[num_index].is_enumerable = TRUE;
+            num_index++;
+        }
+        break;
     }
 
     assert(num_index == num_keys_count);
