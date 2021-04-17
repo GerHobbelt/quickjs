@@ -10777,11 +10777,11 @@ int JS_ToInt32Clamp(JSContext *ctx, int *pres, JSValueConst val,
     return res;
 }
 
+// goto removed
 static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
 {
     uint32_t tag;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
     case JS_TAG_INT:
@@ -10823,7 +10823,7 @@ static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
             *pres = 0;
             return -1;
         }
-        goto redo;
+        return JS_ToInt64SatFree(ctx, pres, val);
     }
 }
 
