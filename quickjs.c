@@ -7290,26 +7290,28 @@ static int JS_SetPrivateField(JSContext *ctx, JSValueConst obj,
     JSProperty *pr;
     JSAtom prop;
 
-    if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) {
-        JS_ThrowTypeErrorNotAnObject(ctx);
-        goto fail;
+    while (true) { // goto replacement
+        if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) {
+            JS_ThrowTypeErrorNotAnObject(ctx);
+            break;
+        }
+        /* safety check */
+        if (unlikely(JS_VALUE_GET_TAG(name) != JS_TAG_SYMBOL)) {
+            JS_ThrowTypeErrorNotASymbol(ctx);
+            break;
+        }
+        prop = js_symbol_to_atom(ctx, (JSValue)name);
+        p = JS_VALUE_GET_OBJ(obj);
+        prs = find_own_property(&pr, p, prop);
+        if (!prs) {
+            JS_ThrowTypeErrorPrivateNotFound(ctx, prop);
+            break;
+        }
+        set_value(ctx, &pr->u.value, val);
+        return 0;
     }
-    /* safety check */
-    if (unlikely(JS_VALUE_GET_TAG(name) != JS_TAG_SYMBOL)) {
-        JS_ThrowTypeErrorNotASymbol(ctx);
-        goto fail;
-    }
-    prop = js_symbol_to_atom(ctx, (JSValue)name);
-    p = JS_VALUE_GET_OBJ(obj);
-    prs = find_own_property(&pr, p, prop);
-    if (!prs) {
-        JS_ThrowTypeErrorPrivateNotFound(ctx, prop);
-    fail:
-        JS_FreeValue(ctx, val);
-        return -1;
-    }
-    set_value(ctx, &pr->u.value, val);
-    return 0;
+    JS_FreeValue(ctx, val);
+    return -1;
 }
 
 static int JS_AddBrand(JSContext *ctx, JSValueConst obj, JSValueConst home_obj)
