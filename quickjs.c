@@ -35387,10 +35387,10 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
     bc.header.ref_count = 1;
     //bc.gc_header.mark = 0;
 
-    fail: for (;;) {
+    for (;;) {
 
         if (bc_get_u16(s, &v16))
-            break fail;
+            break;
         idx = 0;
         bc.has_prototype = bc_get_flags(v16, &idx, 1);
         bc.has_simple_parameter_list = bc_get_flags(v16, &idx, 1);
@@ -35405,26 +35405,26 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
         bc.backtrace_barrier = bc_get_flags(v16, &idx, 1);
         bc.read_only_bytecode = s->is_rom_data;
         if (bc_get_u8(s, &v8))
-            break fail;
+            break;
         bc.js_mode = v8;
         if (bc_get_atom(s, &bc.func_name))  //@ atom leak if failure
-            break fail;
+            break;
         if (bc_get_leb128_u16(s, &bc.arg_count))
-            break fail;
+            break;
         if (bc_get_leb128_u16(s, &bc.var_count))
-            break fail;
+            break;
         if (bc_get_leb128_u16(s, &bc.defined_arg_count))
-            break fail;
+            break;
         if (bc_get_leb128_u16(s, &bc.stack_size))
-            break fail;
+            break;
         if (bc_get_leb128_int(s, &bc.closure_var_count))
-            break fail;
+            break;
         if (bc_get_leb128_int(s, &bc.cpool_count))
-            break fail;
+            break;
         if (bc_get_leb128_int(s, &bc.byte_code_len))
-            break fail;
+            break;
         if (bc_get_leb128_int(s, &local_count))
-            break fail;
+            break;
 
         if (bc.has_debug) {
             function_size = sizeof(*b);
@@ -35475,7 +35475,27 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
             bc_read_trace(s, "vars {\n");
             for(i = 0; i < local_count; i++) {
                 JSVarDef *vd = &b->vardefs[i];
-                if (bc_get_atom(s, &vd->var_name))
+                if (!bc_get_atom(s, &vd->var_name)) {
+                    if (!bc_get_leb128_int(s, &vd->scope_level)) {
+                        if (!bc_get_leb128_int(s, &vd->scope_next)) {
+                            vd->scope_next--;
+                            if (!bc_get_u8(s, &v8)) {
+                                idx = 0;
+                                vd->var_kind = bc_get_flags(v8, &idx, 4);
+                                vd->is_const = bc_get_flags(v8, &idx, 1);
+                                vd->is_lexical = bc_get_flags(v8, &idx, 1);
+                                vd->is_captured = bc_get_flags(v8, &idx, 1);
+#ifdef DUMP_READ_OBJECT
+                                bc_read_trace(s, "name: "); print_atom(s->ctx, vd->var_name); printf("\n");
+#endif
+                                continue;
+                            }
+                        }
+                    }
+                }
+                JS_FreeValue(ctx, obj);
+                return JS_EXCEPTION;
+                /*if (bc_get_atom(s, &vd->var_name))
                     break fail;
                 if (bc_get_leb128_int(s, &vd->scope_level))
                     break fail;
@@ -35491,7 +35511,7 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
                 vd->is_captured = bc_get_flags(v8, &idx, 1);
 #ifdef DUMP_READ_OBJECT
                 bc_read_trace(s, "name: "); print_atom(s->ctx, vd->var_name); printf("\n");
-#endif
+#endif*/
             }
             bc_read_trace(s, "}\n");
         }
@@ -35500,7 +35520,26 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
             for(i = 0; i < b->closure_var_count; i++) {
                 JSClosureVar *cv = &b->closure_var[i];
                 int var_idx;
-                if (bc_get_atom(s, &cv->var_name))
+                if (!bc_get_atom(s, &cv->var_name)) {
+                    if (!bc_get_leb128_int(s, &var_idx)) {
+                        cv->var_idx = var_idx;
+                        if (!bc_get_u8(s, &v8)) {
+                            idx = 0;
+                            cv->is_local = bc_get_flags(v8, &idx, 1);
+                            cv->is_arg = bc_get_flags(v8, &idx, 1);
+                            cv->is_const = bc_get_flags(v8, &idx, 1);
+                            cv->is_lexical = bc_get_flags(v8, &idx, 1);
+                            cv->var_kind = bc_get_flags(v8, &idx, 4);
+#ifdef DUMP_READ_OBJECT
+                            bc_read_trace(s, "name: "); print_atom(s->ctx, cv->var_name); printf("\n");
+#endif
+                            continue;
+                        }
+                    }
+                }
+                JS_FreeValue(ctx, obj);
+                return JS_EXCEPTION;
+                /*if (bc_get_atom(s, &cv->var_name))
                     break fail;
                 if (bc_get_leb128_int(s, &var_idx))
                     break fail;
@@ -35515,31 +35554,31 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
                 cv->var_kind = bc_get_flags(v8, &idx, 4);
 #ifdef DUMP_READ_OBJECT
                 bc_read_trace(s, "name: "); print_atom(s->ctx, cv->var_name); printf("\n");
-#endif
+#endif*/
             }
             bc_read_trace(s, "}\n");
         }
         {
             bc_read_trace(s, "bytecode {\n");
             if (JS_ReadFunctionBytecode(s, b, byte_code_offset, b->byte_code_len))
-                break fail;
+                break;
             bc_read_trace(s, "}\n");
         }
         if (b->has_debug) {
             /* read optional debug information */
             bc_read_trace(s, "debug {\n");
             if (bc_get_atom(s, &b->debug.filename))
-                break fail;
+                break;
             if (bc_get_leb128_int(s, &b->debug.line_num))
-                break fail;
+                break;
             if (bc_get_leb128_int(s, &b->debug.pc2line_len))
-                break fail;
+                break;
             if (b->debug.pc2line_len) {
                 b->debug.pc2line_buf = js_mallocz(ctx, b->debug.pc2line_len);
                 if (!b->debug.pc2line_buf)
-                    break fail;
+                    break;
                 if (bc_get_buf(s, b->debug.pc2line_buf, b->debug.pc2line_len))
-                    break fail;
+                    break;
             }
 #ifdef DUMP_READ_OBJECT
             bc_read_trace(s, "filename: "); print_atom(s->ctx, b->debug.filename); printf("\n");
@@ -35551,8 +35590,10 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
             for(i = 0; i < b->cpool_count; i++) {
                 JSValue val;
                 val = JS_ReadObjectRec(s);
-                if (JS_IsException(val))
-                    break fail;
+                if (JS_IsException(val)) {
+                    JS_FreeValue(ctx, obj);
+                    return JS_EXCEPTION;
+                }
                 b->cpool[i] = val;
             }
             bc_read_trace(s, "}\n");
@@ -35575,93 +35616,122 @@ static JSValue JS_ReadModule(BCReaderState *s)
     int i;
     uint8_t v8;
 
-    fail: for (;;) {
+    for (;;) {
 
         if (bc_get_atom(s, &module_name))
-            break fail;
+            break;
 
 #ifdef DUMP_READ_OBJECT
         bc_read_trace(s, "name: "); print_atom(s->ctx, module_name); printf("\n");
 #endif
         m = js_new_module_def(ctx, module_name);
         if (!m)
-            break fail;
+            break;
         obj = JS_DupValue(ctx, JS_MKPTR(JS_TAG_MODULE, m));
         if (bc_get_leb128_int(s, &m->req_module_entries_count))
-            break fail;
+            break;
         if (m->req_module_entries_count != 0) {
             m->req_module_entries_size = m->req_module_entries_count;
             m->req_module_entries = js_mallocz(ctx, sizeof(m->req_module_entries[0]) * m->req_module_entries_size);
             if (!m->req_module_entries)
-                break fail;
+                break;
             for(i = 0; i < m->req_module_entries_count; i++) {
                 JSReqModuleEntry *rme = &m->req_module_entries[i];
-                if (bc_get_atom(s, &rme->module_name))
-                    break fail;
+                if (bc_get_atom(s, &rme->module_name)) {
+                    if (m) {
+                        js_free_module_def(ctx, m);
+                    }
+                    return JS_EXCEPTION;
+                }
             }
         }
 
         if (bc_get_leb128_int(s, &m->export_entries_count))
-            break fail;
+            break;
         if (m->export_entries_count != 0) {
             m->export_entries_size = m->export_entries_count;
             m->export_entries = js_mallocz(ctx, sizeof(m->export_entries[0]) * m->export_entries_size);
             if (!m->export_entries)
-                break fail;
+                break;
             for(i = 0; i < m->export_entries_count; i++) {
                 JSExportEntry *me = &m->export_entries[i];
-                if (bc_get_u8(s, &v8))
-                    break fail;
+                if (bc_get_u8(s, &v8)) {
+                    if (m) {
+                        js_free_module_def(ctx, m);
+                    }
+                    return JS_EXCEPTION;
+                }
                 me->export_type = v8;
                 if (me->export_type == JS_EXPORT_TYPE_LOCAL) {
-                    if (bc_get_leb128_int(s, &me->u.local.var_idx))
-                        break fail;
+                    if (bc_get_leb128_int(s, &me->u.local.var_idx)) {
+                        if (m) {
+                            js_free_module_def(ctx, m);
+                        }
+                        return JS_EXCEPTION;
+                    }
                 } else {
-                    if (bc_get_leb128_int(s, &me->u.req_module_idx))
-                        break fail;
-                    if (bc_get_atom(s, &me->local_name))
-                        break fail;
+                    if (bc_get_leb128_int(s, &me->u.req_module_idx)) {
+                        if (m) {
+                            js_free_module_def(ctx, m);
+                        }
+                        return JS_EXCEPTION;
+                    }
+                    if (bc_get_atom(s, &me->local_name)) {
+                        if (m) {
+                            js_free_module_def(ctx, m);
+                        }
+                        return JS_EXCEPTION;
+                    }
                 }
-                if (bc_get_atom(s, &me->export_name))
-                    break fail;
+                if (bc_get_atom(s, &me->export_name)) {
+                    if (m) {
+                        js_free_module_def(ctx, m);
+                    }
+                    return JS_EXCEPTION;
+                }
             }
         }
 
         if (bc_get_leb128_int(s, &m->star_export_entries_count))
-            break fail;
+            break;
         if (m->star_export_entries_count != 0) {
             m->star_export_entries_size = m->star_export_entries_count;
             m->star_export_entries = js_mallocz(ctx, sizeof(m->star_export_entries[0]) * m->star_export_entries_size);
             if (!m->star_export_entries)
-                break fail;
+                break;
             for(i = 0; i < m->star_export_entries_count; i++) {
                 JSStarExportEntry *se = &m->star_export_entries[i];
                 if (bc_get_leb128_int(s, &se->req_module_idx))
-                    break fail;
+                    break;
             }
         }
 
         if (bc_get_leb128_int(s, &m->import_entries_count))
-            break fail;
+            break;
         if (m->import_entries_count != 0) {
             m->import_entries_size = m->import_entries_count;
             m->import_entries = js_mallocz(ctx, sizeof(m->import_entries[0]) * m->import_entries_size);
             if (!m->import_entries)
-                break fail;
+                break;
             for(i = 0; i < m->import_entries_count; i++) {
                 JSImportEntry *mi = &m->import_entries[i];
-                if (bc_get_leb128_int(s, &mi->var_idx))
-                    break fail;
-                if (bc_get_atom(s, &mi->import_name))
-                    break fail;
-                if (bc_get_leb128_int(s, &mi->req_module_idx))
-                    break fail;
+                if (!bc_get_leb128_int(s, &mi->var_idx)) {
+                    if (!bc_get_atom(s, &mi->import_name)) {
+                        if (!bc_get_leb128_int(s, &mi->req_module_idx)) {
+                            continue;
+                        }
+                    }
+                }
+                if (m) {
+                    js_free_module_def(ctx, m);
+                }
+                return JS_EXCEPTION;
             }
         }
 
         m->func_obj = JS_ReadObjectRec(s);
         if (JS_IsException(m->func_obj))
-            break fail;
+            break;
         return obj;
     }
 // fail:
