@@ -34103,6 +34103,7 @@ static void bc_set_flags(uint32_t *pflags, int *pidx, uint32_t val, int n)
     *pidx += n;
 }
 
+// goto removed
 static int bc_atom_to_idx(BCWriterState *s, uint32_t *pres, JSAtom atom)
 {
     uint32_t v;
@@ -34129,8 +34130,11 @@ static int bc_atom_to_idx(BCWriterState *s, uint32_t *pres, JSAtom atom)
     }
     if (js_resize_array(s->ctx, (void **)&s->idx_to_atom,
                         sizeof(s->idx_to_atom[0]),
-                        &s->idx_to_atom_size, s->idx_to_atom_count + 1))
-        goto fail;
+                        &s->idx_to_atom_size, s->idx_to_atom_count + 1)) {
+        // goto fail;
+        *pres = 0;
+        return -1;
+    }
 
     v = s->idx_to_atom_count++;
     s->idx_to_atom[v] = atom + s->first_atom;
@@ -34138,9 +34142,9 @@ static int bc_atom_to_idx(BCWriterState *s, uint32_t *pres, JSAtom atom)
     s->atom_to_idx[atom] = v;
     *pres = v;
     return 0;
- fail:
+/* fail:
     *pres = 0;
-    return -1;
+    return -1;*/
 }
 
 static int bc_put_atom(BCWriterState *s, JSAtom atom)
