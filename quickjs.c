@@ -35213,6 +35213,7 @@ static int JS_ReadFunctionBytecode(BCReaderState *s, JSFunctionBytecode *b,
 }
 
 #ifdef CONFIG_BIGNUM
+// goto removed
 static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
 {
     JSValue obj = JS_UNDEFINED;
@@ -35224,10 +35225,15 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
     limb_t v;
     bf_t *a;
     int bpos, d;
-    
+
+    JSValue inner_fail(BCReaderState *s, JSValue obj) {
+        JS_FreeValue(s->ctx, obj);
+        return JS_EXCEPTION;
+    }
+
     p = js_new_bf(s->ctx);
     if (!p)
-        goto fail;
+        return inner_fail(s, obj);
     switch(tag) {
     case BC_TAG_BIG_INT:
         obj = JS_MKPTR(JS_TAG_BIG_INT, p);
@@ -35244,7 +35250,7 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
 
     /* sign + exponent */
     if (bc_get_sleb128(s, &e))
-        goto fail;
+        return inner_fail(s, obj);
 
     a = &p->num;
     a->sign = e & 1;
@@ -35265,11 +35271,11 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
         a->expn != BF_EXP_INF &&
         a->expn != BF_EXP_NAN) {
         if (bc_get_leb128(s, &len))
-            goto fail;
+            return inner_fail(s, obj);
         bc_read_trace(s, "len=%" PRId64 "\n", (int64_t)len);
         if (len == 0) {
             JS_ThrowInternalError(s->ctx, "invalid bignum length");
-            goto fail;
+            return inner_fail(s, obj);
         }
         if (tag != BC_TAG_BIG_DECIMAL)
             l = (len + sizeof(limb_t) - 1) / sizeof(limb_t);
@@ -35277,7 +35283,7 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
             l = (len + LIMB_DIGITS - 1) / LIMB_DIGITS;
         if (bf_resize(a, l)) {
             JS_ThrowOutOfMemory(s->ctx);
-            goto fail;
+            return inner_fail(s, obj);
         }
         if (tag != BC_TAG_BIG_DECIMAL) {
             n = len & (sizeof(limb_t) - 1);
@@ -35285,7 +35291,7 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
                 v = 0;
                 for(i = 0; i < n; i++) {
                     if (bc_get_u8(s, &v8))
-                        goto fail;
+                        return inner_fail(s, obj);
                     v |= (limb_t)v8 << ((sizeof(limb_t) - n + i) * 8);
                 }
                 a->tab[0] = v;
@@ -35296,13 +35302,13 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
             for(; i < l; i++) {
 #if LIMB_BITS == 32
                 if (bc_get_u32(s, &v))
-                    goto fail;
+                    return inner_fail(s, obj);
 #ifdef WORDS_BIGENDIAN
                 v = bswap32(v);
 #endif
 #else
                 if (bc_get_u64(s, &v))
-                    goto fail;
+                    return inner_fail(s, obj);
 #ifdef WORDS_BIGENDIAN
                 v = bswap64(v);
 #endif
@@ -35321,7 +35327,7 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
                 for(; j < LIMB_DIGITS; j++) {
                     if (bpos == 0) {
                         if (bc_get_u8(s, &v8))
-                            goto fail;
+                            return inner_fail(s, obj);
                         d = v8 & 0xf;
                         bpos = 1;
                     } else {
@@ -35330,7 +35336,7 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
                     }
                     if (d >= 10) {
                         JS_ThrowInternalError(s->ctx, "invalid digit");
-                        goto fail;
+                        return inner_fail(s, obj);
                     }
                     v += mp_pow_dec[j] * d;
                 }
@@ -35340,9 +35346,9 @@ static JSValue JS_ReadBigNum(BCReaderState *s, int tag)
     }
     bc_read_trace(s, "}\n");
     return obj;
- fail:
+/* fail:
     JS_FreeValue(s->ctx, obj);
-    return JS_EXCEPTION;
+    return JS_EXCEPTION;*/
 }
 #endif /* CONFIG_BIGNUM */
 
