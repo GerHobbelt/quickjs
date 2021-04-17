@@ -4639,6 +4639,7 @@ static JSShape *find_hashed_shape_proto(JSRuntime *rt, JSObject *proto)
 
 /* find a hashed shape matching sh + (prop, prop_flags). Return NULL if
    not found */
+// goto removed
 static JSShape *find_hashed_shape_prop(JSRuntime *rt, JSShape *sh,
                                        JSAtom atom, int prop_flags)
 {
@@ -4658,14 +4659,13 @@ static JSShape *find_hashed_shape_prop(JSRuntime *rt, JSShape *sh,
             for(i = 0; i < n; i++) {
                 if (unlikely(sh1->prop[i].atom != sh->prop[i].atom) ||
                     unlikely(sh1->prop[i].flags != sh->prop[i].flags))
-                    goto next;
+                    continue;
             }
             if (unlikely(sh1->prop[n].atom != atom) ||
                 unlikely(sh1->prop[n].flags != prop_flags))
-                goto next;
+                continue;
             return sh1;
         }
-    next: ;
     }
     return NULL;
 }
