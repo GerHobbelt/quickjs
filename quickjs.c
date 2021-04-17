@@ -4171,6 +4171,7 @@ static JSValue JS_ConcatString1(JSContext *ctx,
 
 /* op1 and op2 are converted to strings. For convience, op1 or op2 =
    JS_EXCEPTION are accepted and return JS_EXCEPTION.  */
+// goto removed
 static JSValue JS_ConcatString(JSContext *ctx, JSValue op1, JSValue op2)
 {
     JSValue ret;
@@ -4194,28 +4195,27 @@ static JSValue JS_ConcatString(JSContext *ctx, JSValue op1, JSValue op2)
     p2 = JS_VALUE_GET_STRING(op2);
 
     /* XXX: could also check if p1 is empty */
-    if (p2->len == 0) {
-        goto ret_op1;
-    }
-    if (p1->header.ref_count == 1 && p1->is_wide_char == p2->is_wide_char
-    &&  js_malloc_usable_size(ctx, p1) >= sizeof(*p1) + ((p1->len + p2->len) << p2->is_wide_char) + 1 - p1->is_wide_char) {
-        /* Concatenate in place in available space at the end of p1 */
-        if (p1->is_wide_char) {
-            memcpy(p1->u.str16 + p1->len, p2->u.str16, p2->len << 1);
-            p1->len += p2->len;
-        } else {
-            memcpy(p1->u.str8 + p1->len, p2->u.str8, p2->len);
-            p1->len += p2->len;
-            p1->u.str8[p1->len] = '\0';
+    while (p2->len != 0) { // goto replacement
+        if (p1->header.ref_count == 1 && p1->is_wide_char == p2->is_wide_char
+        &&  js_malloc_usable_size(ctx, p1) >= sizeof(*p1) + ((p1->len + p2->len) << p2->is_wide_char) + 1 - p1->is_wide_char) {
+            /* Concatenate in place in available space at the end of p1 */
+            if (p1->is_wide_char) {
+                memcpy(p1->u.str16 + p1->len, p2->u.str16, p2->len << 1);
+                p1->len += p2->len;
+            } else {
+                memcpy(p1->u.str8 + p1->len, p2->u.str8, p2->len);
+                p1->len += p2->len;
+                p1->u.str8[p1->len] = '\0';
+            }
+            break;
         }
-    ret_op1:
+        ret = JS_ConcatString1(ctx, p1, p2);
+        JS_FreeValue(ctx, op1);
         JS_FreeValue(ctx, op2);
-        return op1;
+        return ret;
     }
-    ret = JS_ConcatString1(ctx, p1, p2);
-    JS_FreeValue(ctx, op1);
     JS_FreeValue(ctx, op2);
-    return ret;
+    return op1;
 }
 
 /* Shape support */
