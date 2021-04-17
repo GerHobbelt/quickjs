@@ -30059,6 +30059,7 @@ static void get_loc_or_ref(DynBuf *bc, BOOL is_ref, int idx)
     dbuf_put_u16(bc, idx);
 }
 
+// goto removed
 static int resolve_scope_private_field1(JSContext *ctx,
                                         BOOL *pis_ref, int *pvar_kind,
                                         JSFunctionDef *s,
@@ -30101,7 +30102,10 @@ static int resolve_scope_private_field1(JSContext *ctx,
                             if (idx < 0)
                                 return -1;
                         }
-                        goto done;
+                        // goto done;
+                        *pis_ref = is_ref;
+                        *pvar_kind = var_kind;
+                        return idx;
                     }
                 }
             }
@@ -30114,7 +30118,7 @@ static int resolve_scope_private_field1(JSContext *ctx,
         }
         is_ref = TRUE;
     }
- done:
+ //done:
     *pis_ref = is_ref;
     *pvar_kind = var_kind;
     return idx;
