@@ -6811,7 +6811,7 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
         return JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT;
     }
 
-    if (must_fail()) {
+    if (must_fail(throw_flag, obj)) {
         JS_ThrowTypeErrorNotAnObject(ctx);
         return -1;
     }
@@ -8773,7 +8773,7 @@ static int JS_SetPropertyValue(JSContext *ctx, JSValueConst this_obj,
     int ret;
     if (likely(JS_VALUE_GET_TAG(this_obj) == JS_TAG_OBJECT &&
                JS_VALUE_GET_TAG(prop) == JS_TAG_INT)) {
-        ret = try_set_property_value();
+        ret = try_set_property_value(ctx, this_obj, prop, val, flags);
         if (ret >= -1) {
             return ret;
         } else if (ret == TRYSETPROPVAL_FAIL_OOB) {
@@ -9084,7 +9084,7 @@ int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
     p = JS_VALUE_GET_OBJ(this_obj);
 
     for (;;) { // goto replacement
-        if (prs = find_own_property(&pr, p, prop)) {
+        if ((prs = find_own_property(&pr, p, prop))) {
             /* the range of the Array length property is always tested before */
             if ((prs->flags & JS_PROP_LENGTH) && (flags & JS_PROP_HAS_VALUE)) {
                 uint32_t array_length;
@@ -9874,7 +9874,7 @@ void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id)
 // goto removed
 static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
 {
-    int exception(JSContext *ctx, JSValue val) {
+    JSValue exception(JSContext *ctx, JSValue val) {
         JS_FreeValue(ctx, val);
         return JS_EXCEPTION;
     }
