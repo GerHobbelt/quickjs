@@ -33686,6 +33686,7 @@ static void skip_shebang(JSParseState *s)
     }
 }
 
+// goto removed
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
 static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
                                  const char *input, size_t input_len,
@@ -33702,6 +33703,12 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
 
     js_parse_init(ctx, s, input, input_len, filename);
     skip_shebang(s);
+
+    JSValue inner_fail1(JSContext *ctx, JSModuleDef *m) {
+        if (m)
+            js_free_module_def(ctx, m);
+        return JS_EXCEPTION;
+    }
 
     eval_type = flags & JS_EVAL_TYPE_MASK;
     m = NULL;
@@ -33736,7 +33743,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
     }
     fd = js_new_function_def(ctx, NULL, TRUE, FALSE, filename, 1);
     if (!fd)
-        goto fail1;
+        return inner_fail1(ctx, m);
     s->cur_func = fd;
     fd->eval_type = eval_type;
     fd->has_this_binding = (eval_type != JS_EVAL_TYPE_DIRECT);
@@ -33755,8 +33762,12 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
     fd->js_mode = js_mode;
     fd->func_name = JS_DupAtom(ctx, JS_ATOM__eval_);
     if (b) {
-        if (add_closure_variables(ctx, fd, b, scope_idx))
-            goto fail;
+        if (add_closure_variables(ctx, fd, b, scope_idx)) {
+            // goto fail;
+            free_token(s, &s->token);
+            js_free_function_def(ctx, fd);
+            return inner_fail1(ctx, m);
+        }
     }
     fd->module = m;
     s->is_module = (m != NULL);
@@ -33767,21 +33778,21 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
     
     err = js_parse_program(s);
     if (err) {
-    fail:
+    //fail:
         free_token(s, &s->token);
         js_free_function_def(ctx, fd);
-        goto fail1;
+        return inner_fail1(ctx, m);
     }
 
     /* create the function object and all the enclosed functions */
     fun_obj = js_create_function(ctx, fd);
     if (JS_IsException(fun_obj))
-        goto fail1;
+        return inner_fail1(ctx, m);
     /* Could add a flag to avoid resolution if necessary */
     if (m) {
         m->func_obj = fun_obj;
         if (js_resolve_module(ctx, m) < 0)
-            goto fail1;
+            return inner_fail1(ctx, m);
         fun_obj = JS_DupValue(ctx, JS_MKPTR(JS_TAG_MODULE, m));
     }
     if (flags & JS_EVAL_FLAG_COMPILE_ONLY) {
@@ -33790,11 +33801,11 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
         ret_val = JS_EvalFunctionInternal(ctx, fun_obj, this_obj, var_refs, sf);
     }
     return ret_val;
- fail1:
+// fail1:
     /* XXX: should free all the unresolved dependencies */
-    if (m)
+/*    if (m)
         js_free_module_def(ctx, m);
-    return JS_EXCEPTION;
+    return JS_EXCEPTION;*/
 }
 
 /* the indirection is needed to make 'eval' optional */
