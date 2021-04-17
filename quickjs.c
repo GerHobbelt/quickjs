@@ -27694,8 +27694,15 @@ static JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
     return js_get_module_ns(ctx, m);
 }
 
+// goto removed
 static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
 {
+    JSValue inner_fail(JSContext *ctx, GetExportNamesState *s, JSValue obj) {
+        js_free(ctx, s->exported_names);
+        JS_FreeValue(ctx, obj);
+        return JS_EXCEPTION;
+    }
+
     JSValue obj;
     JSObject *p;
     GetExportNamesState s_s, *s = &s_s;
@@ -27710,8 +27717,9 @@ static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
     memset(s, 0, sizeof(*s));
     ret = get_exported_names(ctx, s, m, FALSE);
     js_free(ctx, s->modules);
+
     if (ret)
-        goto fail;
+        return inner_fail(ctx, s, obj);
 
     /* Resolve the exported names. The ambiguous exports are removed */
     for(i = 0; i < s->exported_names_count; i++) {
@@ -27731,7 +27739,7 @@ static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
         if (res != JS_RESOLVE_RES_FOUND) {
             if (res != JS_RESOLVE_RES_AMBIGUOUS) {
                 js_resolve_export_throw_error(ctx, res, m, en->export_name);
-                goto fail;
+                return inner_fail(ctx, s, obj);
             }
             en->export_type = EXPORTED_NAME_AMBIGUOUS;
         } else {
@@ -27765,7 +27773,7 @@ static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
                                   JS_PROP_ENUMERABLE | JS_PROP_WRITABLE |
                                   JS_PROP_VARREF);
                 if (!pr)
-                    goto fail;
+                    return inner_fail(ctx, s, obj);
                 var_ref->header.ref_count++;
                 pr->u.var_ref = var_ref;
             }
@@ -27776,7 +27784,7 @@ static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
                                           en->export_name,
                                           JS_AUTOINIT_ID_MODULE_NS,
                                           en->u.module, JS_PROP_ENUMERABLE | JS_PROP_WRITABLE) < 0)
-                goto fail;
+                return inner_fail(ctx, s, obj);
             break;
         default:
             break;
@@ -27791,10 +27799,6 @@ static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
 
     p->extensible = FALSE;
     return obj;
- fail:
-    js_free(ctx, s->exported_names);
-    JS_FreeValue(ctx, obj);
-    return JS_EXCEPTION;
 }
 
 static JSValue js_get_module_ns(JSContext *ctx, JSModuleDef *m)
