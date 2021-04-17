@@ -6803,10 +6803,15 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
     JSObject *proto, *p, *p1;
     JSShape *sh;
 
-    if ((throw_flag &&
-        (JS_VALUE_GET_TAG(obj) == JS_TAG_NULL ||
-         JS_VALUE_GET_TAG(obj) == JS_TAG_UNDEFINED)) ||
-         JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT) {
+    BOOL must_fail(BOOL throw_flag, JSValueConst obj) {
+        if (throw_flag) {
+            return JS_VALUE_GET_TAG(obj) == JS_TAG_NULL ||
+                   JS_VALUE_GET_TAG(obj) == JS_TAG_UNDEFINED;
+        }
+        return JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT;
+    }
+
+    if (must_fail()) {
         JS_ThrowTypeErrorNotAnObject(ctx);
         return -1;
     }
