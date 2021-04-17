@@ -2686,6 +2686,7 @@ static JSAtom js_get_atom_index(JSRuntime *rt, JSAtomStruct *p)
     return i;
 }
 
+// goto removed
 /* string case (internal). Return JS_ATOM_NULL if error. 'str' is
    freed. */
 static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
@@ -2721,7 +2722,9 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
                 js_string_memcmp(p, str, len) == 0) {
                 if (!__JS_AtomIsConst(i))
                     p->header.ref_count++;
-                goto done;
+                if (str)
+                    js_free_string(rt, str);
+                return i;
             }
             i = p->hash_next;
         }
@@ -2735,111 +2738,106 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
         }
     }
 
-    if (rt->atom_free_index == 0) {
-        /* allow new atom entries */
-        uint32_t new_size, start;
-        JSAtomStruct **new_array;
+    while (true){ // goto replacement
+        if (rt->atom_free_index == 0) {
+            /* allow new atom entries */
+            uint32_t new_size, start;
+            JSAtomStruct **new_array;
 
-        /* alloc new with size progression 3/2:
-           4 6 9 13 19 28 42 63 94 141 211 316 474 711 1066 1599 2398 3597 5395 8092
-           preallocating space for predefined atoms (at least 195).
-         */
-        new_size = max_int(211, rt->atom_size * 3 / 2);
-        if (new_size > JS_ATOM_MAX)
-            goto fail;
-        /* XXX: should use realloc2 to use slack space */
-        new_array = js_realloc_rt(rt, rt->atom_array, sizeof(*new_array) * new_size);
-        if (!new_array)
-            goto fail;
-        /* Note: the atom 0 is not used */
-        start = rt->atom_size;
-        if (start == 0) {
-            /* JS_ATOM_NULL entry */
-            p = js_mallocz_rt(rt, sizeof(JSAtomStruct));
-            if (!p) {
-                js_free_rt(rt, new_array);
-                goto fail;
+            /* alloc new with size progression 3/2:
+               4 6 9 13 19 28 42 63 94 141 211 316 474 711 1066 1599 2398 3597 5395 8092
+               preallocating space for predefined atoms (at least 195).
+             */
+            new_size = max_int(211, rt->atom_size * 3 / 2);
+            if (new_size > JS_ATOM_MAX) break;
+            /* XXX: should use realloc2 to use slack space */
+            new_array = js_realloc_rt(rt, rt->atom_array, sizeof(*new_array) * new_size);
+            if (!new_array) break;
+            /* Note: the atom 0 is not used */
+            start = rt->atom_size;
+            if (start == 0) {
+                /* JS_ATOM_NULL entry */
+                p = js_mallocz_rt(rt, sizeof(JSAtomStruct));
+                if (!p) {
+                    js_free_rt(rt, new_array);
+                    break;
+                }
+                p->header.ref_count = 1;  /* not refcounted */
+                p->atom_type = JS_ATOM_TYPE_SYMBOL;
+    #ifdef DUMP_LEAKS
+                list_add_tail(&p->link, &rt->string_list);
+    #endif
+                new_array[0] = p;
+                rt->atom_count++;
+                start = 1;
             }
-            p->header.ref_count = 1;  /* not refcounted */
-            p->atom_type = JS_ATOM_TYPE_SYMBOL;
-#ifdef DUMP_LEAKS
-            list_add_tail(&p->link, &rt->string_list);
-#endif
-            new_array[0] = p;
-            rt->atom_count++;
-            start = 1;
+            rt->atom_size = new_size;
+            rt->atom_array = new_array;
+            rt->atom_free_index = start;
+            for(i = start; i < new_size; i++) {
+                uint32_t next;
+                if (i == (new_size - 1))
+                    next = 0;
+                else
+                    next = i + 1;
+                rt->atom_array[i] = atom_set_free(next);
+            }
         }
-        rt->atom_size = new_size;
-        rt->atom_array = new_array;
-        rt->atom_free_index = start;
-        for(i = start; i < new_size; i++) {
-            uint32_t next;
-            if (i == (new_size - 1))
-                next = 0;
-            else
-                next = i + 1;
-            rt->atom_array[i] = atom_set_free(next);
-        }
-    }
 
-    if (str) {
-        if (str->atom_type == 0) {
-            p = str;
-            p->atom_type = atom_type;
+        if (str) {
+            if (str->atom_type == 0) {
+                p = str;
+                p->atom_type = atom_type;
+            } else {
+                p = js_malloc_rt(rt, sizeof(JSString) +
+                                 (str->len << str->is_wide_char) +
+                                 1 - str->is_wide_char);
+                if (unlikely(!p)) break;
+                p->header.ref_count = 1;
+                p->is_wide_char = str->is_wide_char;
+                p->len = str->len;
+    #ifdef DUMP_LEAKS
+                list_add_tail(&p->link, &rt->string_list);
+    #endif
+                memcpy(p->u.str8, str->u.str8, (str->len << str->is_wide_char) +
+                       1 - str->is_wide_char);
+                js_free_string(rt, str);
+            }
         } else {
-            p = js_malloc_rt(rt, sizeof(JSString) +
-                             (str->len << str->is_wide_char) +
-                             1 - str->is_wide_char);
-            if (unlikely(!p))
-                goto fail;
+            p = js_malloc_rt(rt, sizeof(JSAtomStruct)); /* empty wide string */
+            if (!p)
+                return JS_ATOM_NULL;
             p->header.ref_count = 1;
-            p->is_wide_char = str->is_wide_char;
-            p->len = str->len;
-#ifdef DUMP_LEAKS
+            p->is_wide_char = 1;    /* Hack to represent NULL as a JSString */
+            p->len = 0;
+    #ifdef DUMP_LEAKS
             list_add_tail(&p->link, &rt->string_list);
-#endif
-            memcpy(p->u.str8, str->u.str8, (str->len << str->is_wide_char) +
-                   1 - str->is_wide_char);
-            js_free_string(rt, str);
+    #endif
         }
-    } else {
-        p = js_malloc_rt(rt, sizeof(JSAtomStruct)); /* empty wide string */
-        if (!p)
-            return JS_ATOM_NULL;
-        p->header.ref_count = 1;
-        p->is_wide_char = 1;    /* Hack to represent NULL as a JSString */
-        p->len = 0;
-#ifdef DUMP_LEAKS
-        list_add_tail(&p->link, &rt->string_list);
-#endif
+
+        /* use an already free entry */
+        i = rt->atom_free_index;
+        rt->atom_free_index = atom_get_free(rt->atom_array[i]);
+        rt->atom_array[i] = p;
+
+        p->hash = h;
+        p->hash_next = i;   /* atom_index */
+        p->atom_type = atom_type;
+
+        rt->atom_count++;
+
+        if (atom_type != JS_ATOM_TYPE_SYMBOL) {
+            p->hash_next = rt->atom_hash[h1];
+            rt->atom_hash[h1] = i;
+            if (unlikely(rt->atom_count >= rt->atom_count_resize))
+                JS_ResizeAtomHash(rt, rt->atom_hash_size * 2);
+        }
+
+        //    JS_DumpAtoms(rt);
+        return i;
     }
-
-    /* use an already free entry */
-    i = rt->atom_free_index;
-    rt->atom_free_index = atom_get_free(rt->atom_array[i]);
-    rt->atom_array[i] = p;
-
-    p->hash = h;
-    p->hash_next = i;   /* atom_index */
-    p->atom_type = atom_type;
-
-    rt->atom_count++;
-
-    if (atom_type != JS_ATOM_TYPE_SYMBOL) {
-        p->hash_next = rt->atom_hash[h1];
-        rt->atom_hash[h1] = i;
-        if (unlikely(rt->atom_count >= rt->atom_count_resize))
-            JS_ResizeAtomHash(rt, rt->atom_hash_size * 2);
-    }
-
-    //    JS_DumpAtoms(rt);
-    return i;
-
- fail:
     i = JS_ATOM_NULL;
- done:
-    if (str)
-        js_free_string(rt, str);
+    if (str) js_free_string(rt, str);
     return i;
 }
 
