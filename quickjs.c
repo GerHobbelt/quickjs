@@ -35371,6 +35371,7 @@ static int BC_add_object_ref(BCReaderState *s, JSValueConst obj)
     return BC_add_object_ref1(s, JS_VALUE_GET_OBJ(obj));
 }
 
+// goto removed
 static JSValue JS_ReadFunctionTag(BCReaderState *s)
 {
     JSContext *ctx = s->ctx;
@@ -35386,177 +35387,180 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
     bc.header.ref_count = 1;
     //bc.gc_header.mark = 0;
 
-    if (bc_get_u16(s, &v16))
-        goto fail;
-    idx = 0;
-    bc.has_prototype = bc_get_flags(v16, &idx, 1);
-    bc.has_simple_parameter_list = bc_get_flags(v16, &idx, 1);
-    bc.is_derived_class_constructor = bc_get_flags(v16, &idx, 1);
-    bc.need_home_object = bc_get_flags(v16, &idx, 1);
-    bc.func_kind = bc_get_flags(v16, &idx, 2);
-    bc.new_target_allowed = bc_get_flags(v16, &idx, 1);
-    bc.super_call_allowed = bc_get_flags(v16, &idx, 1);
-    bc.super_allowed = bc_get_flags(v16, &idx, 1);
-    bc.arguments_allowed = bc_get_flags(v16, &idx, 1);
-    bc.has_debug = bc_get_flags(v16, &idx, 1);
-    bc.backtrace_barrier = bc_get_flags(v16, &idx, 1);
-    bc.read_only_bytecode = s->is_rom_data;
-    if (bc_get_u8(s, &v8))
-        goto fail;
-    bc.js_mode = v8;
-    if (bc_get_atom(s, &bc.func_name))  //@ atom leak if failure
-        goto fail;
-    if (bc_get_leb128_u16(s, &bc.arg_count))
-        goto fail;
-    if (bc_get_leb128_u16(s, &bc.var_count))
-        goto fail;
-    if (bc_get_leb128_u16(s, &bc.defined_arg_count))
-        goto fail;
-    if (bc_get_leb128_u16(s, &bc.stack_size))
-        goto fail;
-    if (bc_get_leb128_int(s, &bc.closure_var_count))
-        goto fail;
-    if (bc_get_leb128_int(s, &bc.cpool_count))
-        goto fail;
-    if (bc_get_leb128_int(s, &bc.byte_code_len))
-        goto fail;
-    if (bc_get_leb128_int(s, &local_count))
-        goto fail;
+    fail: for (;;) {
 
-    if (bc.has_debug) {
-        function_size = sizeof(*b);
-    } else {
-        function_size = offsetof(JSFunctionBytecode, debug);
-    }
-    cpool_offset = function_size;
-    function_size += bc.cpool_count * sizeof(*bc.cpool);
-    vardefs_offset = function_size;
-    function_size += local_count * sizeof(*bc.vardefs);
-    closure_var_offset = function_size;
-    function_size += bc.closure_var_count * sizeof(*bc.closure_var);
-    byte_code_offset = function_size;
-    if (!bc.read_only_bytecode) {
-        function_size += bc.byte_code_len;
-    }
+        if (bc_get_u16(s, &v16))
+            break fail;
+        idx = 0;
+        bc.has_prototype = bc_get_flags(v16, &idx, 1);
+        bc.has_simple_parameter_list = bc_get_flags(v16, &idx, 1);
+        bc.is_derived_class_constructor = bc_get_flags(v16, &idx, 1);
+        bc.need_home_object = bc_get_flags(v16, &idx, 1);
+        bc.func_kind = bc_get_flags(v16, &idx, 2);
+        bc.new_target_allowed = bc_get_flags(v16, &idx, 1);
+        bc.super_call_allowed = bc_get_flags(v16, &idx, 1);
+        bc.super_allowed = bc_get_flags(v16, &idx, 1);
+        bc.arguments_allowed = bc_get_flags(v16, &idx, 1);
+        bc.has_debug = bc_get_flags(v16, &idx, 1);
+        bc.backtrace_barrier = bc_get_flags(v16, &idx, 1);
+        bc.read_only_bytecode = s->is_rom_data;
+        if (bc_get_u8(s, &v8))
+            break fail;
+        bc.js_mode = v8;
+        if (bc_get_atom(s, &bc.func_name))  //@ atom leak if failure
+            break fail;
+        if (bc_get_leb128_u16(s, &bc.arg_count))
+            break fail;
+        if (bc_get_leb128_u16(s, &bc.var_count))
+            break fail;
+        if (bc_get_leb128_u16(s, &bc.defined_arg_count))
+            break fail;
+        if (bc_get_leb128_u16(s, &bc.stack_size))
+            break fail;
+        if (bc_get_leb128_int(s, &bc.closure_var_count))
+            break fail;
+        if (bc_get_leb128_int(s, &bc.cpool_count))
+            break fail;
+        if (bc_get_leb128_int(s, &bc.byte_code_len))
+            break fail;
+        if (bc_get_leb128_int(s, &local_count))
+            break fail;
 
-    b = js_mallocz(ctx, function_size);
-    if (!b)
-        return JS_EXCEPTION;
-            
-    memcpy(b, &bc, offsetof(JSFunctionBytecode, debug));
-    b->header.ref_count = 1;
-    if (local_count != 0) {
-        b->vardefs = (void *)((uint8_t*)b + vardefs_offset);
-    }
-    if (b->closure_var_count != 0) {
-        b->closure_var = (void *)((uint8_t*)b + closure_var_offset);
-    }
-    if (b->cpool_count != 0) {
-        b->cpool = (void *)((uint8_t*)b + cpool_offset);
-    }
-    
-    add_gc_object(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
-            
-    obj = JS_MKPTR(JS_TAG_FUNCTION_BYTECODE, b);
+        if (bc.has_debug) {
+            function_size = sizeof(*b);
+        } else {
+            function_size = offsetof(JSFunctionBytecode, debug);
+        }
+        cpool_offset = function_size;
+        function_size += bc.cpool_count * sizeof(*bc.cpool);
+        vardefs_offset = function_size;
+        function_size += local_count * sizeof(*bc.vardefs);
+        closure_var_offset = function_size;
+        function_size += bc.closure_var_count * sizeof(*bc.closure_var);
+        byte_code_offset = function_size;
+        if (!bc.read_only_bytecode) {
+            function_size += bc.byte_code_len;
+        }
+
+        b = js_mallocz(ctx, function_size);
+        if (!b)
+            return JS_EXCEPTION;
+
+        memcpy(b, &bc, offsetof(JSFunctionBytecode, debug));
+        b->header.ref_count = 1;
+        if (local_count != 0) {
+            b->vardefs = (void *)((uint8_t*)b + vardefs_offset);
+        }
+        if (b->closure_var_count != 0) {
+            b->closure_var = (void *)((uint8_t*)b + closure_var_offset);
+        }
+        if (b->cpool_count != 0) {
+            b->cpool = (void *)((uint8_t*)b + cpool_offset);
+        }
+
+        add_gc_object(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
+
+        obj = JS_MKPTR(JS_TAG_FUNCTION_BYTECODE, b);
 
 #ifdef DUMP_READ_OBJECT
-    bc_read_trace(s, "name: "); print_atom(s->ctx, b->func_name); printf("\n");
+        bc_read_trace(s, "name: "); print_atom(s->ctx, b->func_name); printf("\n");
 #endif
-    bc_read_trace(s, "args=%d vars=%d defargs=%d closures=%d cpool=%d\n",
-                  b->arg_count, b->var_count, b->defined_arg_count,
-                  b->closure_var_count, b->cpool_count);
-    bc_read_trace(s, "stack=%d bclen=%d locals=%d\n",
-                  b->stack_size, b->byte_code_len, local_count);
+        bc_read_trace(s, "args=%d vars=%d defargs=%d closures=%d cpool=%d\n",
+                      b->arg_count, b->var_count, b->defined_arg_count,
+                      b->closure_var_count, b->cpool_count);
+        bc_read_trace(s, "stack=%d bclen=%d locals=%d\n",
+                      b->stack_size, b->byte_code_len, local_count);
 
-    if (local_count != 0) {
-        bc_read_trace(s, "vars {\n");
-        for(i = 0; i < local_count; i++) {
-            JSVarDef *vd = &b->vardefs[i];
-            if (bc_get_atom(s, &vd->var_name))
-                goto fail;
-            if (bc_get_leb128_int(s, &vd->scope_level))
-                goto fail;
-            if (bc_get_leb128_int(s, &vd->scope_next))
-                goto fail;
-            vd->scope_next--;
-            if (bc_get_u8(s, &v8))
-                goto fail;
-            idx = 0;
-            vd->var_kind = bc_get_flags(v8, &idx, 4);
-            vd->is_const = bc_get_flags(v8, &idx, 1);
-            vd->is_lexical = bc_get_flags(v8, &idx, 1);
-            vd->is_captured = bc_get_flags(v8, &idx, 1);
+        if (local_count != 0) {
+            bc_read_trace(s, "vars {\n");
+            for(i = 0; i < local_count; i++) {
+                JSVarDef *vd = &b->vardefs[i];
+                if (bc_get_atom(s, &vd->var_name))
+                    break fail;
+                if (bc_get_leb128_int(s, &vd->scope_level))
+                    break fail;
+                if (bc_get_leb128_int(s, &vd->scope_next))
+                    break fail;
+                vd->scope_next--;
+                if (bc_get_u8(s, &v8))
+                    break fail;
+                idx = 0;
+                vd->var_kind = bc_get_flags(v8, &idx, 4);
+                vd->is_const = bc_get_flags(v8, &idx, 1);
+                vd->is_lexical = bc_get_flags(v8, &idx, 1);
+                vd->is_captured = bc_get_flags(v8, &idx, 1);
 #ifdef DUMP_READ_OBJECT
-            bc_read_trace(s, "name: "); print_atom(s->ctx, vd->var_name); printf("\n");
+                bc_read_trace(s, "name: "); print_atom(s->ctx, vd->var_name); printf("\n");
 #endif
+            }
+            bc_read_trace(s, "}\n");
         }
-        bc_read_trace(s, "}\n");
-    }
-    if (b->closure_var_count != 0) {
-        bc_read_trace(s, "closure vars {\n");
-        for(i = 0; i < b->closure_var_count; i++) {
-            JSClosureVar *cv = &b->closure_var[i];
-            int var_idx;
-            if (bc_get_atom(s, &cv->var_name))
-                goto fail;
-            if (bc_get_leb128_int(s, &var_idx))
-                goto fail;
-            cv->var_idx = var_idx;
-            if (bc_get_u8(s, &v8))
-                goto fail;
-            idx = 0;
-            cv->is_local = bc_get_flags(v8, &idx, 1);
-            cv->is_arg = bc_get_flags(v8, &idx, 1);
-            cv->is_const = bc_get_flags(v8, &idx, 1);
-            cv->is_lexical = bc_get_flags(v8, &idx, 1);
-            cv->var_kind = bc_get_flags(v8, &idx, 4);
+        if (b->closure_var_count != 0) {
+            bc_read_trace(s, "closure vars {\n");
+            for(i = 0; i < b->closure_var_count; i++) {
+                JSClosureVar *cv = &b->closure_var[i];
+                int var_idx;
+                if (bc_get_atom(s, &cv->var_name))
+                    break fail;
+                if (bc_get_leb128_int(s, &var_idx))
+                    break fail;
+                cv->var_idx = var_idx;
+                if (bc_get_u8(s, &v8))
+                    break fail;
+                idx = 0;
+                cv->is_local = bc_get_flags(v8, &idx, 1);
+                cv->is_arg = bc_get_flags(v8, &idx, 1);
+                cv->is_const = bc_get_flags(v8, &idx, 1);
+                cv->is_lexical = bc_get_flags(v8, &idx, 1);
+                cv->var_kind = bc_get_flags(v8, &idx, 4);
 #ifdef DUMP_READ_OBJECT
-            bc_read_trace(s, "name: "); print_atom(s->ctx, cv->var_name); printf("\n");
+                bc_read_trace(s, "name: "); print_atom(s->ctx, cv->var_name); printf("\n");
 #endif
+            }
+            bc_read_trace(s, "}\n");
         }
-        bc_read_trace(s, "}\n");
-    }
-    {
-        bc_read_trace(s, "bytecode {\n");
-        if (JS_ReadFunctionBytecode(s, b, byte_code_offset, b->byte_code_len))
-            goto fail;
-        bc_read_trace(s, "}\n");
-    }
-    if (b->has_debug) {
-        /* read optional debug information */
-        bc_read_trace(s, "debug {\n");
-        if (bc_get_atom(s, &b->debug.filename))
-            goto fail;
-        if (bc_get_leb128_int(s, &b->debug.line_num))
-            goto fail;
-        if (bc_get_leb128_int(s, &b->debug.pc2line_len))
-            goto fail;
-        if (b->debug.pc2line_len) {
-            b->debug.pc2line_buf = js_mallocz(ctx, b->debug.pc2line_len);
-            if (!b->debug.pc2line_buf)
-                goto fail;
-            if (bc_get_buf(s, b->debug.pc2line_buf, b->debug.pc2line_len))
-                goto fail;
+        {
+            bc_read_trace(s, "bytecode {\n");
+            if (JS_ReadFunctionBytecode(s, b, byte_code_offset, b->byte_code_len))
+                break fail;
+            bc_read_trace(s, "}\n");
         }
+        if (b->has_debug) {
+            /* read optional debug information */
+            bc_read_trace(s, "debug {\n");
+            if (bc_get_atom(s, &b->debug.filename))
+                break fail;
+            if (bc_get_leb128_int(s, &b->debug.line_num))
+                break fail;
+            if (bc_get_leb128_int(s, &b->debug.pc2line_len))
+                break fail;
+            if (b->debug.pc2line_len) {
+                b->debug.pc2line_buf = js_mallocz(ctx, b->debug.pc2line_len);
+                if (!b->debug.pc2line_buf)
+                    break fail;
+                if (bc_get_buf(s, b->debug.pc2line_buf, b->debug.pc2line_len))
+                    break fail;
+            }
 #ifdef DUMP_READ_OBJECT
-        bc_read_trace(s, "filename: "); print_atom(s->ctx, b->debug.filename); printf("\n");
+            bc_read_trace(s, "filename: "); print_atom(s->ctx, b->debug.filename); printf("\n");
 #endif
-        bc_read_trace(s, "}\n");
-    }
-    if (b->cpool_count != 0) {
-        bc_read_trace(s, "cpool {\n");
-        for(i = 0; i < b->cpool_count; i++) {
-            JSValue val;
-            val = JS_ReadObjectRec(s);
-            if (JS_IsException(val))
-                goto fail;
-            b->cpool[i] = val;
+            bc_read_trace(s, "}\n");
         }
-        bc_read_trace(s, "}\n");
+        if (b->cpool_count != 0) {
+            bc_read_trace(s, "cpool {\n");
+            for(i = 0; i < b->cpool_count; i++) {
+                JSValue val;
+                val = JS_ReadObjectRec(s);
+                if (JS_IsException(val))
+                    break fail;
+                b->cpool[i] = val;
+            }
+            bc_read_trace(s, "}\n");
+        }
+        b->realm = JS_DupContext(ctx);
+        return obj;
     }
-    b->realm = JS_DupContext(ctx);
-    return obj;
- fail:
+// fail:
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
