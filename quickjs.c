@@ -10923,12 +10923,12 @@ int JS_ToInt64Ext(JSContext *ctx, int64_t *pres, JSValueConst val)
 }
 
 /* return (<0, 0) in case of exception */
+// goto removed
 static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val)
 {
     uint32_t tag;
     int32_t ret;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
     case JS_TAG_INT:
@@ -10978,7 +10978,7 @@ static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val)
             *pres = 0;
             return -1;
         }
-        goto redo;
+        return JS_ToInt32Free(ctx, pres, val);
     }
     *pres = ret;
     return 0;
