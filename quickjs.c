@@ -32923,6 +32923,7 @@ static __exception int js_parse_directives(JSParseState *s)
     return js_parse_seek_token(s, &pos);
 }
 
+// goto removed
 static int js_parse_function_check_names(JSParseState *s, JSFunctionDef *fd,
                                          JSAtom func_name)
 {
@@ -32955,22 +32956,24 @@ static int js_parse_function_check_names(JSParseState *s, JSFunctionDef *fd,
             if (name != JS_ATOM_NULL) {
                 for (i = 0; i < idx; i++) {
                     if (fd->args[i].var_name == name)
-                        goto duplicate;
+                        return js_parse_error(s, "duplicate argument names not allowed in this context");
+                        // goto duplicate;
                 }
                 /* Check if argument name duplicates a destructuring parameter */
                 /* XXX: should have a flag for such variables */
                 for (i = 0; i < fd->var_count; i++) {
                     if (fd->vars[i].var_name == name &&
                         fd->vars[i].scope_level == 0)
-                        goto duplicate;
+                        return js_parse_error(s, "duplicate argument names not allowed in this context");
+                        // goto duplicate;
                 }
             }
         }
     }
     return 0;
 
-duplicate:
-    return js_parse_error(s, "duplicate argument names not allowed in this context");
+/*duplicate:
+    return js_parse_error(s, "duplicate argument names not allowed in this context");*/
 }
 
 /* create a function to initialize class fields */
