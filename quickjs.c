@@ -34829,6 +34829,7 @@ static int JS_WriteObjectRec(BCWriterState *s, JSValueConst obj)
     return -1;*/
 }
 
+// goto removed
 /* create the atom table */
 static int JS_WriteObjectAtoms(BCWriterState *s)
 {
@@ -34856,17 +34857,19 @@ static int JS_WriteObjectAtoms(BCWriterState *s)
     /* XXX: could just append dbuf1 data, but it uses more memory if
        dbuf1 is larger than dbuf */
     atoms_size = s->dbuf.size;
-    if (dbuf_realloc(&dbuf1, dbuf1.size + atoms_size))
-        goto fail;
+    if (dbuf_realloc(&dbuf1, dbuf1.size + atoms_size)) {
+        dbuf_free(&dbuf1);
+        return -1;
+    }
     memmove(dbuf1.buf + atoms_size, dbuf1.buf, dbuf1.size);
     memcpy(dbuf1.buf, s->dbuf.buf, atoms_size);
     dbuf1.size += atoms_size;
     dbuf_free(&s->dbuf);
     s->dbuf = dbuf1;
     return 0;
- fail:
+/* fail:
     dbuf_free(&dbuf1);
-    return -1;
+    return -1;*/
 }
 
 uint8_t *JS_WriteObject2(JSContext *ctx, size_t *psize, JSValueConst obj,
