@@ -31195,10 +31195,10 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
         return -1;
     }
     return 0;
-/* fail:
+// fail:
     /* continue the copy to keep the atom refcounts consistent */
     /* XXX: find a better solution ? */
-    for (; pos < bc_len; pos = pos_next) {
+    /*for (; pos < bc_len; pos = pos_next) {
         op = bc_buf[pos];
         len = opcode_info[op].size;
         pos_next = pos + len;
