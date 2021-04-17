@@ -34557,6 +34557,7 @@ static int JS_WriteModule(BCWriterState *s, JSValueConst obj)
     return -1;*/
 }
 
+// goto removed
 static int JS_WriteArray(BCWriterState *s, JSValueConst obj)
 {
     JSObject *p = JS_VALUE_GET_OBJ(obj);
@@ -34575,29 +34576,29 @@ static int JS_WriteArray(BCWriterState *s, JSValueConst obj)
         is_template = FALSE;
     }
     if (js_get_length32(s->ctx, &len, obj))
-        goto fail1;
+        return -1;
     bc_put_leb128(s, len);
     for(i = 0; i < len; i++) {
         val = JS_GetPropertyUint32(s->ctx, obj, i);
         if (JS_IsException(val))
-            goto fail1;
+            return -1;
         ret = JS_WriteObjectRec(s, val);
         JS_FreeValue(s->ctx, val);
         if (ret)
-            goto fail1;
+            return -1;
     }
     if (is_template) {
         val = JS_GetProperty(s->ctx, obj, JS_ATOM_raw);
         if (JS_IsException(val))
-            goto fail1;
+            return -1;
         ret = JS_WriteObjectRec(s, val);
         JS_FreeValue(s->ctx, val);
         if (ret)
-            goto fail1;
+            return -1;
     }
     return 0;
- fail1:
-    return -1;
+/* fail1:
+    return -1;*/
 }
 
 static int JS_WriteObjectTag(BCWriterState *s, JSValueConst obj)
