@@ -33618,6 +33618,7 @@ static void js_parse_init(JSContext *ctx, JSParseState *s,
     s->token.line_num = 1;
 }
 
+// goto removed
 static JSValue JS_EvalFunctionInternal(JSContext *ctx, JSValue fun_obj,
                                        JSValueConst this_obj,
                                        JSVarRef **var_refs, JSStackFrame *sf)
@@ -33634,13 +33635,17 @@ static JSValue JS_EvalFunctionInternal(JSContext *ctx, JSValue fun_obj,
         m = JS_VALUE_GET_PTR(fun_obj);
         /* the module refcount should be >= 2 */
         JS_FreeValue(ctx, fun_obj);
-        if (js_create_module_function(ctx, m) < 0)
-            goto fail;
-        if (js_link_module(ctx, m) < 0)
-            goto fail;
+        if (js_create_module_function(ctx, m) < 0) {
+            js_free_modules(ctx, JS_FREE_MODULE_NOT_EVALUATED);
+            return JS_EXCEPTION;
+        }
+        if (js_link_module(ctx, m) < 0) {
+            js_free_modules(ctx, JS_FREE_MODULE_NOT_EVALUATED);
+            return JS_EXCEPTION;
+        }
         ret_val = js_evaluate_module(ctx, m);
         if (JS_IsException(ret_val)) {
-        fail:
+        // fail:
             js_free_modules(ctx, JS_FREE_MODULE_NOT_EVALUATED);
             return JS_EXCEPTION;
         }
