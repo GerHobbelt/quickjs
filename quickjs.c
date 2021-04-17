@@ -28206,6 +28206,7 @@ JSModuleDef *JS_RunModule(JSContext *ctx, const char *basename,
     return m;
 }
 
+// goto removed
 static JSValue js_dynamic_import_job(JSContext *ctx,
                                      int argc, JSValueConst *argv)
 {
@@ -28216,35 +28217,29 @@ static JSValue js_dynamic_import_job(JSContext *ctx,
     const char *basename = NULL, *filename;
     JSValue ret, err, ns;
 
-    if (!JS_IsString(basename_val)) {
+    if (JS_IsString(basename_val)) {
+        basename = JS_ToCString(ctx, basename_val);
+        if (basename) {
+            filename = JS_ToCString(ctx, specifier);
+            if (filename) {
+                m = JS_RunModule(ctx, basename, filename);
+                JS_FreeCString(ctx, filename);
+                if (m) {
+                    ns = js_get_module_ns(ctx, m);
+                    if (!JS_IsException(ns)) {
+                        ret = JS_Call(ctx, resolving_funcs[0], JS_UNDEFINED,
+                                      1, (JSValueConst *)&ns);
+                        JS_FreeValue(ctx, ret); /* XXX: what to do if exception ? */
+                        JS_FreeValue(ctx, ns);
+                        JS_FreeCString(ctx, basename);
+                        return JS_UNDEFINED;
+                    }
+                }
+            }
+        }
+    } else {
         JS_ThrowTypeError(ctx, "no function filename for import()");
-        goto exception;
     }
-    basename = JS_ToCString(ctx, basename_val);
-    if (!basename)
-        goto exception;
-
-    filename = JS_ToCString(ctx, specifier);
-    if (!filename)
-        goto exception;
-                     
-    m = JS_RunModule(ctx, basename, filename);
-    JS_FreeCString(ctx, filename);
-    if (!m)
-        goto exception;
-
-    /* return the module namespace */
-    ns = js_get_module_ns(ctx, m);
-    if (JS_IsException(ns))
-        goto exception;
-
-    ret = JS_Call(ctx, resolving_funcs[0], JS_UNDEFINED,
-                   1, (JSValueConst *)&ns);
-    JS_FreeValue(ctx, ret); /* XXX: what to do if exception ? */
-    JS_FreeValue(ctx, ns);
-    JS_FreeCString(ctx, basename);
-    return JS_UNDEFINED;
- exception:
 
     err = JS_GetException(ctx);
     ret = JS_Call(ctx, resolving_funcs[1], JS_UNDEFINED,
