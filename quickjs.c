@@ -28363,6 +28363,7 @@ static __exception JSAtom js_parse_from_clause(JSParseState *s)
     return module_name;
 }
 
+// goto removed
 static __exception int js_parse_export(JSParseState *s)
 {
     JSContext *ctx = s->ctx;
@@ -28390,6 +28391,17 @@ static __exception int js_parse_export(JSParseState *s)
     if (next_token(s))
         return -1;
 
+    int inner_fail(JSContext *ctx, JSAtom local_name, JSAtom JSAtom export_name) {
+        JS_FreeAtom(ctx, local_name);
+        JS_FreeAtom(ctx, export_name);
+        return -1;
+    }
+
+    int inner_fail1(JSContext *ctx, JSAtom export_name) {
+        JS_FreeAtom(ctx, export_name);
+        return -1;
+    }
+
     switch(tok) {
     case '{':
         first_export = m->export_entries_count;
@@ -28401,21 +28413,22 @@ static __exception int js_parse_export(JSParseState *s)
             local_name = JS_DupAtom(ctx, s->token.u.ident.atom);
             export_name = JS_ATOM_NULL;
             if (next_token(s))
-                goto fail;
+                return inner_fail(ctx, local_name, export_name);
             if (token_is_pseudo_keyword(s, JS_ATOM_as)) {
                 if (next_token(s))
-                    goto fail;
+                    return inner_fail(ctx, local_name, export_name);
                 if (!token_is_ident(s->token.val)) {
                     js_parse_error(s, "identifier expected");
-                    goto fail;
+                    return inner_fail(ctx, local_name, export_name);
                 }
                 export_name = JS_DupAtom(ctx, s->token.u.ident.atom);
                 if (next_token(s)) {
-                fail:
+                    return inner_fail(ctx, local_name, export_name);
+                /*fail:
                     JS_FreeAtom(ctx, local_name);
                 fail1:
                     JS_FreeAtom(ctx, export_name);
-                    return -1;
+                    return -1;*/
                 }
             } else {
                 export_name = JS_DupAtom(ctx, local_name);
@@ -28459,14 +28472,14 @@ static __exception int js_parse_export(JSParseState *s)
             }
             export_name = JS_DupAtom(ctx, s->token.u.ident.atom);
             if (next_token(s))
-                goto fail1;
+                return inner_fail1(ctx, export_name);
             module_name = js_parse_from_clause(s);
             if (module_name == JS_ATOM_NULL)
-                goto fail1;
+                return inner_fail1(ctx, export_name);
             idx = add_req_module_entry(ctx, m, module_name);
             JS_FreeAtom(ctx, module_name);
             if (idx < 0)
-                goto fail1;
+                return inner_fail1(ctx, export_name);
             me = add_export_entry(s, m, JS_ATOM__star_, export_name,
                                   JS_EXPORT_TYPE_INDIRECT);
             JS_FreeAtom(ctx, export_name);
