@@ -8649,136 +8649,150 @@ retry:
     return TRUE;
 }
 
+#define TRYSETPROPVAL_SLOW_PATH -2
+#define TRYSETPROPVAL_FAIL_OOB -3
+static uint8_t try_set_property_value(JSContext *ctx,
+    JSValueConst this_obj, JSValue prop, JSValue val, int flags)
+{
+    JSObject *p;
+    uint32_t idx;
+    double d;
+    int32_t v;
+
+    /* fast path for array access */
+    p = JS_VALUE_GET_OBJ(this_obj);
+    idx = JS_VALUE_GET_INT(prop);
+
+    switch(p->class_id) {
+    case JS_CLASS_ARRAY:
+        if (unlikely(idx >= (uint32_t)p->u.array.count)) {
+            JSObject *p1;
+            JSShape *sh1;
+
+            /* fast path to add an element to the array */
+            if (idx != (uint32_t)p->u.array.count ||
+                !p->fast_array || !p->extensible)
+                return TRYSETPROPVAL_SLOW_PATH;
+            /* check if prototype chain has a numeric property */
+            p1 = p->shape->proto;
+            while (p1 != NULL) {
+                sh1 = p1->shape;
+                if (p1->class_id == JS_CLASS_ARRAY) {
+                    if (unlikely(!p1->fast_array))
+                        return TRYSETPROPVAL_SLOW_PATH;
+                } else if (p1->class_id == JS_CLASS_OBJECT) {
+                    if (unlikely(sh1->has_small_array_index))
+                        return TRYSETPROPVAL_SLOW_PATH;
+                } else {
+                    return TRYSETPROPVAL_SLOW_PATH;
+                }
+                p1 = sh1->proto;
+            }
+            /* add element */
+            return add_fast_array_element(ctx, p, val, flags);
+        }
+        set_value(ctx, &p->u.array.u.values[idx], val);
+        break;
+    case JS_CLASS_ARGUMENTS:
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_SLOW_PATH;
+        set_value(ctx, &p->u.array.u.values[idx], val);
+        break;
+    case JS_CLASS_UINT8C_ARRAY:
+        if (JS_ToUint8ClampFree(ctx, &v, val))
+            return -1;
+        /* Note: the conversion can detach the typed array, so the
+           array bound check must be done after */
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_FAIL_OOB;
+        p->u.array.u.uint8_ptr[idx] = v;
+        break;
+    case JS_CLASS_INT8_ARRAY:
+    case JS_CLASS_UINT8_ARRAY:
+        if (JS_ToInt32Free(ctx, &v, val))
+            return -1;
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_FAIL_OOB;
+        p->u.array.u.uint8_ptr[idx] = v;
+        break;
+    case JS_CLASS_INT16_ARRAY:
+    case JS_CLASS_UINT16_ARRAY:
+        if (JS_ToInt32Free(ctx, &v, val))
+            return -1;
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_FAIL_OOB;
+        p->u.array.u.uint16_ptr[idx] = v;
+        break;
+    case JS_CLASS_INT32_ARRAY:
+    case JS_CLASS_UINT32_ARRAY:
+        if (JS_ToInt32Free(ctx, &v, val))
+            return -1;
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_FAIL_OOB;
+        p->u.array.u.uint32_ptr[idx] = v;
+        break;
+#ifdef CONFIG_BIGNUM
+    case JS_CLASS_BIG_INT64_ARRAY:
+    case JS_CLASS_BIG_UINT64_ARRAY:
+        /* XXX: need specific conversion function */
+        {
+            int64_t v;
+            if (JS_ToBigInt64Free(ctx, &v, val))
+                return -1;
+            if (unlikely(idx >= (uint32_t)p->u.array.count))
+                return TRYSETPROPVAL_FAIL_OOB;
+            p->u.array.u.uint64_ptr[idx] = v;
+        }
+        break;
+#endif
+    case JS_CLASS_FLOAT32_ARRAY:
+        if (JS_ToFloat64Free(ctx, &d, val))
+            return -1;
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_FAIL_OOB;
+        p->u.array.u.float_ptr[idx] = d;
+        break;
+    case JS_CLASS_FLOAT64_ARRAY:
+        if (JS_ToFloat64Free(ctx, &d, val))
+            return -1;
+        if (unlikely(idx >= (uint32_t)p->u.array.count))
+            return TRYSETPROPVAL_FAIL_OOB;
+        p->u.array.u.double_ptr[idx] = d;
+        break;
+    default:
+        return TRYSETPROPVAL_SLOW_PATH;
+    }
+    return TRUE;
+}
+
 /* flags can be JS_PROP_THROW or JS_PROP_THROW_STRICT */
+// goto removed
 static int JS_SetPropertyValue(JSContext *ctx, JSValueConst this_obj,
                                JSValue prop, JSValue val, int flags)
 {
+    int ret;
     if (likely(JS_VALUE_GET_TAG(this_obj) == JS_TAG_OBJECT &&
                JS_VALUE_GET_TAG(prop) == JS_TAG_INT)) {
-        JSObject *p;
-        uint32_t idx;
-        double d;
-        int32_t v;
-
-        /* fast path for array access */
-        p = JS_VALUE_GET_OBJ(this_obj);
-        idx = JS_VALUE_GET_INT(prop);
-        switch(p->class_id) {
-        case JS_CLASS_ARRAY:
-            if (unlikely(idx >= (uint32_t)p->u.array.count)) {
-                JSObject *p1;
-                JSShape *sh1;
-
-                /* fast path to add an element to the array */
-                if (idx != (uint32_t)p->u.array.count ||
-                    !p->fast_array || !p->extensible)
-                    goto slow_path;
-                /* check if prototype chain has a numeric property */
-                p1 = p->shape->proto;
-                while (p1 != NULL) {
-                    sh1 = p1->shape;
-                    if (p1->class_id == JS_CLASS_ARRAY) {
-                        if (unlikely(!p1->fast_array))
-                            goto slow_path;
-                    } else if (p1->class_id == JS_CLASS_OBJECT) {
-                        if (unlikely(sh1->has_small_array_index))
-                            goto slow_path;
-                    } else {
-                        goto slow_path;
-                    }
-                    p1 = sh1->proto;
-                }
-                /* add element */
-                return add_fast_array_element(ctx, p, val, flags);
-            }
-            set_value(ctx, &p->u.array.u.values[idx], val);
-            break;
-        case JS_CLASS_ARGUMENTS:
-            if (unlikely(idx >= (uint32_t)p->u.array.count))
-                goto slow_path;
-            set_value(ctx, &p->u.array.u.values[idx], val);
-            break;
-        case JS_CLASS_UINT8C_ARRAY:
-            if (JS_ToUint8ClampFree(ctx, &v, val))
-                return -1;
-            /* Note: the conversion can detach the typed array, so the
-               array bound check must be done after */
-            if (unlikely(idx >= (uint32_t)p->u.array.count))
-                goto ta_out_of_bound;
-            p->u.array.u.uint8_ptr[idx] = v;
-            break;
-        case JS_CLASS_INT8_ARRAY:
-        case JS_CLASS_UINT8_ARRAY:
-            if (JS_ToInt32Free(ctx, &v, val))
-                return -1;
-            if (unlikely(idx >= (uint32_t)p->u.array.count))
-                goto ta_out_of_bound;
-            p->u.array.u.uint8_ptr[idx] = v;
-            break;
-        case JS_CLASS_INT16_ARRAY:
-        case JS_CLASS_UINT16_ARRAY:
-            if (JS_ToInt32Free(ctx, &v, val))
-                return -1;
-            if (unlikely(idx >= (uint32_t)p->u.array.count))
-                goto ta_out_of_bound;
-            p->u.array.u.uint16_ptr[idx] = v;
-            break;
-        case JS_CLASS_INT32_ARRAY:
-        case JS_CLASS_UINT32_ARRAY:
-            if (JS_ToInt32Free(ctx, &v, val))
-                return -1;
-            if (unlikely(idx >= (uint32_t)p->u.array.count))
-                goto ta_out_of_bound;
-            p->u.array.u.uint32_ptr[idx] = v;
-            break;
-#ifdef CONFIG_BIGNUM
-        case JS_CLASS_BIG_INT64_ARRAY:
-        case JS_CLASS_BIG_UINT64_ARRAY:
-            /* XXX: need specific conversion function */
-            {
-                int64_t v;
-                if (JS_ToBigInt64Free(ctx, &v, val))
-                    return -1;
-                if (unlikely(idx >= (uint32_t)p->u.array.count))
-                    goto ta_out_of_bound;
-                p->u.array.u.uint64_ptr[idx] = v;
-            }
-            break;
-#endif
-        case JS_CLASS_FLOAT32_ARRAY:
-            if (JS_ToFloat64Free(ctx, &d, val))
-                return -1;
-            if (unlikely(idx >= (uint32_t)p->u.array.count))
-                goto ta_out_of_bound;
-            p->u.array.u.float_ptr[idx] = d;
-            break;
-        case JS_CLASS_FLOAT64_ARRAY:
-            if (JS_ToFloat64Free(ctx, &d, val))
-                return -1;
-            if (unlikely(idx >= (uint32_t)p->u.array.count)) {
-            ta_out_of_bound:
-                return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound numeric index");
-            }
-            p->u.array.u.double_ptr[idx] = d;
-            break;
-        default:
-            goto slow_path;
+        ret = try_set_property_value();
+        if (ret >= -1) {
+            return ret;
+        } else if (ret == TRYSETPROPVAL_FAIL_OOB) {
+            return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound numeric index");
+        } else if (ret == TRYSETPROPVAL_SLOW_PATH) {
+            // go just below
         }
-        return TRUE;
-    } else {
-        JSAtom atom;
-        int ret;
-    slow_path:
-        atom = JS_ValueToAtom(ctx, prop);
-        JS_FreeValue(ctx, prop);
-        if (unlikely(atom == JS_ATOM_NULL)) {
-            JS_FreeValue(ctx, val);
-            return -1;
-        }
-        ret = JS_SetPropertyInternal(ctx, this_obj, atom, val, flags);
-        JS_FreeAtom(ctx, atom);
-        return ret;
     }
+    // slow path:
+    JSAtom atom;
+    atom = JS_ValueToAtom(ctx, prop);
+    JS_FreeValue(ctx, prop);
+    if (unlikely(atom == JS_ATOM_NULL)) {
+        JS_FreeValue(ctx, val);
+        return -1;
+    }
+    ret = JS_SetPropertyInternal(ctx, this_obj, atom, val, flags);
+    JS_FreeAtom(ctx, atom);
+    return ret;
 }
 
 int JS_SetPropertyUint32(JSContext *ctx, JSValueConst this_obj,
