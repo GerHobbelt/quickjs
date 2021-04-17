@@ -8428,15 +8428,42 @@ static int JS_SetPropertyGeneric(JSContext *ctx,
    freed by the function. 'flags' is a bitmask of JS_PROP_NO_ADD,
    JS_PROP_THROW or JS_PROP_THROW_STRICT. If JS_PROP_NO_ADD is set,
    the new property is not added and an error is raised. */
+// goto removed
 int JS_SetPropertyInternal(JSContext *ctx, JSValueConst this_obj,
                            JSAtom prop, JSValue val, int flags)
 {
+    int read_only_prop(JSContext *ctx, JSAtom prop, JSValue val, int flags) {
+        JS_FreeValue(ctx, val);
+        return JS_ThrowTypeErrorReadOnly(ctx, flags, prop);
+    }
+
+    int typed_array_oob(JSContext *ctx, JSValue val, int flags) {
+        val = JS_ToNumberFree(ctx, val);
+        JS_FreeValue(ctx, val);
+        if (JS_IsException(val))
+            return -1;
+        return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound numeric index");
+    }
+
+    int ret_create(JSContext *ctx, JSObject *p, JSAtom prop, JSValue val, int flags) {
+        int ret = JS_CreateProperty(ctx, p, prop, val, JS_UNDEFINED, JS_UNDEFINED,
+                                flags |
+                                JS_PROP_HAS_VALUE |
+                                JS_PROP_HAS_ENUMERABLE |
+                                JS_PROP_HAS_WRITABLE |
+                                JS_PROP_HAS_CONFIGURABLE |
+                                JS_PROP_C_W_E);
+        JS_FreeValue(ctx, val);
+        return ret;
+    }
+
     JSObject *p, *p1;
     JSShapeProperty *prs;
     JSProperty *pr;
     uint32_t tag;
     JSPropertyDescriptor desc;
     int ret;
+    BOOL skip_to_proto_lookup = FALSE;
 #if 0
     printf("JS_SetPropertyInternal: "); print_atom(ctx, prop); printf("\n");
 #endif
@@ -8455,148 +8482,141 @@ int JS_SetPropertyInternal(JSContext *ctx, JSValueConst this_obj,
             /* even on a primitive type we can have setters on the prototype */
             p = NULL;
             p1 = JS_VALUE_GET_OBJ(JS_GetPrototypePrimitive(ctx, this_obj));
-            goto prototype_lookup;
+            skip_to_proto_lookup = TRUE;
         }
     }
-    p = JS_VALUE_GET_OBJ(this_obj);
-retry:
-    prs = find_own_property(&pr, p, prop);
-    if (prs) {
-        if (likely((prs->flags & (JS_PROP_TMASK | JS_PROP_WRITABLE |
-                                  JS_PROP_LENGTH)) == JS_PROP_WRITABLE)) {
-            /* fast case */
-            set_value(ctx, &pr->u.value, val);
-            return TRUE;
-        } else if (prs->flags & JS_PROP_LENGTH) {
-            assert(p->class_id == JS_CLASS_ARRAY);
-            assert(prop == JS_ATOM_length);
-            return set_array_length(ctx, p, val, flags);
-        } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET) {
-            return call_setter(ctx, pr->u.getset.setter, this_obj, val, flags);
-        } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF) {
-            /* JS_PROP_WRITABLE is always true for variable
-               references, but they are write protected in module name
-               spaces. */
-            if (p->class_id == JS_CLASS_MODULE_NS)
-                goto read_only_prop;
-            set_value(ctx, pr->u.var_ref->pvalue, val);
-            return TRUE;
-        } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT) {
-            /* Instantiate property and retry (potentially useless) */
-            if (JS_AutoInitProperty(ctx, p, prop, pr, prs)) {
-                JS_FreeValue(ctx, val);
-                return -1;
+    if (!skip_to_proto_lookup){
+        p = JS_VALUE_GET_OBJ(this_obj);
+        while ((prs = find_own_property(&pr, p, prop))) {
+            if (likely((prs->flags & (JS_PROP_TMASK | JS_PROP_WRITABLE |
+                                      JS_PROP_LENGTH)) == JS_PROP_WRITABLE)) {
+                /* fast case */
+                set_value(ctx, &pr->u.value, val);
+                return TRUE;
+            } else if (prs->flags & JS_PROP_LENGTH) {
+                assert(p->class_id == JS_CLASS_ARRAY);
+                assert(prop == JS_ATOM_length);
+                return set_array_length(ctx, p, val, flags);
+            } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET) {
+                return call_setter(ctx, pr->u.getset.setter, this_obj, val, flags);
+            } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF) {
+                /* JS_PROP_WRITABLE is always true for variable
+                   references, but they are write protected in module name
+                   spaces. */
+                if (p->class_id == JS_CLASS_MODULE_NS)
+                    return read_only_prop(ctx, prop, val, flags);
+                set_value(ctx, pr->u.var_ref->pvalue, val);
+                return TRUE;
+            } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT) {
+                /* Instantiate property and retry (potentially useless) */
+                if (JS_AutoInitProperty(ctx, p, prop, pr, prs)) {
+                    JS_FreeValue(ctx, val);
+                    return -1;
+                }
+                continue;
+            } else {
+                return read_only_prop(ctx, prop, val, flags);
             }
-            goto retry;
-        } else {
-            goto read_only_prop;
+            // will never be reached
         }
-    }
 
-    p1 = p;
+        p1 = p;
+    }
     for(;;) {
-        if (p1->is_exotic) {
-            if (p1->fast_array) {
-                if (__JS_AtomIsTaggedInt(prop)) {
-                    uint32_t idx = __JS_AtomToUInt32(prop);
-                    if (idx < p1->u.array.count) {
-                        if (unlikely(p == p1))
-                            return JS_SetPropertyValue(ctx, this_obj, JS_NewInt32(ctx, idx), val, flags);
-                        else
-                            break;
+        if (!skip_to_proto_lookup){
+            if (p1->is_exotic) {
+                if (p1->fast_array) {
+                    if (__JS_AtomIsTaggedInt(prop)) {
+                        uint32_t idx = __JS_AtomToUInt32(prop);
+                        if (idx < p1->u.array.count) {
+                            if (unlikely(p == p1))
+                                return JS_SetPropertyValue(ctx, this_obj, JS_NewInt32(ctx, idx), val, flags);
+                            else
+                                break;
+                        } else if (p1->class_id >= JS_CLASS_UINT8C_ARRAY &&
+                                   p1->class_id <= JS_CLASS_FLOAT64_ARRAY) {
+                            return typed_array_oob(ctx, val, flags);
+                        }
                     } else if (p1->class_id >= JS_CLASS_UINT8C_ARRAY &&
                                p1->class_id <= JS_CLASS_FLOAT64_ARRAY) {
-                        goto typed_array_oob;
-                    }
-                } else if (p1->class_id >= JS_CLASS_UINT8C_ARRAY &&
-                           p1->class_id <= JS_CLASS_FLOAT64_ARRAY) {
-                    ret = JS_AtomIsNumericIndex(ctx, prop);
-                    if (ret != 0) {
-                        if (ret < 0) {
-                            JS_FreeValue(ctx, val);
-                            return -1;
+                        ret = JS_AtomIsNumericIndex(ctx, prop);
+                        if (ret != 0) {
+                            if (ret < 0) {
+                                JS_FreeValue(ctx, val);
+                                return -1;
+                            }
+                            return typed_array_oob(ctx, val, flags);
                         }
-                    typed_array_oob:
-                        val = JS_ToNumberFree(ctx, val);
-                        JS_FreeValue(ctx, val);
-                        if (JS_IsException(val))
-                            return -1;
-                        return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound numeric index");
                     }
-                }
-            } else {
-                const JSClassExoticMethods *em = ctx->rt->class_array[p1->class_id].exotic;
-                if (em) {
-                    JSValue obj1;
-                    if (em->set_property) {
-                        /* set_property can free the prototype */
-                        obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p1));
-                        ret = em->set_property(ctx, obj1, prop,
-                                               val, this_obj, flags);
-                        JS_FreeValue(ctx, obj1);
-                        JS_FreeValue(ctx, val);
-                        return ret;
-                    }
-                    if (em->get_own_property) {
-                        /* get_own_property can free the prototype */
-                        obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p1));
-                        ret = em->get_own_property(ctx, &desc,
-                                                   obj1, prop);
-                        JS_FreeValue(ctx, obj1);
-                        if (ret < 0) {
+                } else {
+                    const JSClassExoticMethods *em = ctx->rt->class_array[p1->class_id].exotic;
+                    if (em) {
+                        JSValue obj1;
+                        if (em->set_property) {
+                            /* set_property can free the prototype */
+                            obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p1));
+                            ret = em->set_property(ctx, obj1, prop,
+                                                   val, this_obj, flags);
+                            JS_FreeValue(ctx, obj1);
                             JS_FreeValue(ctx, val);
                             return ret;
                         }
-                        if (ret) {
-                            if (desc.flags & JS_PROP_GETSET) {
-                                JSObject *setter;
-                                if (JS_IsUndefined(desc.setter))
-                                    setter = NULL;
-                                else
-                                    setter = JS_VALUE_GET_OBJ(desc.setter);
-                                ret = call_setter(ctx, setter, this_obj, val, flags);
-                                JS_FreeValue(ctx, desc.getter);
-                                JS_FreeValue(ctx, desc.setter);
+                        if (em->get_own_property) {
+                            /* get_own_property can free the prototype */
+                            obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p1));
+                            ret = em->get_own_property(ctx, &desc,
+                                                       obj1, prop);
+                            JS_FreeValue(ctx, obj1);
+                            if (ret < 0) {
+                                JS_FreeValue(ctx, val);
                                 return ret;
-                            } else {
-                                JS_FreeValue(ctx, desc.value);
-                                if (!(desc.flags & JS_PROP_WRITABLE))
-                                    goto read_only_prop;
-                                if (likely(p == p1)) {
-                                    ret = JS_DefineProperty(ctx, this_obj, prop, val,
-                                                            JS_UNDEFINED, JS_UNDEFINED,
-                                                            JS_PROP_HAS_VALUE);
-                                    JS_FreeValue(ctx, val);
+                            }
+                            if (ret) {
+                                if (desc.flags & JS_PROP_GETSET) {
+                                    JSObject *setter;
+                                    if (JS_IsUndefined(desc.setter))
+                                        setter = NULL;
+                                    else
+                                        setter = JS_VALUE_GET_OBJ(desc.setter);
+                                    ret = call_setter(ctx, setter, this_obj, val, flags);
+                                    JS_FreeValue(ctx, desc.getter);
+                                    JS_FreeValue(ctx, desc.setter);
                                     return ret;
                                 } else {
-                                    break;
+                                    JS_FreeValue(ctx, desc.value);
+                                    if (!(desc.flags & JS_PROP_WRITABLE))
+                                        return read_only_prop(ctx, prop, val, flags);
+                                    if (likely(p == p1)) {
+                                        ret = JS_DefineProperty(ctx, this_obj, prop, val,
+                                                                JS_UNDEFINED, JS_UNDEFINED,
+                                                                JS_PROP_HAS_VALUE);
+                                        JS_FreeValue(ctx, val);
+                                        return ret;
+                                    } else {
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+            p1 = p1->shape->proto;
         }
-        p1 = p1->shape->proto;
-    prototype_lookup:
+        skip_to_proto_lookup = FALSE;
         if (!p1)
             break;
 
-    retry2:
-        prs = find_own_property(&pr, p1, prop);
-        if (prs) {
+        while ((prs = find_own_property(&pr, p1, prop))) {
             if ((prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET) {
                 return call_setter(ctx, pr->u.getset.setter, this_obj, val, flags);
             } else if ((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT) {
                 /* Instantiate property and retry (potentially useless) */
                 if (JS_AutoInitProperty(ctx, p1, prop, pr, prs))
                     return -1;
-                goto retry2;
             } else if (!(prs->flags & JS_PROP_WRITABLE)) {
-            read_only_prop:
-                JS_FreeValue(ctx, val);
-                return JS_ThrowTypeErrorReadOnly(ctx, flags, prop);
-            }
+                return read_only_prop(ctx, prop, val, flags);
+            } else break;
         }
     }
 
@@ -8623,21 +8643,9 @@ retry:
             if (idx == p->u.array.count) {
                 /* fast case */
                 return add_fast_array_element(ctx, p, val, flags);
-            } else {
-                goto generic_create_prop;
             }
-        } else {
-        generic_create_prop:
-            ret = JS_CreateProperty(ctx, p, prop, val, JS_UNDEFINED, JS_UNDEFINED,
-                                    flags |
-                                    JS_PROP_HAS_VALUE |
-                                    JS_PROP_HAS_ENUMERABLE |
-                                    JS_PROP_HAS_WRITABLE |
-                                    JS_PROP_HAS_CONFIGURABLE |
-                                    JS_PROP_C_W_E);
-            JS_FreeValue(ctx, val);
-            return ret;
         }
+        return ret_create(ctx, p, prop, val, flags);
     }
 
     pr = add_property(ctx, p, prop, JS_PROP_C_W_E);
