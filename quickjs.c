@@ -34222,6 +34222,7 @@ static void bc_byte_swap(uint8_t *bc_buf, int bc_len)
     }
 }
 
+// goto removed
 static int JS_WriteFunctionBytecode(BCWriterState *s,
                                     const uint8_t *bc_buf1, int bc_len)
 {
@@ -34246,8 +34247,11 @@ static int JS_WriteFunctionBytecode(BCWriterState *s,
         case OP_FMT_atom_label_u8:
         case OP_FMT_atom_label_u16:
             atom = get_u32(bc_buf + pos + 1);
-            if (bc_atom_to_idx(s, &val, atom))
-                goto fail;
+            if (bc_atom_to_idx(s, &val, atom)) {
+                // goto fail;
+                js_free(s->ctx, bc_buf);
+                return -1;
+            }
             put_u32(bc_buf + pos + 1, val);
             break;
         default:
@@ -34263,9 +34267,9 @@ static int JS_WriteFunctionBytecode(BCWriterState *s,
 
     js_free(s->ctx, bc_buf);
     return 0;
- fail:
+/* fail:
     js_free(s->ctx, bc_buf);
-    return -1;
+    return -1;*/
 }
 
 static void JS_WriteString(BCWriterState *s, JSString *p)
