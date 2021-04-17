@@ -4805,13 +4805,14 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     case JS_CLASS_BIG_DECIMAL:
 #endif
         p->u.object_data = JS_UNDEFINED;
-        goto set_exotic;
+        if (ctx->rt->class_array[class_id].exotic) {
+            p->is_exotic = 1;
+        }
+        break;
     case JS_CLASS_REGEXP:
         p->u.regexp.pattern = NULL;
         p->u.regexp.bytecode = NULL;
-        goto set_exotic;
     default:
-    set_exotic:
         if (ctx->rt->class_array[class_id].exotic) {
             p->is_exotic = 1;
         }
