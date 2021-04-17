@@ -2738,7 +2738,7 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
         }
     }
 
-    while (true){ // goto replacement
+    while (true) { // goto replacement
         if (rt->atom_free_index == 0) {
             /* allow new atom entries */
             uint32_t new_size, start;
@@ -3082,6 +3082,7 @@ static const char *JS_AtomGetStr(JSContext *ctx, char *buf, int buf_size, JSAtom
     return JS_AtomGetStrRT(ctx->rt, buf, buf_size, atom);
 }
 
+// goto replaced
 static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
 {
     char buf[ATOM_GET_STR_BUF_SIZE];
@@ -3094,18 +3095,17 @@ static JSValue __JS_AtomToValue(JSContext *ctx, JSAtom atom, BOOL force_string)
         JSAtomStruct *p;
         assert(atom < rt->atom_size);
         p = rt->atom_array[atom];
-        if (p->atom_type == JS_ATOM_TYPE_STRING) {
-            goto ret_string;
-        } else if (force_string) {
-            if (p->len == 0 && p->is_wide_char != 0) {
-                /* no description string */
-                p = rt->atom_array[JS_ATOM_empty_string];
+        if (p->atom_type != JS_ATOM_TYPE_STRING) {
+            if (force_string) {
+                if (p->len == 0 && p->is_wide_char != 0) {
+                    /* no description string */
+                    p = rt->atom_array[JS_ATOM_empty_string];
+                }
+            } else {
+                return JS_DupValue(ctx, JS_MKPTR(JS_TAG_SYMBOL, p));
             }
-        ret_string:
-            return JS_DupValue(ctx, JS_MKPTR(JS_TAG_STRING, p));
-        } else {
-            return JS_DupValue(ctx, JS_MKPTR(JS_TAG_SYMBOL, p));
         }
+        return JS_DupValue(ctx, JS_MKPTR(JS_TAG_STRING, p));
     }
 }
 
