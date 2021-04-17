@@ -7223,6 +7223,7 @@ static JSValue JS_ThrowTypeErrorPrivateNotFound(JSContext *ctx, JSAtom atom)
 
 /* Private fields can be added even on non extensible objects or
    Proxies */
+// goto removed
 static int JS_DefinePrivateField(JSContext *ctx, JSValueConst obj,
                                  JSValueConst name, JSValue val)
 {
@@ -7231,31 +7232,31 @@ static int JS_DefinePrivateField(JSContext *ctx, JSValueConst obj,
     JSProperty *pr;
     JSAtom prop;
 
-    if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) {
-        JS_ThrowTypeErrorNotAnObject(ctx);
-        goto fail;
+    while (true) { // goto replacement
+        if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) {
+            JS_ThrowTypeErrorNotAnObject(ctx);
+            break;
+        }
+        /* safety check */
+        if (unlikely(JS_VALUE_GET_TAG(name) != JS_TAG_SYMBOL)) {
+            JS_ThrowTypeErrorNotASymbol(ctx);
+            break;
+        }
+        prop = js_symbol_to_atom(ctx, (JSValue)name);
+        p = JS_VALUE_GET_OBJ(obj);
+        prs = find_own_property(&pr, p, prop);
+        if (prs) {
+            JS_ThrowTypeErrorAtom(ctx, "private class field '%s' already exists",
+                                  prop);
+            break;
+        }
+        pr = add_property(ctx, p, prop, JS_PROP_C_W_E);
+        if (unlikely(!pr)) break;
+        pr->u.value = val;
+        return 0;
     }
-    /* safety check */
-    if (unlikely(JS_VALUE_GET_TAG(name) != JS_TAG_SYMBOL)) {
-        JS_ThrowTypeErrorNotASymbol(ctx);
-        goto fail;
-    }
-    prop = js_symbol_to_atom(ctx, (JSValue)name);
-    p = JS_VALUE_GET_OBJ(obj);
-    prs = find_own_property(&pr, p, prop);
-    if (prs) {
-        JS_ThrowTypeErrorAtom(ctx, "private class field '%s' already exists",
-                              prop);
-        goto fail;
-    }
-    pr = add_property(ctx, p, prop, JS_PROP_C_W_E);
-    if (unlikely(!pr)) {
-    fail:
-        JS_FreeValue(ctx, val);
-        return -1;
-    }
-    pr->u.value = val;
-    return 0;
+    JS_FreeValue(ctx, val);
+    return -1;
 }
 
 static JSValue JS_GetPrivateField(JSContext *ctx, JSValueConst obj,
