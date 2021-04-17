@@ -3322,6 +3322,7 @@ const char *JS_AtomToCString(JSContext *ctx, JSAtom atom)
 }
 
 /* return a string atom containing name concatenated with str1 */
+// goto removed
 static JSAtom js_atom_concat_str(JSContext *ctx, JSAtom name, const char *str1)
 {
     JSValue str;
@@ -3334,21 +3335,19 @@ static JSAtom js_atom_concat_str(JSContext *ctx, JSAtom name, const char *str1)
     if (JS_IsException(str))
         return JS_ATOM_NULL;
     cstr = JS_ToCStringLen(ctx, &len, str);
-    if (!cstr)
-        goto fail;
-    len1 = strlen(str1);
-    cstr2 = js_malloc(ctx, len + len1 + 1);
-    if (!cstr2)
-        goto fail;
-    memcpy(cstr2, cstr, len);
-    memcpy(cstr2 + len, str1, len1);
-    cstr2[len + len1] = '\0';
-    atom = JS_NewAtomLen(ctx, cstr2, len + len1);
-    js_free(ctx, cstr2);
-    JS_FreeCString(ctx, cstr);
-    JS_FreeValue(ctx, str);
-    return atom;
- fail:
+    while (cstr) { // goto replacement
+        len1 = strlen(str1);
+        cstr2 = js_malloc(ctx, len + len1 + 1);
+        if (!cstr2) break;
+        memcpy(cstr2, cstr, len);
+        memcpy(cstr2 + len, str1, len1);
+        cstr2[len + len1] = '\0';
+        atom = JS_NewAtomLen(ctx, cstr2, len + len1);
+        js_free(ctx, cstr2);
+        JS_FreeCString(ctx, cstr);
+        JS_FreeValue(ctx, str);
+        return atom;
+    }
     JS_FreeCString(ctx, cstr);
     JS_FreeValue(ctx, str);
     return JS_ATOM_NULL;
