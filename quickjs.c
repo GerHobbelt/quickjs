@@ -35751,28 +35751,30 @@ static JSValue JS_ReadObjectTag(BCReaderState *s)
     JSValue val;
     int ret;
 
-    fail: for (;;) {
+    for (;;) {
 
         obj = JS_NewObject(ctx);
         if (BC_add_object_ref(s, obj))
-            break fail;
+            break;
         if (bc_get_leb128(s, &prop_count))
-            break fail;
+            break;
         for(i = 0; i < prop_count; i++) {
-            if (bc_get_atom(s, &atom))
-                break fail;
+            if (!bc_get_atom(s, &atom)) {
 #ifdef DUMP_READ_OBJECT
-            bc_read_trace(s, "propname: "); print_atom(s->ctx, atom); printf("\n");
+                bc_read_trace(s, "propname: "); print_atom(s->ctx, atom); printf("\n");
 #endif
-            val = JS_ReadObjectRec(s);
-            if (JS_IsException(val)) {
-                JS_FreeAtom(ctx, atom);
-                break fail;
+                val = JS_ReadObjectRec(s);
+                if (!JS_IsException(val)) {
+                    ret = JS_DefinePropertyValue(ctx, obj, atom, val, JS_PROP_C_W_E);
+                    JS_FreeAtom(ctx, atom);
+                    if (ret >= 0)
+                        continue;
+                } else {
+                    JS_FreeAtom(ctx, atom);
+                }
             }
-            ret = JS_DefinePropertyValue(ctx, obj, atom, val, JS_PROP_C_W_E);
-            JS_FreeAtom(ctx, atom);
-            if (ret < 0)
-                break fail;
+            JS_FreeValue(ctx, obj);
+            return JS_EXCEPTION;
         }
         return obj;
     }
