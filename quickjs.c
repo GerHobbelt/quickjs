@@ -10241,7 +10241,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
     int i, j, len;
     BOOL buf_allocated = FALSE;
     BOOL check_radix_prefix = TRUE;
-    JSValue val;
+    JSValue val = JS_NAN;
     
     /* optional separator between digits */
     sep = (flags & ATOD_ACCEPT_UNDERSCORES) ? '_' : 256;
@@ -10470,13 +10470,13 @@ typedef enum JSToNumberHintEnum {
     TON_FLAG_NUMERIC,
 } JSToNumberHintEnum;
 
+// goto replaced
 static JSValue JS_ToNumberHintFree(JSContext *ctx, JSValue val,
                                    JSToNumberHintEnum flag)
 {
     uint32_t tag;
     JSValue ret;
 
- redo:
     tag = JS_VALUE_GET_NORM_TAG(val);
     switch(tag) {
 #ifdef CONFIG_BIGNUM
@@ -10518,7 +10518,7 @@ static JSValue JS_ToNumberHintFree(JSContext *ctx, JSValue val,
         val = JS_ToPrimitiveFree(ctx, val, HINT_NUMBER);
         if (JS_IsException(val))
             return JS_EXCEPTION;
-        goto redo;
+        ret = JS_ToNumberHintFree(ctx, val, flag);
     case JS_TAG_STRING:
         {
             const char *str;
