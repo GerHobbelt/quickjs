@@ -7013,28 +7013,27 @@ static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
 }
 
 /* return TRUE, FALSE or (-1) in case of exception */
+// goto removed
 int JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj)
 {
     JSValue method;
 
-    if (!JS_IsObject(obj))
-        goto fail;
-    method = JS_GetProperty(ctx, obj, JS_ATOM_Symbol_hasInstance);
-    if (JS_IsException(method))
-        return -1;
-    if (!JS_IsNull(method) && !JS_IsUndefined(method)) {
-        JSValue ret;
-        ret = JS_CallFree(ctx, method, obj, 1, &val);
-        return JS_ToBoolFree(ctx, ret);
-    }
+    while (JS_IsObject(obj)) {
+        method = JS_GetProperty(ctx, obj, JS_ATOM_Symbol_hasInstance);
+        if (JS_IsException(method))
+            return -1;
+        if (!JS_IsNull(method) && !JS_IsUndefined(method)) {
+            JSValue ret;
+            ret = JS_CallFree(ctx, method, obj, 1, &val);
+            return JS_ToBoolFree(ctx, ret);
+        }
 
-    /* legacy case */
-    if (!JS_IsFunction(ctx, obj)) {
-    fail:
-        JS_ThrowTypeError(ctx, "invalid 'instanceof' right operand");
-        return -1;
+        /* legacy case */
+        if (!JS_IsFunction(ctx, obj)) break;
+        return JS_OrdinaryIsInstanceOf(ctx, val, obj);
     }
-    return JS_OrdinaryIsInstanceOf(ctx, val, obj);
+    JS_ThrowTypeError(ctx, "invalid 'instanceof' right operand");
+    return -1;
 }
 
 /* return the value associated to the autoinit property or an exception */
