@@ -9498,8 +9498,14 @@ static JSValue JS_ThrowSyntaxErrorVarRedeclaration(JSContext *ctx, JSAtom prop)
 
 /* flags is 0, DEFINE_GLOBAL_LEX_VAR or DEFINE_GLOBAL_FUNC_VAR */
 /* XXX: could support exotic global object. */
+// goto removed
 static int JS_CheckDefineGlobalVar(JSContext *ctx, JSAtom prop, int flags)
 {
+    int throw_define_error(JSContext *ctx, JSAtom prop) {
+        JS_ThrowTypeErrorAtom(ctx, "cannot define variable '%s'", prop);
+        return -1;
+    }
+
     JSObject *p;
     JSShapeProperty *prs;
 
@@ -9507,21 +9513,20 @@ static int JS_CheckDefineGlobalVar(JSContext *ctx, JSAtom prop, int flags)
     prs = find_own_property1(p, prop);
     /* XXX: should handle JS_PROP_AUTOINIT */
     if (flags & DEFINE_GLOBAL_LEX_VAR) {
-        if (prs && !(prs->flags & JS_PROP_CONFIGURABLE))
-            goto fail_redeclaration;
+        if (prs && !(prs->flags & JS_PROP_CONFIGURABLE)){
+            JS_ThrowSyntaxErrorVarRedeclaration(ctx, prop);
+            return -1;
+        }
     } else {
         if (!prs && !p->extensible)
-            goto define_error;
+            return throw_define_error(ctx, prop);
         if (flags & DEFINE_GLOBAL_FUNC_VAR) {
             if (prs) {
                 if (!(prs->flags & JS_PROP_CONFIGURABLE) &&
                     ((prs->flags & JS_PROP_TMASK) == JS_PROP_GETSET ||
                      ((prs->flags & (JS_PROP_WRITABLE | JS_PROP_ENUMERABLE)) !=
                       (JS_PROP_WRITABLE | JS_PROP_ENUMERABLE)))) {
-                define_error:
-                    JS_ThrowTypeErrorAtom(ctx, "cannot define variable '%s'",
-                                          prop);
-                    return -1;
+                    return throw_define_error(ctx, prop);
                 }
             }
         }
@@ -9530,7 +9535,6 @@ static int JS_CheckDefineGlobalVar(JSContext *ctx, JSAtom prop, int flags)
     p = JS_VALUE_GET_OBJ(ctx->global_var_obj);
     prs = find_own_property1(p, prop);
     if (prs) {
-    fail_redeclaration:
         JS_ThrowSyntaxErrorVarRedeclaration(ctx, prop);
         return -1;
     }
