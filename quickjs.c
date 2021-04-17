@@ -8845,58 +8845,42 @@ static int get_prop_flags(int flags, int def_flags)
     return (flags & mask) | (def_flags & ~mask);
 }
 
-static int JS_CreateProperty(JSContext *ctx, JSObject *p,
+#define PROPNEWORMODEXOTIC_CONTINUE -2
+#define PROPNEWORMODEXOTIC_NOT_EXTENSIBLE -3
+#define PROPNEWORMODEXOTIC_CONVERT_TO_ARRAY -4
+#define PROPNEWORMODEXOTIC_GENERIC_ARRAY -5
+
+static int prop_new_or_mod_exotic(JSContext *ctx, JSObject *p,
                              JSAtom prop, JSValueConst val,
                              JSValueConst getter, JSValueConst setter,
-                             int flags)
+                             int flags, uint32_t *idx)
 {
-    JSProperty *pr;
-    int ret, prop_flags;
-
+    int ret = PROPNEWORMODEXOTIC_CONTINUE;
     /* add a new property or modify an existing exotic one */
     if (p->is_exotic) {
         if (p->class_id == JS_CLASS_ARRAY) {
-            uint32_t idx, len;
-
             if (p->fast_array) {
                 if (__JS_AtomIsTaggedInt(prop)) {
-                    idx = __JS_AtomToUInt32(prop);
-                    if (idx == p->u.array.count) {
+                    *idx = __JS_AtomToUInt32(prop);
+                    if (*idx == p->u.array.count) {
                         if (!p->extensible)
-                            goto not_extensible;
+                            return PROPNEWORMODEXOTIC_NOT_EXTENSIBLE;
                         if (flags & (JS_PROP_HAS_GET | JS_PROP_HAS_SET))
-                            goto convert_to_array;
-                        prop_flags = get_prop_flags(flags, 0);
+                            return PROPNEWORMODEXOTIC_CONVERT_TO_ARRAY;
+                        int prop_flags = get_prop_flags(flags, 0);
                         if (prop_flags != JS_PROP_C_W_E)
-                            goto convert_to_array;
+                            return PROPNEWORMODEXOTIC_CONVERT_TO_ARRAY;
                         return add_fast_array_element(ctx, p,
                                                       JS_DupValue(ctx, val), flags);
                     } else {
-                        goto convert_to_array;
+                        return PROPNEWORMODEXOTIC_CONVERT_TO_ARRAY;
                     }
-                } else if (JS_AtomIsArrayIndex(ctx, &idx, prop)) {
+                } else if (JS_AtomIsArrayIndex(ctx, idx, prop)) {
                     /* convert the fast array to normal array */
-                convert_to_array:
-                    if (convert_fast_array_to_array(ctx, p))
-                        return -1;
-                    goto generic_array;
+                    return PROPNEWORMODEXOTIC_CONVERT_TO_ARRAY;
                 }
-            } else if (JS_AtomIsArrayIndex(ctx, &idx, prop)) {
-                JSProperty *plen;
-                JSShapeProperty *pslen;
-            generic_array:
-                /* update the length field */
-                plen = &p->prop[0];
-                JS_ToUint32(ctx, &len, plen->u.value);
-                if ((idx + 1) > len) {
-                    pslen = get_shape_prop(p->shape);
-                    if (unlikely(!(pslen->flags & JS_PROP_WRITABLE)))
-                        return JS_ThrowTypeErrorReadOnly(ctx, flags, JS_ATOM_length);
-                    /* XXX: should update the length after defining
-                       the property */
-                    len = idx + 1;
-                    set_value(ctx, &plen->u.value, JS_NewUint32(ctx, len));
-                }
+            } else if (JS_AtomIsArrayIndex(ctx, idx, prop)) {
+                return PROPNEWORMODEXOTIC_GENERIC_ARRAY;
             }
         } else if (p->class_id >= JS_CLASS_UINT8C_ARRAY &&
                    p->class_id <= JS_CLASS_FLOAT64_ARRAY) {
@@ -8917,14 +8901,52 @@ static int JS_CreateProperty(JSContext *ctx, JSObject *p,
                 if (ret < 0)
                     return -1;
                 if (!ret)
-                    goto not_extensible;
+                    return PROPNEWORMODEXOTIC_NOT_EXTENSIBLE;
             }
         }
     }
+    if (!p->extensible)
+        ret = PROPNEWORMODEXOTIC_NOT_EXTENSIBLE;
+    return ret;
+}
 
-    if (!p->extensible) {
-    not_extensible:
+// goto removed
+static int JS_CreateProperty(JSContext *ctx, JSObject *p,
+                             JSAtom prop, JSValueConst val,
+                             JSValueConst getter, JSValueConst setter,
+                             int flags)
+{
+    JSProperty *pr;
+    int ret, prop_flags;
+    uint32_t idx;
+
+    ret = prop_new_or_mod_exotic(ctx, p, prop, val, getter, setter, flags, &idx);
+    if (ret == PROPNEWORMODEXOTIC_CONVERT_TO_ARRAY) {
+        if (convert_fast_array_to_array(ctx, p))
+            return -1;
+        ret = PROPNEWORMODEXOTIC_GENERIC_ARRAY;
+    } else if (ret == PROPNEWORMODEXOTIC_NOT_EXTENSIBLE) {
         return JS_ThrowTypeErrorOrFalse(ctx, flags, "object is not extensible");
+    }
+
+    if (ret == PROPNEWORMODEXOTIC_GENERIC_ARRAY) {
+        uint32_t len;
+        JSProperty *plen;
+        JSShapeProperty *pslen;
+        /* update the length field */
+        plen = &p->prop[0];
+        JS_ToUint32(ctx, &len, plen->u.value);
+        if ((idx + 1) > len) {
+            pslen = get_shape_prop(p->shape);
+            if (unlikely(!(pslen->flags & JS_PROP_WRITABLE)))
+                return JS_ThrowTypeErrorReadOnly(ctx, flags, JS_ATOM_length);
+            /* XXX: should update the length after defining
+               the property */
+            len = idx + 1;
+            set_value(ctx, &plen->u.value, JS_NewUint32(ctx, len));
+        }
+    } else if (ret >= -1) {
+        return ret;
     }
 
     if (flags & (JS_PROP_HAS_GET | JS_PROP_HAS_SET)) {
