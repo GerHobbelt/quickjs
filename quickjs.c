@@ -7358,6 +7358,7 @@ static int JS_AddBrand(JSContext *ctx, JSValueConst obj, JSValueConst home_obj)
     return 0;
 }
 
+// goto removed
 static int JS_CheckBrand(JSContext *ctx, JSValueConst obj, JSValueConst func)
 {
     JSObject *p, *p1, *home_obj;
@@ -7366,37 +7367,32 @@ static int JS_CheckBrand(JSContext *ctx, JSValueConst obj, JSValueConst func)
     JSValueConst brand;
     
     /* get the home object of 'func' */
-    if (unlikely(JS_VALUE_GET_TAG(func) != JS_TAG_OBJECT)) {
-    not_obj:
-        JS_ThrowTypeErrorNotAnObject(ctx);
-        return -1;
+    while (unlikely(JS_VALUE_GET_TAG(func) == JS_TAG_OBJECT)) { // goto replacement
+        p1 = JS_VALUE_GET_OBJ(func);
+        if (!js_class_has_bytecode(p1->class_id)) break;
+        home_obj = p1->u.func.home_object;
+        if (!home_obj) break;
+        prs = find_own_property(&pr, home_obj, JS_ATOM_Private_brand);
+        if (!prs) {
+            JS_ThrowTypeError(ctx, "expecting <brand> private field");
+            return -1;
+        }
+        brand = pr->u.value;
+        /* safety check */
+        if (unlikely(JS_VALUE_GET_TAG(brand) != JS_TAG_SYMBOL)) break;
+        
+        /* get the brand array of 'obj' */
+        if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)) break;
+        p = JS_VALUE_GET_OBJ(obj);
+        prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, (JSValue)brand));
+        if (!prs) {
+            JS_ThrowTypeError(ctx, "invalid brand on object");
+            return -1;
+        }
+        return 0;
     }
-    p1 = JS_VALUE_GET_OBJ(func);
-    if (!js_class_has_bytecode(p1->class_id))
-        goto not_obj;
-    home_obj = p1->u.func.home_object;
-    if (!home_obj)
-        goto not_obj;
-    prs = find_own_property(&pr, home_obj, JS_ATOM_Private_brand);
-    if (!prs) {
-        JS_ThrowTypeError(ctx, "expecting <brand> private field");
-        return -1;
-    }
-    brand = pr->u.value;
-    /* safety check */
-    if (unlikely(JS_VALUE_GET_TAG(brand) != JS_TAG_SYMBOL))
-        goto not_obj;
-    
-    /* get the brand array of 'obj' */
-    if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT))
-        goto not_obj;
-    p = JS_VALUE_GET_OBJ(obj);
-    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, (JSValue)brand));
-    if (!prs) {
-        JS_ThrowTypeError(ctx, "invalid brand on object");
-        return -1;
-    }
-    return 0;
+    JS_ThrowTypeErrorNotAnObject(ctx);
+    return -1;
 }
 
 static uint32_t js_string_obj_get_length(JSContext *ctx,
