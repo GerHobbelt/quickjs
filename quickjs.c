@@ -12105,6 +12105,7 @@ JSValue JS_NewBigUint64(JSContext *ctx, uint64_t v)
 /* if the returned bigfloat is allocated it is equal to
    'buf'. Otherwise it is a pointer to the bigfloat in 'val'. Return
    NULL in case of error. */
+// goto removed
 static bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
 {
     uint32_t tag;
@@ -12118,14 +12119,15 @@ static bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
     case JS_TAG_NULL:
         r = buf;
         bf_init(ctx->bf_ctx, r);
-        if (bf_set_si(r, JS_VALUE_GET_INT(val)))
-            goto fail;
+        if (bf_set_si(r, JS_VALUE_GET_INT(val))) {
+            bf_delete(r);
+            return NULL;
+        }
         break;
     case JS_TAG_FLOAT64:
         r = buf;
         bf_init(ctx->bf_ctx, r);
         if (bf_set_float64(r, JS_VALUE_GET_FLOAT64(val))) {
-        fail:
             bf_delete(r);
             return NULL;
         }
