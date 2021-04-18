@@ -11693,6 +11693,13 @@ static JSValue JS_ToStringCheckObject(JSContext *ctx, JSValueConst val)
     return JS_ToString(ctx, val);
 }
 
+static JSValue JS_ToQuotedString_fail(JSContext *ctx, JSValueConst val, StringBuffer *buf) {
+    JS_FreeValue(ctx, val);
+    string_buffer_free(buf);
+    return JS_EXCEPTION;
+}
+
+// goto removed
 static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
 {
     JSValue val;
@@ -11708,10 +11715,10 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
     p = JS_VALUE_GET_STRING(val);
 
     if (string_buffer_init(ctx, b, p->len + 2))
-        goto fail;
+        return JS_ToQuotedString_fail(ctx, val, b);
 
     if (string_buffer_putc8(b, '\"'))
-        goto fail;
+        return JS_ToQuotedString_fail(ctx, val, b);
     for(i = 0; i < p->len; ) {
         c = string_getc(p, &i);
         switch(c) {
@@ -11734,30 +11741,26 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
         case '\\':
         quote:
             if (string_buffer_putc8(b, '\\'))
-                goto fail;
+                return JS_ToQuotedString_fail(ctx, val, b);
             if (string_buffer_putc8(b, c))
-                goto fail;
+                return JS_ToQuotedString_fail(ctx, val, b);
             break;
         default:
             if (c < 32 || (c >= 0xd800 && c < 0xe000)) {
                 snprintf(buf, sizeof(buf), "\\u%04x", c);
                 if (string_buffer_puts8(b, buf))
-                    goto fail;
+                    return JS_ToQuotedString_fail(ctx, val, b);
             } else {
                 if (string_buffer_putc(b, c))
-                    goto fail;
+                    return JS_ToQuotedString_fail(ctx, val, b);
             }
             break;
         }
     }
     if (string_buffer_putc8(b, '\"'))
-        goto fail;
+        return JS_ToQuotedString_fail(ctx, val, b);
     JS_FreeValue(ctx, val);
     return string_buffer_end(b);
- fail:
-    JS_FreeValue(ctx, val);
-    string_buffer_free(b);
-    return JS_EXCEPTION;
 }
 
 static __maybe_unused void JS_DumpObjectHeader(JSRuntime *rt)
