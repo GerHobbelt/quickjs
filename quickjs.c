@@ -11048,9 +11048,15 @@ static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val)
     return 0;
 }
 
+// goto removed
 static __exception int JS_ToArrayLengthFree(JSContext *ctx, uint32_t *plen,
                                             JSValue val, BOOL is_array_ctor)
 {
+    int fail(JSContext *ctx) {
+        JS_ThrowRangeError(ctx, "invalid array length");
+        return -1;
+    }
+
     uint32_t tag, len;
 
     tag = JS_VALUE_GET_TAG(val);
@@ -11061,8 +11067,7 @@ static __exception int JS_ToArrayLengthFree(JSContext *ctx, uint32_t *plen,
         {
             int v;
             v = JS_VALUE_GET_INT(val);
-            if (v < 0)
-                goto fail;
+            if (v < 0) return fail(ctx);
             len = v;
         }
         break;
@@ -11079,8 +11084,7 @@ static __exception int JS_ToArrayLengthFree(JSContext *ctx, uint32_t *plen,
             res = bf_cmp_eq(&a, &p->num);
             bf_delete(&a);
             JS_FreeValue(ctx, val);
-            if (!res)
-                goto fail;
+            if (!res) return fail(ctx);
         }
         break;
 #endif
@@ -11089,8 +11093,7 @@ static __exception int JS_ToArrayLengthFree(JSContext *ctx, uint32_t *plen,
             double d;
             d = JS_VALUE_GET_FLOAT64(val);
             len = (uint32_t)d;
-            if (len != d)
-                goto fail;
+            if (len != d) return fail(ctx);
         } else {
             uint32_t len1;
 
@@ -11113,11 +11116,7 @@ static __exception int JS_ToArrayLengthFree(JSContext *ctx, uint32_t *plen,
                 /* cannot recurse because val is a number */
                 if (JS_ToArrayLengthFree(ctx, &len1, val, FALSE))
                     return -1;
-                if (len1 != len) {
-                fail:
-                    JS_ThrowRangeError(ctx, "invalid array length");
-                    return -1;
-                }
+                if (len1 != len) return fail(ctx);
             }
         }
         break;
