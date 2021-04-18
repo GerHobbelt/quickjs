@@ -11499,9 +11499,12 @@ static void js_fcvt(char *buf, int buf_size, double d, int n_digits)
 /* XXX: slow and maybe not fully correct. Use libbf when it is fast enough.
    XXX: radix != 10 is only supported for small integers
 */
+// goto removed
 static void js_dtoa1(char *buf, double d, int radix, int n_digits, int flags)
 {
     char *q;
+    BOOL generic_conv = FALSE;
+    BOOL finite_path = FALSE;
 
     if (!isfinite(d)) {
         if (isnan(d)) {
@@ -11516,21 +11519,24 @@ static void js_dtoa1(char *buf, double d, int radix, int n_digits, int flags)
         int64_t i64;
         char buf1[70], *ptr;
         i64 = (int64_t)d;
-        if (d != i64 || i64 > MAX_SAFE_INTEGER || i64 < -MAX_SAFE_INTEGER)
-            goto generic_conv;
-        /* fast path for integers */
-        ptr = i64toa(buf1 + sizeof(buf1), i64, radix);
-        strcpy(buf, ptr);
-    } else {
+        if (d != i64 || i64 > MAX_SAFE_INTEGER || i64 < -MAX_SAFE_INTEGER) {
+            generic_conv = TRUE;
+        } else {
+            /* fast path for integers */
+            ptr = i64toa(buf1 + sizeof(buf1), i64, radix);
+            strcpy(buf, ptr);
+        }
+    } else finite_path = TRUE;
+
+    if (generic_conv || finite_path) {
         if (d == 0.0)
             d = 0.0; /* convert -0 to 0 */
-        if (flags == JS_DTOA_FRAC_FORMAT) {
+        if (!generic_conv && flags == JS_DTOA_FRAC_FORMAT) {
             js_fcvt(buf, JS_DTOA_BUF_SIZE, d, n_digits);
         } else {
             char buf1[JS_DTOA_BUF_SIZE];
             int sign, decpt, k, n, i, p, n_max;
             BOOL is_fixed;
-        generic_conv:
             is_fixed = ((flags & 3) == JS_DTOA_FIXED_FORMAT);
             if (is_fixed) {
                 n_max = n_digits;
@@ -11543,9 +11549,8 @@ static void js_dtoa1(char *buf, double d, int radix, int n_digits, int flags)
             q = buf;
             if (sign)
                 *q++ = '-';
-            if (flags & JS_DTOA_FORCE_EXP)
-                goto force_exp;
-            if (n >= 1 && n <= n_max) {
+            BOOL force_exp = flags & JS_DTOA_FORCE_EXP;
+            if (!force_exp && n >= 1 && n <= n_max) {
                 if (k <= n) {
                     memcpy(q, buf1, k);
                     q += k;
@@ -11561,7 +11566,7 @@ static void js_dtoa1(char *buf, double d, int radix, int n_digits, int flags)
                         *q++ = buf1[n + i];
                     *q = '\0';
                 }
-            } else if (n >= -5 && n <= 0) {
+            } else if (!force_exp && n >= -5 && n <= 0) {
                 *q++ = '0';
                 *q++ = '.';
                 for(i = 0; i < -n; i++)
@@ -11570,7 +11575,6 @@ static void js_dtoa1(char *buf, double d, int radix, int n_digits, int flags)
                 q += k;
                 *q = '\0';
             } else {
-            force_exp:
                 /* exponential notation */
                 *q++ = buf1[0];
                 if (k > 1) {
