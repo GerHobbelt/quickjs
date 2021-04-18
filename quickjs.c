@@ -12210,67 +12210,77 @@ static JSValue JS_StringToBigIntErr(JSContext *ctx, JSValue val)
 
 /* if the returned bigfloat is allocated it is equal to
    'buf'. Otherwise it is a pointer to the bigfloat in 'val'. */
+// goto removed
 static bf_t *JS_ToBigIntFree(JSContext *ctx, bf_t *buf, JSValue val)
 {
     uint32_t tag;
     bf_t *r;
+    BOOL failed = TRUE;
     JSBigFloat *p;
 
- redo:
-    tag = JS_VALUE_GET_NORM_TAG(val);
-    switch(tag) {
-    case JS_TAG_INT:
-    case JS_TAG_NULL:
-    case JS_TAG_UNDEFINED:
-        if (!is_math_mode(ctx))
-            goto fail;
-        /* fall tru */
-    case JS_TAG_BOOL:
-        r = buf;
-        bf_init(ctx->bf_ctx, r);
-        bf_set_si(r, JS_VALUE_GET_INT(val));
-        break;
-    case JS_TAG_FLOAT64:
-        {
-            double d = JS_VALUE_GET_FLOAT64(val);
+    while (TRUE) { // goto replacement
+        tag = JS_VALUE_GET_NORM_TAG(val);
+        switch(tag) {
+        case JS_TAG_INT:
+        case JS_TAG_NULL:
+        case JS_TAG_UNDEFINED:
             if (!is_math_mode(ctx))
-                goto fail;
-            if (!isfinite(d))
-                goto fail;
+                break;
+            /* fall tru */
+        case JS_TAG_BOOL:
             r = buf;
             bf_init(ctx->bf_ctx, r);
-            d = trunc(d);
-            bf_set_float64(r, d);
+            bf_set_si(r, JS_VALUE_GET_INT(val));
+            failed = FALSE;
+            break;
+        case JS_TAG_FLOAT64:
+            {
+                double d = JS_VALUE_GET_FLOAT64(val);
+                if (!is_math_mode(ctx))
+                    break;
+                if (!isfinite(d))
+                    break;
+                r = buf;
+                bf_init(ctx->bf_ctx, r);
+                d = trunc(d);
+                bf_set_float64(r, d);
+                failed = FALSE;
+            }
+            break;
+        case JS_TAG_BIG_INT:
+            p = JS_VALUE_GET_PTR(val);
+            r = &p->num;
+            failed = FALSE;
+            break;
+        case JS_TAG_BIG_FLOAT:
+            if (!is_math_mode(ctx))
+                break;
+            p = JS_VALUE_GET_PTR(val);
+            if (!bf_is_finite(&p->num))
+                break;
+            r = buf;
+            bf_init(ctx->bf_ctx, r);
+            bf_set(r, &p->num);
+            bf_rint(r, BF_RNDZ);
+            JS_FreeValue(ctx, val);
+            failed = FALSE;
+            break;
+        case JS_TAG_STRING:
+            val = JS_StringToBigIntErr(ctx, val);
+            if (JS_IsException(val))
+                return NULL;
+            continue;
+        case JS_TAG_OBJECT:
+            val = JS_ToPrimitiveFree(ctx, val, HINT_NUMBER);
+            if (JS_IsException(val))
+                return NULL;
+            continue;
+        default:
+            break;
         }
         break;
-    case JS_TAG_BIG_INT:
-        p = JS_VALUE_GET_PTR(val);
-        r = &p->num;
-        break;
-    case JS_TAG_BIG_FLOAT:
-        if (!is_math_mode(ctx))
-            goto fail;
-        p = JS_VALUE_GET_PTR(val);
-        if (!bf_is_finite(&p->num))
-            goto fail;
-        r = buf;
-        bf_init(ctx->bf_ctx, r);
-        bf_set(r, &p->num);
-        bf_rint(r, BF_RNDZ);
-        JS_FreeValue(ctx, val);
-        break;
-    case JS_TAG_STRING:
-        val = JS_StringToBigIntErr(ctx, val);
-        if (JS_IsException(val))
-            return NULL;
-        goto redo;
-    case JS_TAG_OBJECT:
-        val = JS_ToPrimitiveFree(ctx, val, HINT_NUMBER);
-        if (JS_IsException(val))
-            return NULL;
-        goto redo;
-    default:
-    fail:
+    }
+    if (failed) {
         JS_FreeValue(ctx, val);
         JS_ThrowTypeError(ctx, "cannot convert to bigint");
         return NULL;
