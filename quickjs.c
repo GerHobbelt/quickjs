@@ -11908,11 +11908,12 @@ static __maybe_unused void JS_DumpGCObject(JSRuntime *rt, JSGCObjectHeader *p)
     }
 }
 
+// goto removed
 static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
                                                       JSValueConst val)
 {
     uint32_t tag = JS_VALUE_GET_NORM_TAG(val);
-    const char *str;
+    const char *str = NULL;
 
     switch(tag) {
     case JS_TAG_INT:
@@ -11923,20 +11924,18 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
             str = "true";
         else
             str = "false";
-        goto print_str;
+        break;
     case JS_TAG_NULL:
         str = "null";
-        goto print_str;
+        break;
     case JS_TAG_EXCEPTION:
         str = "exception";
-        goto print_str;
+        break;
     case JS_TAG_UNINITIALIZED:
         str = "uninitialized";
-        goto print_str;
+        break;
     case JS_TAG_UNDEFINED:
         str = "undefined";
-    print_str:
-        printf("%s", str);
         break;
     case JS_TAG_FLOAT64:
         printf("%.14g", JS_VALUE_GET_FLOAT64(val));
@@ -11950,6 +11949,7 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
                           BF_RNDZ | BF_FTOA_FORMAT_FRAC);
             printf("%sn", str);
             bf_realloc(&rt->bf_ctx, str, 0);
+            str = NULL;
         }
         break;
     case JS_TAG_BIG_FLOAT:
@@ -11960,6 +11960,7 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
                           BF_RNDZ | BF_FTOA_FORMAT_FREE | BF_FTOA_ADD_PREFIX);
             printf("%sl", str);
             bf_free(&rt->bf_ctx, str);
+            str = NULL;
         }
         break;
     case JS_TAG_BIG_DECIMAL:
@@ -11970,6 +11971,7 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
                              BF_RNDZ | BF_FTOA_FORMAT_FREE);
             printf("%sm", str);
             bf_free(&rt->bf_ctx, str);
+            str = NULL;
         }
         break;
 #endif
@@ -12011,6 +12013,7 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
         printf("[unknown tag %d]", tag);
         break;
     }
+    if (str) printf("%s", str);
 }
 
 static __maybe_unused void JS_DumpValue(JSContext *ctx,
