@@ -11600,10 +11600,10 @@ static JSValue js_dtoa(JSContext *ctx,
     return JS_NewString(ctx, buf);
 }
 
+// goto removed
 JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToPropertyKey)
 {
     uint32_t tag;
-    const char *str;
     char buf[32];
 
     tag = JS_VALUE_GET_NORM_TAG(val);
@@ -11612,8 +11612,7 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
         return JS_DupValue(ctx, val);
     case JS_TAG_INT:
         snprintf(buf, sizeof(buf), "%d", JS_VALUE_GET_INT(val));
-        str = buf;
-        goto new_string;
+        return JS_NewString(ctx, buf);
     case JS_TAG_BOOL:
         return JS_AtomToString(ctx, JS_VALUE_GET_BOOL(val) ?
                           JS_ATOM_true : JS_ATOM_false);
@@ -11635,8 +11634,7 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
         }
         break;
     case JS_TAG_FUNCTION_BYTECODE:
-        str = "[function bytecode]";
-        goto new_string;
+        return JS_NewString(ctx, "[function bytecode]");
     case JS_TAG_SYMBOL:
         if (is_ToPropertyKey) {
             return JS_DupValue(ctx, val);
@@ -11655,9 +11653,7 @@ JSValue JS_ToStringInternal(JSContext *ctx, JSValueConst val, BOOL is_ToProperty
         return ctx->rt->bigdecimal_ops.to_string(ctx, val);
 #endif
     default:
-        str = "[unsupported type]";
-    new_string:
-        return JS_NewString(ctx, str);
+        return JS_NewString(ctx, "[unsupported type]");
     }
 }
 
