@@ -13303,6 +13303,7 @@ static int js_bfdec_pow(bfdec_t *r, const bfdec_t *a, const bfdec_t *b)
     return bfdec_pow_ui(r, a, b2);
 }
 
+// goto removed
 static int js_binary_arith_bigdecimal(JSContext *ctx, OPCodeEnum op,
                                       JSValue *pres, JSValue op1, JSValue op2)
 {
@@ -13311,16 +13312,16 @@ static int js_binary_arith_bigdecimal(JSContext *ctx, OPCodeEnum op,
     JSValue res;
 
     res = JS_NewBigDecimal(ctx);
-    if (JS_IsException(res))
-        goto fail;
-    r = JS_GetBigDecimal(res);
-    
     a = JS_ToBigDecimal(ctx, op1);
-    if (!a)
-        goto fail;
     b = JS_ToBigDecimal(ctx, op2);
-    if (!b)
-        goto fail;
+    if (JS_IsException(res) || !a || !b) {
+        if (!JS_IsException(res))
+            JS_FreeValue(ctx, res);
+        JS_FreeValue(ctx, op1);
+        JS_FreeValue(ctx, op2);
+        return -1;
+    }
+    r = JS_GetBigDecimal(res);
     switch(op) {
     case OP_add:
         ret = bfdec_add(r, a, b, BF_PREC_INF, BF_RNDZ);
@@ -13356,11 +13357,6 @@ static int js_binary_arith_bigdecimal(JSContext *ctx, OPCodeEnum op,
     }
     *pres = res;
     return 0;
- fail:
-    JS_FreeValue(ctx, res);
-    JS_FreeValue(ctx, op1);
-    JS_FreeValue(ctx, op2);
-    return -1;
 }
 
 static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *sp,
