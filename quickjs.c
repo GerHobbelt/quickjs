@@ -12641,6 +12641,7 @@ static __exception int js_call_binary_op_fallback(JSContext *ctx,
 
 /* try to call the operation on the operatorSet field of 'obj'. Only
    used for "/" and "**" on the BigInt prototype in math mode */
+// goto removed
 static __exception int js_call_binary_op_simple(JSContext *ctx,
                                                 JSValue *pret,
                                                 JSValueConst obj,
@@ -12655,42 +12656,38 @@ static __exception int js_call_binary_op_simple(JSContext *ctx,
     JSValueConst args[2];
 
     opset1_obj = JS_GetProperty(ctx, obj, JS_ATOM_Symbol_operatorSet);
-    if (JS_IsException(opset1_obj))
-        goto exception;
-    if (JS_IsUndefined(opset1_obj))
-        return 0;
-    opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
-    if (!opset1)
-        goto exception;
-    ovop = get_ovop_from_opcode(op);
+    while (TRUE) { // goto replacement
+        if (JS_IsException(opset1_obj)) break;
+        if (JS_IsUndefined(opset1_obj)) return 0;
+        opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
+        if (!opset1) break;
+        ovop = get_ovop_from_opcode(op);
 
-    p = opset1->self_ops[ovop];
-    if (!p) {
-        JS_FreeValue(ctx, opset1_obj);
-        return 0;
-    }
+        p = opset1->self_ops[ovop];
+        if (!p) {
+            JS_FreeValue(ctx, opset1_obj);
+            return 0;
+        }
 
-    new_op1 = JS_ToNumeric(ctx, op1);
-    if (JS_IsException(new_op1))
-        goto exception;
-    new_op2 = JS_ToNumeric(ctx, op2);
-    if (JS_IsException(new_op2)) {
+        new_op1 = JS_ToNumeric(ctx, op1);
+        if (JS_IsException(new_op1)) break;
+        new_op2 = JS_ToNumeric(ctx, op2);
+        if (JS_IsException(new_op2)) {
+            JS_FreeValue(ctx, new_op1);
+            break;
+        }
+
+        method = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
+        args[0] = new_op1;
+        args[1] = new_op2;
+        ret = JS_CallFree(ctx, method, JS_UNDEFINED, 2, args);
         JS_FreeValue(ctx, new_op1);
-        goto exception;
+        JS_FreeValue(ctx, new_op2);
+        if (JS_IsException(ret)) break;
+        JS_FreeValue(ctx, opset1_obj);
+        *pret = ret;
+        return 1;
     }
-
-    method = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
-    args[0] = new_op1;
-    args[1] = new_op2;
-    ret = JS_CallFree(ctx, method, JS_UNDEFINED, 2, args);
-    JS_FreeValue(ctx, new_op1);
-    JS_FreeValue(ctx, new_op2);
-    if (JS_IsException(ret))
-        goto exception;
-    JS_FreeValue(ctx, opset1_obj);
-    *pret = ret;
-    return 1;
- exception:
     JS_FreeValue(ctx, opset1_obj);
     *pret = JS_UNDEFINED;
     return -1;
