@@ -13024,6 +13024,7 @@ static __exception int js_post_inc_slow(JSContext *ctx,
     return js_unary_arith_slow(ctx, sp + 1, op - OP_post_dec + OP_dec);
 }
 
+// goto removed
 static no_inline int js_not_slow(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, val;
@@ -13042,19 +13043,18 @@ static no_inline int js_not_slow(JSContext *ctx, JSValue *sp)
     }
 
     op1 = JS_ToNumericFree(ctx, op1);
-    if (JS_IsException(op1))
-        goto exception;
-    if (is_math_mode(ctx) || JS_VALUE_GET_TAG(op1) == JS_TAG_BIG_INT) {
-        if (ctx->rt->bigint_ops.unary_arith(ctx, sp - 1, OP_not, op1))
-            goto exception;
-    } else {
-        int32_t v1;
-        if (unlikely(JS_ToInt32Free(ctx, &v1, op1)))
-            goto exception;
-        sp[-1] = JS_NewInt32(ctx, ~v1);
+    while (!JS_IsException(op1)) {
+        if (is_math_mode(ctx) || JS_VALUE_GET_TAG(op1) == JS_TAG_BIG_INT) {
+            if (ctx->rt->bigint_ops.unary_arith(ctx, sp - 1, OP_not, op1))
+                break;
+        } else {
+            int32_t v1;
+            if (unlikely(JS_ToInt32Free(ctx, &v1, op1)))
+                break;
+            sp[-1] = JS_NewInt32(ctx, ~v1);
+        }
+        return 0;
     }
-    return 0;
- exception:
     sp[-1] = JS_UNDEFINED;
     return -1;
 }
