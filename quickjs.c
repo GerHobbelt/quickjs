@@ -12517,6 +12517,7 @@ static JSObject *find_binary_op(JSBinaryOperatorDef *def,
 
 /* return -1 if exception, 0 if no operator overloading, 1 if
    overloaded operator called */
+// goto removed
 static __exception int js_call_binary_op_fallback(JSContext *ctx,
                                                   JSValue *pret,
                                                   JSValueConst op1,
@@ -12536,108 +12537,102 @@ static __exception int js_call_binary_op_fallback(JSContext *ctx,
     
     opset2_obj = JS_UNDEFINED;
     opset1_obj = JS_GetProperty(ctx, op1, JS_ATOM_Symbol_operatorSet);
-    if (JS_IsException(opset1_obj))
-        goto exception;
-    if (JS_IsUndefined(opset1_obj))
-        return 0;
-    opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
-    if (!opset1)
-        goto exception;
+    while (TRUE) { // goto replacement
+        if (JS_IsException(opset1_obj)) break;
+        if (JS_IsUndefined(opset1_obj)) return 0;
+        opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
+        if (!opset1) break;
 
-    opset2_obj = JS_GetProperty(ctx, op2, JS_ATOM_Symbol_operatorSet);
-    if (JS_IsException(opset2_obj))
-        goto exception;
-    if (JS_IsUndefined(opset2_obj)) {
-        JS_FreeValue(ctx, opset1_obj);
-        return 0;
-    }
-    opset2 = JS_GetOpaque2(ctx, opset2_obj, JS_CLASS_OPERATOR_SET);
-    if (!opset2)
-        goto exception;
-
-    if (opset1->is_primitive && opset2->is_primitive) {
-        JS_FreeValue(ctx, opset1_obj);
-        JS_FreeValue(ctx, opset2_obj);
-        return 0;
-    }
-
-    ovop = get_ovop_from_opcode(op);
-    
-    if (opset1->operator_counter == opset2->operator_counter) {
-        p = opset1->self_ops[ovop];
-    } else if (opset1->operator_counter > opset2->operator_counter) {
-        p = find_binary_op(&opset1->left, opset2->operator_counter, ovop);
-    } else {
-        p = find_binary_op(&opset2->right, opset1->operator_counter, ovop);
-    }
-    if (!p) {
-        JS_ThrowTypeError(ctx, "operator %s: no function defined",
-                          js_overloadable_operator_names[ovop]);
-        goto exception;
-    }
-
-    if (opset1->is_primitive) {
-        if (is_numeric) {
-            new_op1 = JS_ToNumeric(ctx, op1);
-        } else {
-            new_op1 = JS_ToPrimitive(ctx, op1, hint);
+        opset2_obj = JS_GetProperty(ctx, op2, JS_ATOM_Symbol_operatorSet);
+        if (JS_IsException(opset2_obj)) break;
+        if (JS_IsUndefined(opset2_obj)) {
+            JS_FreeValue(ctx, opset1_obj);
+            return 0;
         }
-        if (JS_IsException(new_op1))
-            goto exception;
-    } else {
-        new_op1 = JS_DupValue(ctx, op1);
-    }
-    
-    if (opset2->is_primitive) {
-        if (is_numeric) {
-            new_op2 = JS_ToNumeric(ctx, op2);
-        } else {
-            new_op2 = JS_ToPrimitive(ctx, op2, hint);
-        }
-        if (JS_IsException(new_op2)) {
-            JS_FreeValue(ctx, new_op1);
-            goto exception;
-        }
-    } else {
-        new_op2 = JS_DupValue(ctx, op2);
-    }
+        opset2 = JS_GetOpaque2(ctx, opset2_obj, JS_CLASS_OPERATOR_SET);
+        if (!opset2) break;
 
-    /* XXX: could apply JS_ToPrimitive() if primitive type so that the
-       operator function does not get a value object */
-    
-    method = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
-    if (ovop == JS_OVOP_LESS && (op == OP_lte || op == OP_gt)) {
-        args[0] = new_op2;
-        args[1] = new_op1;
-    } else {
-        args[0] = new_op1;
-        args[1] = new_op2;
-    }
-    ret = JS_CallFree(ctx, method, JS_UNDEFINED, 2, args);
-    JS_FreeValue(ctx, new_op1);
-    JS_FreeValue(ctx, new_op2);
-    if (JS_IsException(ret))
-        goto exception;
-    if (ovop == JS_OVOP_EQ) {
-        BOOL res = JS_ToBoolFree(ctx, ret);
-        if (op == OP_neq)
-            res ^= 1;
-        ret = JS_NewBool(ctx, res);
-    } else if (ovop == JS_OVOP_LESS) {
-        if (JS_IsUndefined(ret)) {
-            ret = JS_FALSE;
+        if (opset1->is_primitive && opset2->is_primitive) {
+            JS_FreeValue(ctx, opset1_obj);
+            JS_FreeValue(ctx, opset2_obj);
+            return 0;
+        }
+
+        ovop = get_ovop_from_opcode(op);
+        
+        if (opset1->operator_counter == opset2->operator_counter) {
+            p = opset1->self_ops[ovop];
+        } else if (opset1->operator_counter > opset2->operator_counter) {
+            p = find_binary_op(&opset1->left, opset2->operator_counter, ovop);
         } else {
+            p = find_binary_op(&opset2->right, opset1->operator_counter, ovop);
+        }
+        if (!p) {
+            JS_ThrowTypeError(ctx, "operator %s: no function defined",
+                              js_overloadable_operator_names[ovop]);
+            break;
+        }
+
+        if (opset1->is_primitive) {
+            if (is_numeric) {
+                new_op1 = JS_ToNumeric(ctx, op1);
+            } else {
+                new_op1 = JS_ToPrimitive(ctx, op1, hint);
+            }
+            if (JS_IsException(new_op1)) break;
+        } else {
+            new_op1 = JS_DupValue(ctx, op1);
+        }
+        
+        if (opset2->is_primitive) {
+            if (is_numeric) {
+                new_op2 = JS_ToNumeric(ctx, op2);
+            } else {
+                new_op2 = JS_ToPrimitive(ctx, op2, hint);
+            }
+            if (JS_IsException(new_op2)) {
+                JS_FreeValue(ctx, new_op1);
+                break;
+            }
+        } else {
+            new_op2 = JS_DupValue(ctx, op2);
+        }
+
+        /* XXX: could apply JS_ToPrimitive() if primitive type so that the
+           operator function does not get a value object */
+        
+        method = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
+        if (ovop == JS_OVOP_LESS && (op == OP_lte || op == OP_gt)) {
+            args[0] = new_op2;
+            args[1] = new_op1;
+        } else {
+            args[0] = new_op1;
+            args[1] = new_op2;
+        }
+        ret = JS_CallFree(ctx, method, JS_UNDEFINED, 2, args);
+        JS_FreeValue(ctx, new_op1);
+        JS_FreeValue(ctx, new_op2);
+        if (JS_IsException(ret)) break;
+        if (ovop == JS_OVOP_EQ) {
             BOOL res = JS_ToBoolFree(ctx, ret);
-            if (op == OP_lte || op == OP_gte)
+            if (op == OP_neq)
                 res ^= 1;
             ret = JS_NewBool(ctx, res);
+        } else if (ovop == JS_OVOP_LESS) {
+            if (JS_IsUndefined(ret)) {
+                ret = JS_FALSE;
+            } else {
+                BOOL res = JS_ToBoolFree(ctx, ret);
+                if (op == OP_lte || op == OP_gte)
+                    res ^= 1;
+                ret = JS_NewBool(ctx, res);
+            }
         }
+        JS_FreeValue(ctx, opset1_obj);
+        JS_FreeValue(ctx, opset2_obj);
+        *pret = ret;
+        return 1;
     }
-    JS_FreeValue(ctx, opset1_obj);
-    JS_FreeValue(ctx, opset2_obj);
-    *pret = ret;
-    return 1;
- exception:
     JS_FreeValue(ctx, opset1_obj);
     JS_FreeValue(ctx, opset2_obj);
     *pret = JS_UNDEFINED;
