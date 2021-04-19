@@ -12903,6 +12903,40 @@ static int js_unary_arith_bigdecimal(JSContext *ctx,
     return 0;
 }
 
+static int js_unary_arith_slow_exception(JSValue *sp) {
+    sp[-1] = JS_UNDEFINED;
+    return -1;
+}
+
+static int js_unary_arith_slow_handle_float64(JSContext *ctx,
+        BOOL big_int, JSValue *sp, OPCodeEnum op, JSValue op1)
+{
+    double d;
+    int v;
+    if (big_int || is_math_mode(ctx)) {
+        if (ctx->rt->bigint_ops.unary_arith(ctx, sp - 1, op, op1))
+            return js_unary_arith_slow_exception(sp);
+    }
+    d = JS_VALUE_GET_FLOAT64(op1);
+    switch(op) {
+    case OP_inc:
+    case OP_dec:
+        v = 2 * (op - OP_dec) - 1;
+        d += v;
+        break;
+    case OP_plus:
+        break;
+    case OP_neg:
+        d = -d;
+        break;
+    default:
+        abort();
+    }
+    sp[-1] = __JS_NewFloat64(ctx, d);
+    return 0;
+}
+
+// goto removed
 static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
                                                      JSValue *sp,
                                                      OPCodeEnum op)
@@ -12914,7 +12948,7 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
     op1 = sp[-1];
     /* fast path for float64 */
     if (JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(op1)))
-        goto handle_float64;
+        return js_unary_arith_slow_handle_float64(ctx, FALSE, sp, op, op1);
     if (JS_IsObject(op1)) {
         ret = js_call_unary_op_fallback(ctx, &val, op1, op);
         if (ret < 0)
@@ -12928,7 +12962,7 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
 
     op1 = JS_ToNumericFree(ctx, op1);
     if (JS_IsException(op1))
-        goto exception;
+        return js_unary_arith_slow_exception(sp);
     tag = JS_VALUE_GET_TAG(op1);
     switch(tag) {
     case JS_TAG_INT:
@@ -12958,47 +12992,19 @@ static no_inline __exception int js_unary_arith_slow(JSContext *ctx,
         }
         break;
     case JS_TAG_BIG_INT:
-    handle_bigint:
-        if (ctx->rt->bigint_ops.unary_arith(ctx, sp - 1, op, op1))
-            goto exception;
-        break;
+        return js_unary_arith_slow_handle_float64(ctx, TRUE, sp, op, op1);
     case JS_TAG_BIG_FLOAT:
         if (ctx->rt->bigfloat_ops.unary_arith(ctx, sp - 1, op, op1))
-            goto exception;
+            return js_unary_arith_slow_exception(sp);
         break;
     case JS_TAG_BIG_DECIMAL:
         if (ctx->rt->bigdecimal_ops.unary_arith(ctx, sp - 1, op, op1))
-            goto exception;
+            return js_unary_arith_slow_exception(sp);
         break;
     default:
-    handle_float64:
-        {
-            double d;
-            if (is_math_mode(ctx))
-                goto handle_bigint;
-            d = JS_VALUE_GET_FLOAT64(op1);
-            switch(op) {
-            case OP_inc:
-            case OP_dec:
-                v = 2 * (op - OP_dec) - 1;
-                d += v;
-                break;
-            case OP_plus:
-                break;
-            case OP_neg:
-                d = -d;
-                break;
-            default:
-                abort();
-            }
-            sp[-1] = __JS_NewFloat64(ctx, d);
-        }
-        break;
+        return js_unary_arith_slow_handle_float64(ctx, FALSE, sp, op, op1);
     }
     return 0;
- exception:
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static __exception int js_post_inc_slow(JSContext *ctx,
