@@ -13656,6 +13656,7 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     return 0;
 }
 
+// goto removed
 static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
                                                       JSValue *sp,
                                                       OPCodeEnum op)
@@ -13680,7 +13681,7 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             if (ret < 0) {
-                goto exception;
+                return bigint_binary_exception(sp);
             } else {
                 sp[-2] = res;
                 return 0;
@@ -13691,16 +13692,18 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
     op1 = JS_ToNumericFree(ctx, op1);
     if (JS_IsException(op1)) {
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     op2 = JS_ToNumericFree(ctx, op2);
     if (JS_IsException(op2)) {
         JS_FreeValue(ctx, op1);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
 
-    if (is_math_mode(ctx))
-        goto bigint_op;
+    if (is_math_mode(ctx)) {
+        ret = bigint_binary_arith(ctx, sp, op, op1, op2);
+        if (ret != 0) return ret;
+    }
 
     tag1 = JS_VALUE_GET_TAG(op1);
     tag2 = JS_VALUE_GET_TAG(op2);
@@ -13709,19 +13712,18 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             JS_ThrowTypeError(ctx, "both operands must be bigint");
-            goto exception;
+            return bigint_binary_exception(sp);
         } else {
-        bigint_op:
-            if (ctx->rt->bigint_ops.binary_arith(ctx, op, sp - 2, op1, op2))
-                goto exception;
+            ret = bigint_binary_arith(ctx, sp, op, op1, op2);
+            if (ret != 0) return ret;
         }
     } else {
         if (unlikely(JS_ToInt32Free(ctx, (int32_t *)&v1, op1))) {
             JS_FreeValue(ctx, op2);
-            goto exception;
+            return bigint_binary_exception(sp);
         }
         if (unlikely(JS_ToInt32Free(ctx, (int32_t *)&v2, op2)))
-            goto exception;
+            return bigint_binary_exception(sp);
         switch(op) {
         case OP_shl:
             r = v1 << (v2 & 0x1f);
@@ -13744,10 +13746,6 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
         sp[-2] = JS_NewInt32(ctx, r);
     }
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 /* Note: also used for bigint */
