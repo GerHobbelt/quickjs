@@ -13120,23 +13120,26 @@ static int js_binary_arith_bigfloat(JSContext *ctx, OPCodeEnum op,
     return 0;
 }
 
+// goto removed
 static int js_binary_arith_bigint(JSContext *ctx, OPCodeEnum op,
                                   JSValue *pres, JSValue op1, JSValue op2)
 {
     bf_t a_s, b_s, *r, *a, *b;
     int ret;
     JSValue res;
+    BOOL math_mode_div_pow = FALSE;
     
     res = JS_NewBigInt(ctx);
-    if (JS_IsException(res))
-        goto fail;
     a = JS_ToBigInt(ctx, &a_s, op1);
-    if (!a)
-        goto fail;
     b = JS_ToBigInt(ctx, &b_s, op2);
-    if (!b) {
-        JS_FreeBigInt(ctx, a, &a_s);
-        goto fail;
+    if (JS_IsException(res) || !a || !b) {
+        if (a) JS_FreeBigInt(ctx, a, &a_s);
+        if (b) JS_FreeBigInt(ctx, b, &b_s);
+        if (!JS_IsException(res))
+            JS_FreeValue(ctx, res);
+        JS_FreeValue(ctx, op1);
+        JS_FreeValue(ctx, op2);
+        return -1;
     }
     r = JS_GetBigInt(res);
     ret = 0;
@@ -13158,7 +13161,8 @@ static int js_binary_arith_bigint(JSContext *ctx, OPCodeEnum op,
                             BF_RNDZ);
             bf_delete(rem);
         } else {
-            goto math_mode_div_pow;
+            math_mode_div_pow = TRUE;
+            break;
         }
         break;
     case OP_math_mod:
@@ -13175,47 +13179,8 @@ static int js_binary_arith_bigint(JSContext *ctx, OPCodeEnum op,
             if (!is_math_mode(ctx)) {
                 ret = BF_ST_INVALID_OP;
             } else {
-            math_mode_div_pow:
-                JS_FreeValue(ctx, res);
-                ret = js_call_binary_op_simple(ctx, &res, ctx->class_proto[JS_CLASS_BIG_INT], op1, op2, op);
-                if (ret != 0) {
-                    JS_FreeBigInt(ctx, a, &a_s);
-                    JS_FreeBigInt(ctx, b, &b_s);
-                    JS_FreeValue(ctx, op1);
-                    JS_FreeValue(ctx, op2);
-                    if (ret < 0) {
-                        return -1;
-                    } else {
-                        *pres = res;
-                        return 0;
-                    }
-                }
-                /* if no BigInt power operator defined, return a
-                   bigfloat */
-                res = JS_NewBigFloat(ctx);
-                if (JS_IsException(res)) {
-                    JS_FreeBigInt(ctx, a, &a_s);
-                    JS_FreeBigInt(ctx, b, &b_s);
-                    goto fail;
-                }
-                r = JS_GetBigFloat(res);
-                if (op == OP_div) {
-                    ret = bf_div(r, a, b, ctx->fp_env.prec, ctx->fp_env.flags) & BF_ST_MEM_ERROR;
-                } else {
-                    ret = bf_pow(r, a, b, ctx->fp_env.prec,
-                                 ctx->fp_env.flags | BF_POW_JS_QUIRKS) & BF_ST_MEM_ERROR;
-                }
-                JS_FreeBigInt(ctx, a, &a_s);
-                JS_FreeBigInt(ctx, b, &b_s);
-                JS_FreeValue(ctx, op1);
-                JS_FreeValue(ctx, op2);
-                if (unlikely(ret)) {
-                    JS_FreeValue(ctx, res);
-                    throw_bf_exception(ctx, ret);
-                    return -1;
-                }
-                *pres = res;
-                return 0;
+                math_mode_div_pow = TRUE;
+                break;
             }
         } else {
             ret = bf_pow(r, a, b, BF_PREC_INF, BF_RNDZ | BF_POW_JS_QUIRKS);
@@ -13257,6 +13222,47 @@ static int js_binary_arith_bigint(JSContext *ctx, OPCodeEnum op,
     default:
         abort();
     }
+    if (math_mode_div_pow) {
+        JS_FreeValue(ctx, res);
+        ret = js_call_binary_op_simple(ctx, &res, ctx->class_proto[JS_CLASS_BIG_INT], op1, op2, op);
+        if (ret != 0) {
+            JS_FreeBigInt(ctx, a, &a_s);
+            JS_FreeBigInt(ctx, b, &b_s);
+            JS_FreeValue(ctx, op1);
+            JS_FreeValue(ctx, op2);
+            if (ret >= 0) {
+                *pres = res;
+                return 0;
+            } else return -1;
+        }
+        // if no BigInt power operator defined, return a bigfloat
+        res = JS_NewBigFloat(ctx);
+        if (JS_IsException(res)) {
+            JS_FreeBigInt(ctx, a, &a_s);
+            JS_FreeBigInt(ctx, b, &b_s);
+            JS_FreeValue(ctx, op1);
+            JS_FreeValue(ctx, op2);
+            return -1;
+        }
+        r = JS_GetBigFloat(res);
+        if (op == OP_div) {
+            ret = bf_div(r, a, b, ctx->fp_env.prec, ctx->fp_env.flags) & BF_ST_MEM_ERROR;
+        } else {
+            ret = bf_pow(r, a, b, ctx->fp_env.prec,
+                         ctx->fp_env.flags | BF_POW_JS_QUIRKS) & BF_ST_MEM_ERROR;
+        }
+        JS_FreeBigInt(ctx, a, &a_s);
+        JS_FreeBigInt(ctx, b, &b_s);
+        JS_FreeValue(ctx, op1);
+        JS_FreeValue(ctx, op2);
+        if (unlikely(ret)) {
+            JS_FreeValue(ctx, res);
+            throw_bf_exception(ctx, ret);
+            return -1;
+        }
+        *pres = res;
+        return 0;
+    }
     JS_FreeBigInt(ctx, a, &a_s);
     JS_FreeBigInt(ctx, b, &b_s);
     JS_FreeValue(ctx, op1);
@@ -13268,11 +13274,6 @@ static int js_binary_arith_bigint(JSContext *ctx, OPCodeEnum op,
     }
     *pres = JS_CompactBigInt(ctx, res);
     return 0;
- fail:
-    JS_FreeValue(ctx, res);
-    JS_FreeValue(ctx, op1);
-    JS_FreeValue(ctx, op2);
-    return -1;
 }
 
 /* b must be a positive integer */
