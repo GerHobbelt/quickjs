@@ -12695,6 +12695,7 @@ static __exception int js_call_binary_op_simple(JSContext *ctx,
 
 /* return -1 if exception, 0 if no operator overloading, 1 if
    overloaded operator called */
+// goto removed
 static __exception int js_call_unary_op_fallback(JSContext *ctx,
                                                  JSValue *pret,
                                                  JSValueConst op1,
@@ -12709,34 +12710,31 @@ static __exception int js_call_unary_op_fallback(JSContext *ctx,
         return 0;
     
     opset1_obj = JS_GetProperty(ctx, op1, JS_ATOM_Symbol_operatorSet);
-    if (JS_IsException(opset1_obj))
-        goto exception;
-    if (JS_IsUndefined(opset1_obj))
-        return 0;
-    opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
-    if (!opset1)
-        goto exception;
-    if (opset1->is_primitive) {
+    while (TRUE) { // goto replacement
+        if (JS_IsException(opset1_obj)) break;
+        if (JS_IsUndefined(opset1_obj)) return 0;
+        opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
+        if (!opset1) break;
+        if (opset1->is_primitive) {
+            JS_FreeValue(ctx, opset1_obj);
+            return 0;
+        }
+
+        ovop = get_ovop_from_opcode(op);
+
+        p = opset1->self_ops[ovop];
+        if (!p) {
+            JS_ThrowTypeError(ctx, "no overloaded operator %s",
+                              js_overloadable_operator_names[ovop]);
+            break;
+        }
+        method = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
+        ret = JS_CallFree(ctx, method, JS_UNDEFINED, 1, &op1);
+        if (JS_IsException(ret)) break;
         JS_FreeValue(ctx, opset1_obj);
-        return 0;
+        *pret = ret;
+        return 1;
     }
-
-    ovop = get_ovop_from_opcode(op);
-
-    p = opset1->self_ops[ovop];
-    if (!p) {
-        JS_ThrowTypeError(ctx, "no overloaded operator %s",
-                          js_overloadable_operator_names[ovop]);
-        goto exception;
-    }
-    method = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
-    ret = JS_CallFree(ctx, method, JS_UNDEFINED, 1, &op1);
-    if (JS_IsException(ret))
-        goto exception;
-    JS_FreeValue(ctx, opset1_obj);
-    *pret = ret;
-    return 1;
- exception:
     JS_FreeValue(ctx, opset1_obj);
     *pret = JS_UNDEFINED;
     return -1;
