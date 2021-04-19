@@ -13359,6 +13359,20 @@ static int js_binary_arith_bigdecimal(JSContext *ctx, OPCodeEnum op,
     return 0;
 }
 
+static int js_binary_arith_slow_exception(JSValue *sp) {
+    sp[-2] = JS_UNDEFINED;
+    sp[-1] = JS_UNDEFINED;
+    return -1;
+}
+
+static int js_binary_arith_slow_bigint(JSContext *ctx, JSValue *sp,
+                                OPCodeEnum op, JSValue op1, JSValue op2) {
+    if (ctx->rt->bigint_ops.binary_arith(ctx, op, sp - 2, op1, op2))
+        return js_binary_arith_slow_exception(sp);
+    return 0;
+}
+
+// goto removed
 static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *sp,
                                                       OPCodeEnum op)
 {
@@ -13366,6 +13380,8 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     uint32_t tag1, tag2;
     int ret;
     double d1, d2;
+    BOOL handle_float64 = FALSE;
+    BOOL skip_init_float64 = FALSE;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -13375,119 +13391,128 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     if (tag1 == JS_TAG_FLOAT64 && tag2 == JS_TAG_FLOAT64) {
         d1 = JS_VALUE_GET_FLOAT64(op1);
         d2 = JS_VALUE_GET_FLOAT64(op2);
-        goto handle_float64;
+        handle_float64 = TRUE;
+        skip_init_float64 = TRUE;
     }
 
-    /* try to call an overloaded operator */
-    if ((tag1 == JS_TAG_OBJECT &&
-         (tag2 != JS_TAG_NULL && tag2 != JS_TAG_UNDEFINED)) ||
-        (tag2 == JS_TAG_OBJECT &&
-         (tag1 != JS_TAG_NULL && tag1 != JS_TAG_UNDEFINED))) {
-        ret = js_call_binary_op_fallback(ctx, &res, op1, op2, op, TRUE, 0);
-        if (ret != 0) {
-            JS_FreeValue(ctx, op1);
+    if (!handle_float64) {
+        /* try to call an overloaded operator */
+        if ((tag1 == JS_TAG_OBJECT &&
+             (tag2 != JS_TAG_NULL && tag2 != JS_TAG_UNDEFINED)) ||
+            (tag2 == JS_TAG_OBJECT &&
+             (tag1 != JS_TAG_NULL && tag1 != JS_TAG_UNDEFINED))) {
+            ret = js_call_binary_op_fallback(ctx, &res, op1, op2, op, TRUE, 0);
+            if (ret != 0) {
+                JS_FreeValue(ctx, op1);
+                JS_FreeValue(ctx, op2);
+                if (ret < 0) {
+                    return js_binary_arith_slow_exception(sp);
+                } else {
+                    sp[-2] = res;
+                    return 0;
+                }
+            }
+        }
+
+        op1 = JS_ToNumericFree(ctx, op1);
+        if (JS_IsException(op1)) {
             JS_FreeValue(ctx, op2);
-            if (ret < 0) {
-                goto exception;
-            } else {
-                sp[-2] = res;
-                return 0;
-            }
+            return js_binary_arith_slow_exception(sp);
         }
-    }
+        op2 = JS_ToNumericFree(ctx, op2);
+        if (JS_IsException(op2)) {
+            JS_FreeValue(ctx, op1);
+            return js_binary_arith_slow_exception(sp);
+        }
+        tag1 = JS_VALUE_GET_NORM_TAG(op1);
+        tag2 = JS_VALUE_GET_NORM_TAG(op2);
 
-    op1 = JS_ToNumericFree(ctx, op1);
-    if (JS_IsException(op1)) {
-        JS_FreeValue(ctx, op2);
-        goto exception;
-    }
-    op2 = JS_ToNumericFree(ctx, op2);
-    if (JS_IsException(op2)) {
-        JS_FreeValue(ctx, op1);
-        goto exception;
-    }
-    tag1 = JS_VALUE_GET_NORM_TAG(op1);
-    tag2 = JS_VALUE_GET_NORM_TAG(op2);
-
-    if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
-        int32_t v1, v2;
-        int64_t v;
-        v1 = JS_VALUE_GET_INT(op1);
-        v2 = JS_VALUE_GET_INT(op2);
-        switch(op) {
-        case OP_sub:
-            v = (int64_t)v1 - (int64_t)v2;
-            break;
-        case OP_mul:
-            v = (int64_t)v1 * (int64_t)v2;
-            if (is_math_mode(ctx) &&
-                (v < -MAX_SAFE_INTEGER || v > MAX_SAFE_INTEGER))
-                goto handle_bigint;
-            if (v == 0 && (v1 | v2) < 0) {
-                sp[-2] = __JS_NewFloat64(ctx, -0.0);
+        if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
+            int32_t v1, v2;
+            int64_t v;
+            v1 = JS_VALUE_GET_INT(op1);
+            v2 = JS_VALUE_GET_INT(op2);
+            switch(op) {
+            case OP_sub:
+                v = (int64_t)v1 - (int64_t)v2;
+                break;
+            case OP_mul:
+                v = (int64_t)v1 * (int64_t)v2;
+                if (is_math_mode(ctx) && (v < -MAX_SAFE_INTEGER || v > MAX_SAFE_INTEGER)) {
+                    ret = js_binary_arith_slow_bigint(ctx, sp, op, op1, op2);
+                    if (ret != 0) return ret;
+                }
+                if (v == 0 && (v1 | v2) < 0) {
+                    sp[-2] = __JS_NewFloat64(ctx, -0.0);
+                    return 0;
+                }
+                break;
+            case OP_div:
+                if (is_math_mode(ctx)) {
+                    ret = js_binary_arith_slow_bigint(ctx, sp, op, op1, op2);
+                    if (ret != 0) return ret;
+                }
+                sp[-2] = __JS_NewFloat64(ctx, (double)v1 / (double)v2);
                 return 0;
-            }
-            break;
-        case OP_div:
-            if (is_math_mode(ctx))
-                goto handle_bigint;
-            sp[-2] = __JS_NewFloat64(ctx, (double)v1 / (double)v2);
-            return 0;
-        case OP_math_mod:
-            if (unlikely(v2 == 0)) {
-                throw_bf_exception(ctx, BF_ST_DIVIDE_ZERO);
-                goto exception;
-            }
-            v = (int64_t)v1 % (int64_t)v2;
-            if (v < 0) {
-                if (v2 < 0)
-                    v -= v2;
-                else
-                    v += v2;
-            }
-            break;
-        case OP_mod:
-            if (v1 < 0 || v2 <= 0) {
-                sp[-2] = JS_NewFloat64(ctx, fmod(v1, v2));
-                return 0;
-            } else {
+            case OP_math_mod:
+                if (unlikely(v2 == 0)) {
+                    throw_bf_exception(ctx, BF_ST_DIVIDE_ZERO);
+                    return js_binary_arith_slow_exception(sp);
+                }
                 v = (int64_t)v1 % (int64_t)v2;
+                if (v < 0) {
+                    if (v2 < 0) v -= v2;
+                    else v += v2;
+                }
+                break;
+            case OP_mod:
+                if (v1 < 0 || v2 <= 0) {
+                    sp[-2] = JS_NewFloat64(ctx, fmod(v1, v2));
+                    return 0;
+                } else {
+                    v = (int64_t)v1 % (int64_t)v2;
+                }
+                break;
+            case OP_pow:
+                if (!is_math_mode(ctx)) {
+                    sp[-2] = JS_NewFloat64(ctx, js_pow(v1, v2));
+                    return 0;
+                } else {
+                    ret = js_binary_arith_slow_bigint(ctx, sp, op, op1, op2);
+                    if (ret != 0) return ret;
+                }
+                break;
+            default:
+                abort();
             }
-            break;
-        case OP_pow:
-            if (!is_math_mode(ctx)) {
-                sp[-2] = JS_NewFloat64(ctx, js_pow(v1, v2));
-                return 0;
-            } else {
-                goto handle_bigint;
-            }
-            break;
-        default:
-            abort();
-        }
-        sp[-2] = JS_NewInt64(ctx, v);
-    } else if (tag1 == JS_TAG_BIG_DECIMAL || tag2 == JS_TAG_BIG_DECIMAL) {
-        if (ctx->rt->bigdecimal_ops.binary_arith(ctx, op, sp - 2, op1, op2))
-            goto exception;
-    } else if (tag1 == JS_TAG_BIG_FLOAT || tag2 == JS_TAG_BIG_FLOAT) {
-        if (ctx->rt->bigfloat_ops.binary_arith(ctx, op, sp - 2, op1, op2))
-            goto exception;
-    } else if (tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) {
-    handle_bigint:
-        if (ctx->rt->bigint_ops.binary_arith(ctx, op, sp - 2, op1, op2))
-            goto exception;
-    } else {
+            sp[-2] = JS_NewInt64(ctx, v);
+        } else if (tag1 == JS_TAG_BIG_DECIMAL || tag2 == JS_TAG_BIG_DECIMAL) {
+            if (ctx->rt->bigdecimal_ops.binary_arith(ctx, op, sp - 2, op1, op2))
+                return js_binary_arith_slow_exception(sp);
+        } else if (tag1 == JS_TAG_BIG_FLOAT || tag2 == JS_TAG_BIG_FLOAT) {
+            if (ctx->rt->bigfloat_ops.binary_arith(ctx, op, sp - 2, op1, op2))
+                return js_binary_arith_slow_exception(sp);
+        } else if (tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) {
+            ret = js_binary_arith_slow_bigint(ctx, sp, op, op1, op2);
+            if (ret != 0) return ret;
+        } else handle_float64 = TRUE;
+    }
+
+    if (handle_float64) {
         double dr;
         /* float64 result */
-        if (JS_ToFloat64Free(ctx, &d1, op1)) {
-            JS_FreeValue(ctx, op2);
-            goto exception;
+        if (!skip_init_float64) {
+            if (JS_ToFloat64Free(ctx, &d1, op1)) {
+                JS_FreeValue(ctx, op2);
+                return js_binary_arith_slow_exception(sp);
+            }
+            if (JS_ToFloat64Free(ctx, &d2, op2))
+                return js_binary_arith_slow_exception(sp);
         }
-        if (JS_ToFloat64Free(ctx, &d2, op2))
-            goto exception;
-    handle_float64:
-        if (is_math_mode(ctx) && is_safe_integer(d1) && is_safe_integer(d2))
-            goto handle_bigint;
+        if (is_math_mode(ctx) && is_safe_integer(d1) && is_safe_integer(d2)) {
+            ret = js_binary_arith_slow_bigint(ctx, sp, op, op1, op2);
+            if (ret != 0) return ret;
+        }
         switch(op) {
         case OP_sub:
             dr = d1 - d2;
@@ -13517,10 +13542,6 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
         sp[-2] = __JS_NewFloat64(ctx, dr);
     }
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
