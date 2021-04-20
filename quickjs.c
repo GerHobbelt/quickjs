@@ -13439,8 +13439,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
             case OP_mul:
                 v = (int64_t)v1 * (int64_t)v2;
                 if (is_math_mode(ctx) && (v < -MAX_SAFE_INTEGER || v > MAX_SAFE_INTEGER)) {
-                    ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-                    if (ret != 0) return ret;
+                    return bigint_binary_arith(ctx, sp, op, op1, op2);
                 }
                 if (v == 0 && (v1 | v2) < 0) {
                     sp[-2] = __JS_NewFloat64(ctx, -0.0);
@@ -13449,8 +13448,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
                 break;
             case OP_div:
                 if (is_math_mode(ctx)) {
-                    ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-                    if (ret != 0) return ret;
+                    return bigint_binary_arith(ctx, sp, op, op1, op2);
                 }
                 sp[-2] = __JS_NewFloat64(ctx, (double)v1 / (double)v2);
                 return 0;
@@ -13478,8 +13476,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
                     sp[-2] = JS_NewFloat64(ctx, js_pow(v1, v2));
                     return 0;
                 } else {
-                    ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-                    if (ret != 0) return ret;
+                    return bigint_binary_arith(ctx, sp, op, op1, op2);
                 }
                 break;
             default:
@@ -13493,8 +13490,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
             if (ctx->rt->bigfloat_ops.binary_arith(ctx, op, sp - 2, op1, op2))
                 return bigint_binary_exception(sp);
         } else if (tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) {
-            ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-            if (ret != 0) return ret;
+            return bigint_binary_arith(ctx, sp, op, op1, op2);
         } else handle_float64 = TRUE;
     }
 
@@ -13510,36 +13506,36 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
                 return bigint_binary_exception(sp);
         }
         if (is_math_mode(ctx) && is_safe_integer(d1) && is_safe_integer(d2)) {
-            ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-            if (ret != 0) return ret;
+            return bigint_binary_arith(ctx, sp, op, op1, op2);
+        } else {
+            switch(op) {
+            case OP_sub:
+                dr = d1 - d2;
+                break;
+            case OP_mul:
+                dr = d1 * d2;
+                break;
+            case OP_div:
+                dr = d1 / d2;
+                break;
+            case OP_mod:
+                dr = fmod(d1, d2);
+                break;
+            case OP_math_mod:
+                d2 = fabs(d2);
+                dr = fmod(d1, d2);
+                /* XXX: loss of accuracy if dr < 0 */
+                if (dr < 0)
+                    dr += d2;
+                break;
+            case OP_pow:
+                dr = js_pow(d1, d2);
+                break;
+            default:
+                abort();
+            }
+            sp[-2] = __JS_NewFloat64(ctx, dr);
         }
-        switch(op) {
-        case OP_sub:
-            dr = d1 - d2;
-            break;
-        case OP_mul:
-            dr = d1 * d2;
-            break;
-        case OP_div:
-            dr = d1 / d2;
-            break;
-        case OP_mod:
-            dr = fmod(d1, d2);
-            break;
-        case OP_math_mod:
-            d2 = fabs(d2);
-            dr = fmod(d1, d2);
-            /* XXX: loss of accuracy if dr < 0 */
-            if (dr < 0)
-                dr += d2;
-            break;
-        case OP_pow:
-            dr = js_pow(d1, d2);
-            break;
-        default:
-            abort();
-        }
-        sp[-2] = __JS_NewFloat64(ctx, dr);
     }
     return 0;
 }
