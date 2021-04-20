@@ -13632,8 +13632,7 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
         if (ctx->rt->bigfloat_ops.binary_arith(ctx, OP_add, sp - 2, op1, op2))
             return bigint_binary_exception(sp);
     } else if (tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) {
-        ret = bigint_binary_arith(ctx, sp, OP_add, op1, op2);
-        if (ret != 0) return ret;
+        return bigint_binary_arith(ctx, sp, OP_add, op1, op2);
     } else {
         double d1, d2;
         /* float64 result */
@@ -13644,8 +13643,7 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
         if (JS_ToFloat64Free(ctx, &d2, op2))
             return bigint_binary_exception(sp);
         if (is_math_mode(ctx) && is_safe_integer(d1) && is_safe_integer(d2)) {
-            ret = bigint_binary_arith(ctx, sp, OP_add, op1, op2);
-            if (ret != 0) return ret;
+            return bigint_binary_arith(ctx, sp, OP_add, op1, op2);
         }
         sp[-2] = __JS_NewFloat64(ctx, d1 + d2);
     }
@@ -13697,8 +13695,7 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
     }
 
     if (is_math_mode(ctx)) {
-        ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-        if (ret != 0) return ret;
+        return bigint_binary_arith(ctx, sp, op, op1, op2);
     }
 
     tag1 = JS_VALUE_GET_TAG(op1);
@@ -13710,8 +13707,7 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
             JS_ThrowTypeError(ctx, "both operands must be bigint");
             return bigint_binary_exception(sp);
         } else {
-            ret = bigint_binary_arith(ctx, sp, op, op1, op2);
-            if (ret != 0) return ret;
+            return bigint_binary_arith(ctx, sp, op, op1, op2);
         }
     } else {
         if (unlikely(JS_ToInt32Free(ctx, (int32_t *)&v1, op1))) {
