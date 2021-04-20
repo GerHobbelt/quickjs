@@ -11693,7 +11693,7 @@ static JSValue JS_ToStringCheckObject(JSContext *ctx, JSValueConst val)
     return JS_ToString(ctx, val);
 }
 
-static JSValue JS_ToQuotedString_fail(JSContext *ctx, JSValueConst val, StringBuffer *buf) {
+static JSValue JS_ToQuotedString_fail(JSContext *ctx, JSValue val, StringBuffer *buf) {
     JS_FreeValue(ctx, val);
     string_buffer_free(buf);
     return JS_EXCEPTION;
