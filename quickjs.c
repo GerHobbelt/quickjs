@@ -11708,6 +11708,7 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
     uint32_t c;
     StringBuffer b_s, *b = &b_s;
     char buf[16];
+    BOOL special;
 
     val = JS_ToStringCheckObject(ctx, val1);
     if (JS_IsException(val))
@@ -11721,31 +11722,28 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
         return JS_ToQuotedString_fail(ctx, val, b);
     for(i = 0; i < p->len; ) {
         c = string_getc(p, &i);
+        special = TRUE;
         switch(c) {
         case '\t':
             c = 't';
-            goto quote;
+            break;
         case '\r':
             c = 'r';
-            goto quote;
+            break;
         case '\n':
             c = 'n';
-            goto quote;
+            break;
         case '\b':
             c = 'b';
-            goto quote;
+            break;
         case '\f':
             c = 'f';
-            goto quote;
+            break;
         case '\"':
         case '\\':
-        quote:
-            if (string_buffer_putc8(b, '\\'))
-                return JS_ToQuotedString_fail(ctx, val, b);
-            if (string_buffer_putc8(b, c))
-                return JS_ToQuotedString_fail(ctx, val, b);
             break;
         default:
+            special = FALSE;
             if (c < 32 || (c >= 0xd800 && c < 0xe000)) {
                 snprintf(buf, sizeof(buf), "\\u%04x", c);
                 if (string_buffer_puts8(b, buf))
@@ -11755,6 +11753,10 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
                     return JS_ToQuotedString_fail(ctx, val, b);
             }
             break;
+        }
+        if (special) {
+            if (string_buffer_putc8(b, '\\') || string_buffer_putc8(b, c))
+                return JS_ToQuotedString_fail(ctx, val, b);
         }
     }
     if (string_buffer_putc8(b, '\"'))
