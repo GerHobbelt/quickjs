@@ -13835,12 +13835,15 @@ static int js_compare_bigdecimal(JSContext *ctx, OPCodeEnum op,
     return res;
 }
 
+// goto removed
 static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
                                         OPCodeEnum op)
 {
     JSValue op1, op2, ret;
     int res;
     uint32_t tag1, tag2;
+    BOOL float64_compare;
+    BOOL invalid_bigint_string;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -13857,7 +13860,7 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             if (res < 0) {
-                goto exception;
+                return bigint_binary_exception(sp);
             } else {
                 sp[-2] = ret;
                 return 0;
@@ -13867,12 +13870,12 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
     op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NUMBER);
     if (JS_IsException(op1)) {
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NUMBER);
     if (JS_IsException(op2)) {
         JS_FreeValue(ctx, op1);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
@@ -13899,39 +13902,41 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
         }
         JS_FreeValue(ctx, op1);
         JS_FreeValue(ctx, op2);
+        float64_compare = FALSE;
     } else if ((tag1 <= JS_TAG_NULL || tag1 == JS_TAG_FLOAT64) &&
                (tag2 <= JS_TAG_NULL || tag2 == JS_TAG_FLOAT64)) {
         /* fast path for float64/int */
-        goto float64_compare;
+        float64_compare = TRUE;
     } else {
         if (((tag1 == JS_TAG_BIG_INT && tag2 == JS_TAG_STRING) ||
              (tag2 == JS_TAG_BIG_INT && tag1 == JS_TAG_STRING)) &&
             !is_math_mode(ctx)) {
+            invalid_bigint_string = FALSE;
             if (tag1 == JS_TAG_STRING) {
                 op1 = JS_StringToBigInt(ctx, op1);
-                if (JS_VALUE_GET_TAG(op1) != JS_TAG_BIG_INT)
-                    goto invalid_bigint_string;
+                invalid_bigint_string = JS_VALUE_GET_TAG(op1) != JS_TAG_BIG_INT;
             }
-            if (tag2 == JS_TAG_STRING) {
+            if (!invalid_bigint_string && tag2 == JS_TAG_STRING) {
                 op2 = JS_StringToBigInt(ctx, op2);
-                if (JS_VALUE_GET_TAG(op2) != JS_TAG_BIG_INT) {
-                invalid_bigint_string:
-                    JS_FreeValue(ctx, op1);
-                    JS_FreeValue(ctx, op2);
-                    res = FALSE;
-                    goto done;
-                }
+                invalid_bigint_string = JS_VALUE_GET_TAG(op2) != JS_TAG_BIG_INT;
+            }
+            if (invalid_bigint_string) {
+                JS_FreeValue(ctx, op1);
+                JS_FreeValue(ctx, op2);
+                res = FALSE;
+                sp[-2] = JS_NewBool(ctx, res);
+                return 0;
             }
         } else {
             op1 = JS_ToNumericFree(ctx, op1);
             if (JS_IsException(op1)) {
                 JS_FreeValue(ctx, op2);
-                goto exception;
+                return bigint_binary_exception(sp);
             }
             op2 = JS_ToNumericFree(ctx, op2);
             if (JS_IsException(op2)) {
                 JS_FreeValue(ctx, op1);
-                goto exception;
+                return bigint_binary_exception(sp);
             }
         }
 
@@ -13941,54 +13946,54 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
         if (tag1 == JS_TAG_BIG_DECIMAL || tag2 == JS_TAG_BIG_DECIMAL) {
             res = ctx->rt->bigdecimal_ops.compare(ctx, op, op1, op2);
             if (res < 0)
-                goto exception;
+                return bigint_binary_exception(sp);
+            float64_compare = FALSE;
         } else if (tag1 == JS_TAG_BIG_FLOAT || tag2 == JS_TAG_BIG_FLOAT) {
             res = ctx->rt->bigfloat_ops.compare(ctx, op, op1, op2);
             if (res < 0)
-                goto exception;
+                return bigint_binary_exception(sp);
+            float64_compare = FALSE;
         } else if (tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) {
             res = ctx->rt->bigint_ops.compare(ctx, op, op1, op2);
             if (res < 0)
-                goto exception;
+                return bigint_binary_exception(sp);
+            float64_compare = FALSE;
         } else {
-            double d1, d2;
-
-        float64_compare:
-            /* can use floating point comparison */
-            if (tag1 == JS_TAG_FLOAT64) {
-                d1 = JS_VALUE_GET_FLOAT64(op1);
-            } else {
-                d1 = JS_VALUE_GET_INT(op1);
-            }
-            if (tag2 == JS_TAG_FLOAT64) {
-                d2 = JS_VALUE_GET_FLOAT64(op2);
-            } else {
-                d2 = JS_VALUE_GET_INT(op2);
-            }
-            switch(op) {
-            case OP_lt:
-                res = (d1 < d2); /* if NaN return false */
-                break;
-            case OP_lte:
-                res = (d1 <= d2); /* if NaN return false */
-                break;
-            case OP_gt:
-                res = (d1 > d2); /* if NaN return false */
-                break;
-            default:
-            case OP_gte:
-                res = (d1 >= d2); /* if NaN return false */
-                break;
-            }
+            float64_compare = TRUE;
         }
     }
- done:
+
+    if (float64_compare) {
+        double d1, d2;
+        /* can use floating point comparison */
+        if (tag1 == JS_TAG_FLOAT64) {
+            d1 = JS_VALUE_GET_FLOAT64(op1);
+        } else {
+            d1 = JS_VALUE_GET_INT(op1);
+        }
+        if (tag2 == JS_TAG_FLOAT64) {
+            d2 = JS_VALUE_GET_FLOAT64(op2);
+        } else {
+            d2 = JS_VALUE_GET_INT(op2);
+        }
+        switch(op) {
+        case OP_lt:
+            res = (d1 < d2); /* if NaN return false */
+            break;
+        case OP_lte:
+            res = (d1 <= d2); /* if NaN return false */
+            break;
+        case OP_gt:
+            res = (d1 > d2); /* if NaN return false */
+            break;
+        default:
+        case OP_gte:
+            res = (d1 >= d2); /* if NaN return false */
+            break;
+        }
+    }
     sp[-2] = JS_NewBool(ctx, res);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static BOOL tag_is_number(uint32_t tag)
