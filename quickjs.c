@@ -14607,6 +14607,7 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
     return 0;
 }
 
+// goto removed
 static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, op2;
@@ -14616,17 +14617,13 @@ static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
     op2 = sp[-1];
     if (unlikely(JS_ToUint32Free(ctx, &v1, op1))) {
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     if (unlikely(JS_ToUint32Free(ctx, &v2, op2)))
-        goto exception;
+        return bigint_binary_exception(sp);
     r = v1 >> (v2 & 0x1f);
     sp[-2] = JS_NewUint32(ctx, r);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 #endif /* !CONFIG_BIGNUM */
