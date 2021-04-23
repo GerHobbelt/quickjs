@@ -14629,12 +14629,14 @@ static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
 #endif /* !CONFIG_BIGNUM */
 
 /* XXX: Should take JSValueConst arguments */
+// goto removed
 static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
                           JSStrictEqModeEnum eq_mode)
 {
     BOOL res;
     int tag1, tag2;
     double d1, d2;
+    BOOL number_test = FALSE;
 
     tag1 = JS_VALUE_GET_NORM_TAG(op1);
     tag2 = JS_VALUE_GET_NORM_TAG(op2);
@@ -14643,8 +14645,7 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
         if (tag1 != tag2) {
             res = FALSE;
         } else {
-            res = JS_VALUE_GET_INT(op1) == JS_VALUE_GET_INT(op2);
-            goto done_no_free;
+            return JS_VALUE_GET_INT(op1) == JS_VALUE_GET_INT(op2);
         }
         break;
     case JS_TAG_NULL:
@@ -14685,10 +14686,10 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
         d1 = JS_VALUE_GET_INT(op1);
         if (tag2 == JS_TAG_INT) {
             d2 = JS_VALUE_GET_INT(op2);
-            goto number_test;
+            number_test = TRUE;
         } else if (tag2 == JS_TAG_FLOAT64) {
             d2 = JS_VALUE_GET_FLOAT64(op2);
-            goto number_test;
+            number_test = TRUE;
         } else {
             res = FALSE;
         }
@@ -14703,23 +14704,8 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
             res = FALSE;
             break;
         }
-    number_test:
-        if (unlikely(eq_mode >= JS_EQ_SAME_VALUE)) {
-            JSFloat64Union u1, u2;
-            /* NaN is not always normalized, so this test is necessary */
-            if (isnan(d1) || isnan(d2)) {
-                res = isnan(d1) == isnan(d2);
-            } else if (eq_mode == JS_EQ_SAME_VALUE_ZERO) {
-                res = (d1 == d2); /* +0 == -0 */
-            } else {
-                u1.d = d1;
-                u2.d = d2;
-                res = (u1.u64 == u2.u64); /* +0 != -0 */
-            }
-        } else {
-            res = (d1 == d2); /* if NaN return false and +0 == -0 */
-        }
-        goto done_no_free;
+        number_test = TRUE;
+        break;
 #ifdef CONFIG_BIGNUM
     case JS_TAG_BIG_INT:
         {
@@ -14781,9 +14767,26 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
         res = FALSE;
         break;
     }
-    JS_FreeValue(ctx, op1);
-    JS_FreeValue(ctx, op2);
- done_no_free:
+    if (number_test) {
+        if (unlikely(eq_mode >= JS_EQ_SAME_VALUE)) {
+            JSFloat64Union u1, u2;
+            /* NaN is not always normalized, so this test is necessary */
+            if (isnan(d1) || isnan(d2)) {
+                res = isnan(d1) == isnan(d2);
+            } else if (eq_mode == JS_EQ_SAME_VALUE_ZERO) {
+                res = (d1 == d2); /* +0 == -0 */
+            } else {
+                u1.d = d1;
+                u2.d = d2;
+                res = (u1.u64 == u2.u64); /* +0 != -0 */
+            }
+        } else {
+            res = (d1 == d2); /* if NaN return false and +0 == -0 */
+        }
+    } else {
+        JS_FreeValue(ctx, op1);
+        JS_FreeValue(ctx, op2);
+    }
     return res;
 }
 
