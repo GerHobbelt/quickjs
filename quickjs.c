@@ -14324,6 +14324,7 @@ static __exception int js_post_inc_slow(JSContext *ctx,
     return 0;
 }
 
+// goto removed
 static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *sp,
                                                       OPCodeEnum op)
 {
@@ -14334,10 +14335,10 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     op2 = sp[-1];
     if (unlikely(JS_ToFloat64Free(ctx, &d1, op1))) {
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     if (unlikely(JS_ToFloat64Free(ctx, &d2, op2))) {
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     switch(op) {
     case OP_sub:
@@ -14360,10 +14361,6 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     }
     sp[-2] = JS_NewFloat64(ctx, r);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
