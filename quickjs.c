@@ -14159,6 +14159,7 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
     return 0;
 }
 
+// goto removed
 static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, op2;
@@ -14169,12 +14170,12 @@ static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
     op1 = JS_ToNumericFree(ctx, op1);
     if (JS_IsException(op1)) {
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     op2 = JS_ToNumericFree(ctx, op2);
     if (JS_IsException(op2)) {
         JS_FreeValue(ctx, op1);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     /* XXX: could forbid >>> in bignum mode */
     if (!is_math_mode(ctx) &&
@@ -14183,7 +14184,7 @@ static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
         JS_ThrowTypeError(ctx, "bigint operands are forbidden for >>>");
         JS_FreeValue(ctx, op1);
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     /* cannot give an exception */
     JS_ToUint32Free(ctx, &v1, op1);
@@ -14191,10 +14192,6 @@ static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
     r = v1 >> (v2 & 0x1f);
     sp[-2] = JS_NewUint32(ctx, r);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static JSValue js_mul_pow10_to_float64(JSContext *ctx, const bf_t *a,
