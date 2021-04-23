@@ -14463,6 +14463,7 @@ static no_inline int js_not_slow(JSContext *ctx, JSValue *sp)
     return 0;
 }
 
+// goto removed
 static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
                                         OPCodeEnum op)
 {
@@ -14474,12 +14475,12 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
     op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NUMBER);
     if (JS_IsException(op1)) {
         JS_FreeValue(ctx, op2);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NUMBER);
     if (JS_IsException(op2)) {
         JS_FreeValue(ctx, op1);
-        goto exception;
+        return bigint_binary_exception(sp);
     }
     if (JS_VALUE_GET_TAG(op1) == JS_TAG_STRING &&
         JS_VALUE_GET_TAG(op2) == JS_TAG_STRING) {
@@ -14508,10 +14509,10 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
         double d1, d2;
         if (JS_ToFloat64Free(ctx, &d1, op1)) {
             JS_FreeValue(ctx, op2);
-            goto exception;
+            return bigint_binary_exception(sp);
         }
         if (JS_ToFloat64Free(ctx, &d2, op2))
-            goto exception;
+            return bigint_binary_exception(sp);
         switch(op) {
         case OP_lt:
             res = (d1 < d2); /* if NaN return false */
@@ -14530,10 +14531,6 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
     }
     sp[-2] = JS_NewBool(ctx, res);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
