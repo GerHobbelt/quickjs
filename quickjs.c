@@ -14533,6 +14533,7 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
     return 0;
 }
 
+// goto removed
 static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
                                             BOOL is_neq)
 {
@@ -14542,70 +14543,68 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
 
     op1 = sp[-2];
     op2 = sp[-1];
- redo:
-    tag1 = JS_VALUE_GET_NORM_TAG(op1);
-    tag2 = JS_VALUE_GET_NORM_TAG(op2);
-    if (tag1 == tag2 ||
-        (tag1 == JS_TAG_INT && tag2 == JS_TAG_FLOAT64) ||
-        (tag2 == JS_TAG_INT && tag1 == JS_TAG_FLOAT64)) {
-        res = js_strict_eq(ctx, op1, op2);
-    } else if ((tag1 == JS_TAG_NULL && tag2 == JS_TAG_UNDEFINED) ||
-               (tag2 == JS_TAG_NULL && tag1 == JS_TAG_UNDEFINED)) {
-        res = TRUE;
-    } else if ((tag1 == JS_TAG_STRING && (tag2 == JS_TAG_INT ||
-                                   tag2 == JS_TAG_FLOAT64)) ||
-        (tag2 == JS_TAG_STRING && (tag1 == JS_TAG_INT ||
-                                   tag1 == JS_TAG_FLOAT64))) {
-        double d1;
-        double d2;
-        if (JS_ToFloat64Free(ctx, &d1, op1)) {
-            JS_FreeValue(ctx, op2);
-            goto exception;
-        }
-        if (JS_ToFloat64Free(ctx, &d2, op2))
-            goto exception;
-        res = (d1 == d2);
-    } else if (tag1 == JS_TAG_BOOL) {
-        op1 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op1));
-        goto redo;
-    } else if (tag2 == JS_TAG_BOOL) {
-        op2 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op2));
-        goto redo;
-    } else if (tag1 == JS_TAG_OBJECT &&
-               (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64 || tag2 == JS_TAG_STRING || tag2 == JS_TAG_SYMBOL)) {
-        op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NONE);
-        if (JS_IsException(op1)) {
-            JS_FreeValue(ctx, op2);
-            goto exception;
-        }
-        goto redo;
-    } else if (tag2 == JS_TAG_OBJECT &&
-               (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64 || tag1 == JS_TAG_STRING || tag1 == JS_TAG_SYMBOL)) {
-        op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NONE);
-        if (JS_IsException(op2)) {
-            JS_FreeValue(ctx, op1);
-            goto exception;
-        }
-        goto redo;
-    } else {
-        /* IsHTMLDDA object is equivalent to undefined for '==' and '!=' */
-        if ((JS_IsHTMLDDA(ctx, op1) &&
-             (tag2 == JS_TAG_NULL || tag2 == JS_TAG_UNDEFINED)) ||
-            (JS_IsHTMLDDA(ctx, op2) &&
-             (tag1 == JS_TAG_NULL || tag1 == JS_TAG_UNDEFINED))) {
+    while (TRUE) { // goto replacement
+        tag1 = JS_VALUE_GET_NORM_TAG(op1);
+        tag2 = JS_VALUE_GET_NORM_TAG(op2);
+        if (tag1 == tag2 ||
+            (tag1 == JS_TAG_INT && tag2 == JS_TAG_FLOAT64) ||
+            (tag2 == JS_TAG_INT && tag1 == JS_TAG_FLOAT64)) {
+            res = js_strict_eq(ctx, op1, op2);
+        } else if ((tag1 == JS_TAG_NULL && tag2 == JS_TAG_UNDEFINED) ||
+                   (tag2 == JS_TAG_NULL && tag1 == JS_TAG_UNDEFINED)) {
             res = TRUE;
+        } else if ((tag1 == JS_TAG_STRING && (tag2 == JS_TAG_INT ||
+                                       tag2 == JS_TAG_FLOAT64)) ||
+            (tag2 == JS_TAG_STRING && (tag1 == JS_TAG_INT ||
+                                       tag1 == JS_TAG_FLOAT64))) {
+            double d1;
+            double d2;
+            if (JS_ToFloat64Free(ctx, &d1, op1)) {
+                JS_FreeValue(ctx, op2);
+                return bigint_binary_exception(sp);
+            }
+            if (JS_ToFloat64Free(ctx, &d2, op2))
+                return bigint_binary_exception(sp);
+            res = (d1 == d2);
+        } else if (tag1 == JS_TAG_BOOL) {
+            op1 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op1));
+            continue;
+        } else if (tag2 == JS_TAG_BOOL) {
+            op2 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op2));
+            continue;
+        } else if (tag1 == JS_TAG_OBJECT &&
+                   (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64 || tag2 == JS_TAG_STRING || tag2 == JS_TAG_SYMBOL)) {
+            op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NONE);
+            if (JS_IsException(op1)) {
+                JS_FreeValue(ctx, op2);
+                return bigint_binary_exception(sp);
+            }
+            continue;
+        } else if (tag2 == JS_TAG_OBJECT &&
+                   (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64 || tag1 == JS_TAG_STRING || tag1 == JS_TAG_SYMBOL)) {
+            op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NONE);
+            if (JS_IsException(op2)) {
+                JS_FreeValue(ctx, op1);
+                return bigint_binary_exception(sp);
+            }
+            continue;
         } else {
-            res = FALSE;
+            /* IsHTMLDDA object is equivalent to undefined for '==' and '!=' */
+            if ((JS_IsHTMLDDA(ctx, op1) &&
+                 (tag2 == JS_TAG_NULL || tag2 == JS_TAG_UNDEFINED)) ||
+                (JS_IsHTMLDDA(ctx, op2) &&
+                 (tag1 == JS_TAG_NULL || tag1 == JS_TAG_UNDEFINED))) {
+                res = TRUE;
+            } else {
+                res = FALSE;
+            }
+            JS_FreeValue(ctx, op1);
+            JS_FreeValue(ctx, op2);
         }
-        JS_FreeValue(ctx, op1);
-        JS_FreeValue(ctx, op2);
+        break;
     }
     sp[-2] = JS_NewBool(ctx, res ^ is_neq);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
