@@ -14003,52 +14003,117 @@ static BOOL tag_is_number(uint32_t tag)
             tag == JS_TAG_BIG_DECIMAL);
 }
 
+// goto removed
 static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
                                             BOOL is_neq)
 {
     JSValue op1, op2, ret;
     int res;
     uint32_t tag1, tag2;
+    BOOL invalid_bigint_string;
 
     op1 = sp[-2];
     op2 = sp[-1];
- redo:
-    tag1 = JS_VALUE_GET_NORM_TAG(op1);
-    tag2 = JS_VALUE_GET_NORM_TAG(op2);
-    if (tag_is_number(tag1) && tag_is_number(tag2)) {
-        if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
-            res = JS_VALUE_GET_INT(op1) == JS_VALUE_GET_INT(op2);
-        } else if ((tag1 == JS_TAG_FLOAT64 &&
-                    (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64)) ||
-                   (tag2 == JS_TAG_FLOAT64 &&
-                    (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64))) {
-            double d1, d2;
-            if (tag1 == JS_TAG_FLOAT64) {
-                d1 = JS_VALUE_GET_FLOAT64(op1);
+    while (TRUE) { // goto replacement
+        tag1 = JS_VALUE_GET_NORM_TAG(op1);
+        tag2 = JS_VALUE_GET_NORM_TAG(op2);
+        if (tag_is_number(tag1) && tag_is_number(tag2)) {
+            if (tag1 == JS_TAG_INT && tag2 == JS_TAG_INT) {
+                res = JS_VALUE_GET_INT(op1) == JS_VALUE_GET_INT(op2);
+            } else if ((tag1 == JS_TAG_FLOAT64 &&
+                        (tag2 == JS_TAG_INT || tag2 == JS_TAG_FLOAT64)) ||
+                       (tag2 == JS_TAG_FLOAT64 &&
+                        (tag1 == JS_TAG_INT || tag1 == JS_TAG_FLOAT64))) {
+                double d1, d2;
+                if (tag1 == JS_TAG_FLOAT64) {
+                    d1 = JS_VALUE_GET_FLOAT64(op1);
+                } else {
+                    d1 = JS_VALUE_GET_INT(op1);
+                }
+                if (tag2 == JS_TAG_FLOAT64) {
+                    d2 = JS_VALUE_GET_FLOAT64(op2);
+                } else {
+                    d2 = JS_VALUE_GET_INT(op2);
+                }
+                res = (d1 == d2);
+            } else if (tag1 == JS_TAG_BIG_DECIMAL || tag2 == JS_TAG_BIG_DECIMAL) {
+                res = ctx->rt->bigdecimal_ops.compare(ctx, OP_eq, op1, op2);
+                if (res < 0)
+                    return bigint_binary_exception(sp);
+            } else if (tag1 == JS_TAG_BIG_FLOAT || tag2 == JS_TAG_BIG_FLOAT) {
+                res = ctx->rt->bigfloat_ops.compare(ctx, OP_eq, op1, op2);
+                if (res < 0)
+                    return bigint_binary_exception(sp);
             } else {
-                d1 = JS_VALUE_GET_INT(op1);
+                res = ctx->rt->bigint_ops.compare(ctx, OP_eq, op1, op2);
+                if (res < 0)
+                    return bigint_binary_exception(sp);
             }
-            if (tag2 == JS_TAG_FLOAT64) {
-                d2 = JS_VALUE_GET_FLOAT64(op2);
+        } else if (tag1 == tag2) {
+            if (tag1 == JS_TAG_OBJECT) {
+                /* try the fallback operator */
+                res = js_call_binary_op_fallback(ctx, &ret, op1, op2,
+                                                 is_neq ? OP_neq : OP_eq,
+                                                 FALSE, HINT_NONE);
+                if (res != 0) {
+                    JS_FreeValue(ctx, op1);
+                    JS_FreeValue(ctx, op2);
+                    if (res < 0) {
+                        return bigint_binary_exception(sp);
+                    } else {
+                        sp[-2] = ret;
+                        return 0;
+                    }
+                }
+            }
+            res = js_strict_eq2(ctx, op1, op2, JS_EQ_STRICT);
+        } else if ((tag1 == JS_TAG_NULL && tag2 == JS_TAG_UNDEFINED) ||
+                   (tag2 == JS_TAG_NULL && tag1 == JS_TAG_UNDEFINED)) {
+            res = TRUE;
+        } else if ((tag1 == JS_TAG_STRING && tag_is_number(tag2)) ||
+                   (tag2 == JS_TAG_STRING && tag_is_number(tag1))) {
+
+            if ((tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) &&
+                !is_math_mode(ctx)) {
+                invalid_bigint_string = FALSE;
+                if (tag1 == JS_TAG_STRING) {
+                    op1 = JS_StringToBigInt(ctx, op1);
+                    invalid_bigint_string = JS_VALUE_GET_TAG(op1) != JS_TAG_BIG_INT;
+                }
+                if (!invalid_bigint_string && tag2 == JS_TAG_STRING) {
+                    op2 = JS_StringToBigInt(ctx, op2);
+                    invalid_bigint_string = JS_VALUE_GET_TAG(op2) != JS_TAG_BIG_INT;
+                }
+                if (invalid_bigint_string) {
+                    JS_FreeValue(ctx, op1);
+                    JS_FreeValue(ctx, op2);
+                    sp[-2] = JS_NewBool(ctx, is_neq);
+                    return 0;
+                }
             } else {
-                d2 = JS_VALUE_GET_INT(op2);
+                op1 = JS_ToNumericFree(ctx, op1);
+                if (JS_IsException(op1)) {
+                    JS_FreeValue(ctx, op2);
+                    return bigint_binary_exception(sp);
+                }
+                op2 = JS_ToNumericFree(ctx, op2);
+                if (JS_IsException(op2)) {
+                    JS_FreeValue(ctx, op1);
+                    return bigint_binary_exception(sp);
+                }
             }
-            res = (d1 == d2);
-        } else if (tag1 == JS_TAG_BIG_DECIMAL || tag2 == JS_TAG_BIG_DECIMAL) {
-            res = ctx->rt->bigdecimal_ops.compare(ctx, OP_eq, op1, op2);
-            if (res < 0)
-                goto exception;
-        } else if (tag1 == JS_TAG_BIG_FLOAT || tag2 == JS_TAG_BIG_FLOAT) {
-            res = ctx->rt->bigfloat_ops.compare(ctx, OP_eq, op1, op2);
-            if (res < 0)
-                goto exception;
-        } else {
-            res = ctx->rt->bigint_ops.compare(ctx, OP_eq, op1, op2);
-            if (res < 0)
-                goto exception;
-        }
-    } else if (tag1 == tag2) {
-        if (tag1 == JS_TAG_OBJECT) {
+            res = js_strict_eq(ctx, op1, op2);
+        } else if (tag1 == JS_TAG_BOOL) {
+            op1 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op1));
+            continue;
+        } else if (tag2 == JS_TAG_BOOL) {
+            op2 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op2));
+            continue;
+        } else if ((tag1 == JS_TAG_OBJECT &&
+                    (tag_is_number(tag2) || tag2 == JS_TAG_STRING || tag2 == JS_TAG_SYMBOL)) ||
+                   (tag2 == JS_TAG_OBJECT &&
+                    (tag_is_number(tag1) || tag1 == JS_TAG_STRING || tag1 == JS_TAG_SYMBOL))) {
+
             /* try the fallback operator */
             res = js_call_binary_op_fallback(ctx, &ret, op1, op2,
                                              is_neq ? OP_neq : OP_eq,
@@ -14057,107 +14122,41 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
                 JS_FreeValue(ctx, op1);
                 JS_FreeValue(ctx, op2);
                 if (res < 0) {
-                    goto exception;
+                    return bigint_binary_exception(sp);
                 } else {
                     sp[-2] = ret;
                     return 0;
                 }
             }
-        }
-        res = js_strict_eq2(ctx, op1, op2, JS_EQ_STRICT);
-    } else if ((tag1 == JS_TAG_NULL && tag2 == JS_TAG_UNDEFINED) ||
-               (tag2 == JS_TAG_NULL && tag1 == JS_TAG_UNDEFINED)) {
-        res = TRUE;
-    } else if ((tag1 == JS_TAG_STRING && tag_is_number(tag2)) ||
-               (tag2 == JS_TAG_STRING && tag_is_number(tag1))) {
 
-        if ((tag1 == JS_TAG_BIG_INT || tag2 == JS_TAG_BIG_INT) &&
-            !is_math_mode(ctx)) {
-            if (tag1 == JS_TAG_STRING) {
-                op1 = JS_StringToBigInt(ctx, op1);
-                if (JS_VALUE_GET_TAG(op1) != JS_TAG_BIG_INT)
-                    goto invalid_bigint_string;
-            }
-            if (tag2 == JS_TAG_STRING) {
-                op2 = JS_StringToBigInt(ctx, op2);
-                if (JS_VALUE_GET_TAG(op2) != JS_TAG_BIG_INT) {
-                invalid_bigint_string:
-                    JS_FreeValue(ctx, op1);
-                    JS_FreeValue(ctx, op2);
-                    res = FALSE;
-                    goto done;
-                }
-            }
-        } else {
-            op1 = JS_ToNumericFree(ctx, op1);
+            op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NONE);
             if (JS_IsException(op1)) {
                 JS_FreeValue(ctx, op2);
-                goto exception;
+                return bigint_binary_exception(sp);
             }
-            op2 = JS_ToNumericFree(ctx, op2);
+            op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NONE);
             if (JS_IsException(op2)) {
                 JS_FreeValue(ctx, op1);
-                goto exception;
+                return bigint_binary_exception(sp);
             }
-        }
-        res = js_strict_eq(ctx, op1, op2);
-    } else if (tag1 == JS_TAG_BOOL) {
-        op1 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op1));
-        goto redo;
-    } else if (tag2 == JS_TAG_BOOL) {
-        op2 = JS_NewInt32(ctx, JS_VALUE_GET_INT(op2));
-        goto redo;
-    } else if ((tag1 == JS_TAG_OBJECT &&
-                (tag_is_number(tag2) || tag2 == JS_TAG_STRING || tag2 == JS_TAG_SYMBOL)) ||
-               (tag2 == JS_TAG_OBJECT &&
-                (tag_is_number(tag1) || tag1 == JS_TAG_STRING || tag1 == JS_TAG_SYMBOL))) {
-
-        /* try the fallback operator */
-        res = js_call_binary_op_fallback(ctx, &ret, op1, op2,
-                                         is_neq ? OP_neq : OP_eq,
-                                         FALSE, HINT_NONE);
-        if (res != 0) {
-            JS_FreeValue(ctx, op1);
-            JS_FreeValue(ctx, op2);
-            if (res < 0) {
-                goto exception;
-            } else {
-                sp[-2] = ret;
-                return 0;
-            }
-        }
-
-        op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NONE);
-        if (JS_IsException(op1)) {
-            JS_FreeValue(ctx, op2);
-            goto exception;
-        }
-        op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NONE);
-        if (JS_IsException(op2)) {
-            JS_FreeValue(ctx, op1);
-            goto exception;
-        }
-        goto redo;
-    } else {
-        /* IsHTMLDDA object is equivalent to undefined for '==' and '!=' */
-        if ((JS_IsHTMLDDA(ctx, op1) &&
-             (tag2 == JS_TAG_NULL || tag2 == JS_TAG_UNDEFINED)) ||
-            (JS_IsHTMLDDA(ctx, op2) &&
-             (tag1 == JS_TAG_NULL || tag1 == JS_TAG_UNDEFINED))) {
-            res = TRUE;
+            continue;
         } else {
-            res = FALSE;
+            /* IsHTMLDDA object is equivalent to undefined for '==' and '!=' */
+            if ((JS_IsHTMLDDA(ctx, op1) &&
+                 (tag2 == JS_TAG_NULL || tag2 == JS_TAG_UNDEFINED)) ||
+                (JS_IsHTMLDDA(ctx, op2) &&
+                 (tag1 == JS_TAG_NULL || tag1 == JS_TAG_UNDEFINED))) {
+                res = TRUE;
+            } else {
+                res = FALSE;
+            }
+            JS_FreeValue(ctx, op1);
+            JS_FreeValue(ctx, op2);
         }
-        JS_FreeValue(ctx, op1);
-        JS_FreeValue(ctx, op2);
+        break;
     }
- done:
     sp[-2] = JS_NewBool(ctx, res ^ is_neq);
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static no_inline int js_shr_slow(JSContext *ctx, JSValue *sp)
