@@ -14363,10 +14363,12 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     return 0;
 }
 
+// goto removed
 static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, op2;
     uint32_t tag1, tag2;
+    BOOL add_numbers;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -14374,41 +14376,40 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     tag2 = JS_VALUE_GET_TAG(op2);
     if ((tag1 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag1)) &&
         (tag2 == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag2))) {
-        goto add_numbers;
+        add_numbers = TRUE;
     } else {
         op1 = JS_ToPrimitiveFree(ctx, op1, HINT_NONE);
         if (JS_IsException(op1)) {
             JS_FreeValue(ctx, op2);
-            goto exception;
+            return bigint_binary_exception(sp);
         }
         op2 = JS_ToPrimitiveFree(ctx, op2, HINT_NONE);
         if (JS_IsException(op2)) {
             JS_FreeValue(ctx, op1);
-            goto exception;
+            return bigint_binary_exception(sp);
         }
         tag1 = JS_VALUE_GET_TAG(op1);
         tag2 = JS_VALUE_GET_TAG(op2);
         if (tag1 == JS_TAG_STRING || tag2 == JS_TAG_STRING) {
+            add_numbers = FALSE;
             sp[-2] = JS_ConcatString(ctx, op1, op2);
             if (JS_IsException(sp[-2]))
-                goto exception;
+                return bigint_binary_exception(sp);
         } else {
-            double d1, d2;
-        add_numbers:
-            if (JS_ToFloat64Free(ctx, &d1, op1)) {
-                JS_FreeValue(ctx, op2);
-                goto exception;
-            }
-            if (JS_ToFloat64Free(ctx, &d2, op2))
-                goto exception;
-            sp[-2] = JS_NewFloat64(ctx, d1 + d2);
+            add_numbers = TRUE;
         }
     }
+    if (add_numbers) {
+        double d1, d2;
+        if (JS_ToFloat64Free(ctx, &d1, op1)) {
+            JS_FreeValue(ctx, op2);
+            return bigint_binary_exception(sp);
+        }
+        if (JS_ToFloat64Free(ctx, &d2, op2))
+            return bigint_binary_exception(sp);
+        sp[-2] = JS_NewFloat64(ctx, d1 + d2);
+    }
     return 0;
- exception:
-    sp[-2] = JS_UNDEFINED;
-    sp[-1] = JS_UNDEFINED;
-    return -1;
 }
 
 static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
