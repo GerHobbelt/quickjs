@@ -14878,6 +14878,7 @@ static __exception int js_operator_instanceof(JSContext *ctx, JSValue *sp)
     return 0;
 }
 
+// goto removed
 static __exception int js_operator_typeof(JSContext *ctx, JSValueConst op1)
 {
     JSAtom atom;
@@ -14918,11 +14919,10 @@ static __exception int js_operator_typeof(JSContext *ctx, JSValueConst op1)
             else if (JS_IsFunction(ctx, op1))
                 atom = JS_ATOM_function;
             else
-                goto obj_type;
+                atom = JS_ATOM_object;
         }
         break;
     case JS_TAG_NULL:
-    obj_type:
         atom = JS_ATOM_object;
         break;
     case JS_TAG_SYMBOL:
