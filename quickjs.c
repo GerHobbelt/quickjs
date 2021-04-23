@@ -15065,6 +15065,7 @@ static JSValue js_build_arguments(JSContext *ctx, int argc, JSValueConst *argv)
 #define ARGUMENT_VAR_OFFSET 0x20000000
 
 /* legacy arguments object: add references to the function arguments */
+// goto removed
 static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
                                          JSValueConst *argv,
                                          JSStackFrame *sf, int arg_count)
@@ -15088,12 +15089,15 @@ static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
     for(i = 0; i < arg_count; i++) {
         JSVarRef *var_ref;
         var_ref = get_var_ref(ctx, sf, i, TRUE);
-        if (!var_ref)
-            goto fail;
+        if (!var_ref) {
+            JS_FreeValue(ctx, val);
+            return JS_EXCEPTION;
+        }
         pr = add_property(ctx, p, __JS_AtomFromUInt32(i), JS_PROP_C_W_E | JS_PROP_VARREF);
         if (!pr) {
             free_var_ref(ctx->rt, var_ref);
-            goto fail;
+            JS_FreeValue(ctx, val);
+            return JS_EXCEPTION;
         }
         pr->u.var_ref = var_ref;
     }
@@ -15103,8 +15107,10 @@ static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
     for(i = arg_count; i < argc; i++) {
         if (JS_DefinePropertyValueUint32(ctx, val, i,
                                          JS_DupValue(ctx, argv[i]),
-                                         JS_PROP_C_W_E) < 0)
-            goto fail;
+                                         JS_PROP_C_W_E) < 0) {
+            JS_FreeValue(ctx, val);
+            return JS_EXCEPTION;
+        }
     }
 
     JS_DefinePropertyValue(ctx, val, JS_ATOM_Symbol_iterator,
@@ -15115,9 +15121,6 @@ static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
                            JS_DupValue(ctx, ctx->rt->current_stack_frame->cur_func),
                            JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
     return val;
- fail:
-    JS_FreeValue(ctx, val);
-    return JS_EXCEPTION;
 }
 
 static JSValue js_build_rest(JSContext *ctx, int first, int argc, JSValueConst *argv)
