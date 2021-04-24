@@ -19801,8 +19801,7 @@ static JSValue js_async_generator_next(JSContext *ctx, JSValueConst this_val,
     if (!req) {
         JS_FreeValue(ctx, resolving_funcs[0]);
         JS_FreeValue(ctx, resolving_funcs[1]);
-        JS_FreeValue(ctx, promise);
-        return JS_EXCEPTION;
+        return free_and_ret_exception(ctx, promise);
     }
     req->completion_type = magic;
     req->result = JS_DupValue(ctx, argv[0]);
@@ -19816,6 +19815,7 @@ static JSValue js_async_generator_next(JSContext *ctx, JSValueConst this_val,
     return promise;
 }
 
+// goto removed
 static JSValue js_async_generator_function_call(JSContext *ctx, JSValueConst func_obj,
                                                 JSValueConst this_obj,
                                                 int argc, JSValueConst *argv,
@@ -19829,25 +19829,24 @@ static JSValue js_async_generator_function_call(JSContext *ctx, JSValueConst fun
         return JS_EXCEPTION;
     s->state = JS_ASYNC_GENERATOR_STATE_SUSPENDED_START;
     init_list_head(&s->queue);
-    if (async_func_init(ctx, &s->func_state, func_obj, this_obj, argc, argv)) {
-        s->state = JS_ASYNC_GENERATOR_STATE_COMPLETED;
-        goto fail;
+    while (TRUE) { // goto replacement
+        if (async_func_init(ctx, &s->func_state, func_obj, this_obj, argc, argv)) {
+            s->state = JS_ASYNC_GENERATOR_STATE_COMPLETED;
+            break;
+        }
+
+        /* execute the function up to 'OP_initial_yield' (no yield nor
+           await are possible) */
+        func_ret = async_func_resume(ctx, &s->func_state);
+        if (JS_IsException(func_ret)) break;
+        JS_FreeValue(ctx, func_ret);
+
+        obj = js_create_from_ctor(ctx, func_obj, JS_CLASS_ASYNC_GENERATOR);
+        if (JS_IsException(obj)) break;
+        s->generator = JS_VALUE_GET_OBJ(obj);
+        JS_SetOpaque(obj, s);
+        return obj;
     }
-
-    /* execute the function up to 'OP_initial_yield' (no yield nor
-       await are possible) */
-    func_ret = async_func_resume(ctx, &s->func_state);
-    if (JS_IsException(func_ret))
-        goto fail;
-    JS_FreeValue(ctx, func_ret);
-
-    obj = js_create_from_ctor(ctx, func_obj, JS_CLASS_ASYNC_GENERATOR);
-    if (JS_IsException(obj))
-        goto fail;
-    s->generator = JS_VALUE_GET_OBJ(obj);
-    JS_SetOpaque(obj, s);
-    return obj;
- fail:
     js_async_generator_free(ctx->rt, s);
     return JS_EXCEPTION;
 }
