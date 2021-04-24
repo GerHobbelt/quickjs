@@ -15570,25 +15570,26 @@ static __exception int js_iterator_get_value_done(JSContext *ctx, JSValue *sp)
     return 0;
 }
 
+// goto removed
 static JSValue js_create_iterator_result(JSContext *ctx,
                                          JSValue val,
                                          BOOL done)
 {
     JSValue obj;
+    JSValue new_bool;
+    BOOL fail1, fail2;
+
     obj = JS_NewObject(ctx);
     if (JS_IsException(obj)) {
         JS_FreeValue(ctx, val);
-        return obj;
-    }
-    if (JS_DefinePropertyValue(ctx, obj, JS_ATOM_value,
-                               val, JS_PROP_C_W_E) < 0) {
-        goto fail;
-    }
-    if (JS_DefinePropertyValue(ctx, obj, JS_ATOM_done,
-                               JS_NewBool(ctx, done), JS_PROP_C_W_E) < 0) {
-    fail:
-        JS_FreeValue(ctx, obj);
-        return JS_EXCEPTION;
+    } else {
+        new_bool = JS_NewBool(ctx, done);
+        fail1 = JS_DefinePropertyValue(ctx, obj, JS_ATOM_value, val, JS_PROP_C_W_E) < 0;
+        fail2 = JS_DefinePropertyValue(ctx, obj, JS_ATOM_done, new_bool, JS_PROP_C_W_E) < 0;
+        if (fail1 || fail2) {
+            JS_FreeValue(ctx, obj);
+            obj = JS_EXCEPTION;
+        }
     }
     return obj;
 }
