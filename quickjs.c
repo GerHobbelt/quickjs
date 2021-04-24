@@ -15825,6 +15825,7 @@ static JSVarRef *get_var_ref(JSContext *ctx, JSStackFrame *sf,
     return var_ref;
 }
 
+// goto removed
 static JSValue js_closure2(JSContext *ctx, JSValue func_obj,
                            JSFunctionBytecode *b,
                            JSVarRef **cur_var_refs,
@@ -15841,7 +15842,8 @@ static JSValue js_closure2(JSContext *ctx, JSValue func_obj,
     if (b->closure_var_count) {
         var_refs = js_mallocz(ctx, sizeof(var_refs[0]) * b->closure_var_count);
         if (!var_refs)
-            goto fail;
+            /* bfunc is freed when func_obj is freed */
+            return free_and_ret_exception(ctx, func_obj);
         p->u.func.var_refs = var_refs;
         for(i = 0; i < b->closure_var_count; i++) {
             JSClosureVar *cv = &b->closure_var[i];
@@ -15850,7 +15852,8 @@ static JSValue js_closure2(JSContext *ctx, JSValue func_obj,
                 /* reuse the existing variable reference if it already exists */
                 var_ref = get_var_ref(ctx, sf, cv->var_idx, cv->is_arg);
                 if (!var_ref)
-                    goto fail;
+                    /* bfunc is freed when func_obj is freed */
+                    return free_and_ret_exception(ctx, func_obj);
             } else {
                 var_ref = cur_var_refs[cv->var_idx];
                 var_ref->header.ref_count++;
@@ -15859,10 +15862,6 @@ static JSValue js_closure2(JSContext *ctx, JSValue func_obj,
         }
     }
     return func_obj;
- fail:
-    /* bfunc is freed when func_obj is freed */
-    JS_FreeValue(ctx, func_obj);
-    return JS_EXCEPTION;
 }
 
 static JSValue js_instantiate_prototype(JSContext *ctx, JSObject *p, JSAtom atom, void *opaque)
