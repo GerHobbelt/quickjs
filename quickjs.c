@@ -15441,6 +15441,7 @@ static JSValue JS_IteratorNext(JSContext *ctx, JSValueConst enum_obj,
 }
 
 /* return < 0 in case of exception */
+// goto removed
 static int JS_IteratorClose(JSContext *ctx, JSValueConst enum_obj,
                             BOOL is_exception_pending)
 {
@@ -15456,24 +15457,25 @@ static int JS_IteratorClose(JSContext *ctx, JSValueConst enum_obj,
         res = 0;
     }
     method = JS_GetProperty(ctx, enum_obj, JS_ATOM_return);
-    if (JS_IsException(method)) {
-        res = -1;
-        goto done;
-    }
-    if (JS_IsUndefined(method) || JS_IsNull(method)) {
-        goto done;
-    }
-    ret = JS_CallFree(ctx, method, enum_obj, 0, NULL);
-    if (!is_exception_pending) {
-        if (JS_IsException(ret)) {
+    while (TRUE) { // goto replacement
+        if (JS_IsException(method)) {
             res = -1;
-        } else if (!JS_IsObject(ret)) {
-            JS_ThrowTypeErrorNotAnObject(ctx);
-            res = -1;
+            break;
         }
+        if (JS_IsUndefined(method) || JS_IsNull(method))
+            break;
+        ret = JS_CallFree(ctx, method, enum_obj, 0, NULL);
+        if (!is_exception_pending) {
+            if (JS_IsException(ret)) {
+                res = -1;
+            } else if (!JS_IsObject(ret)) {
+                JS_ThrowTypeErrorNotAnObject(ctx);
+                res = -1;
+            }
+        }
+        JS_FreeValue(ctx, ret);
+        break;
     }
-    JS_FreeValue(ctx, ret);
- done:
     if (is_exception_pending) {
         JS_Throw(ctx, ex_obj);
     }
