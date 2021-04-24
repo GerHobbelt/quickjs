@@ -20254,6 +20254,7 @@ static void free_token(JSParseState *s, JSToken *token)
     }
 }
 
+// goto removed
 static void __attribute((unused)) dump_token(JSParseState *s,
                                              const JSToken *token)
 {
@@ -20266,7 +20267,6 @@ static void __attribute((unused)) dump_token(JSParseState *s,
         }
         break;
     case TOK_IDENT:
-    dump_atom:
         {
             char buf[ATOM_GET_STR_BUF_SIZE];
             printf("ident: '%s'\n",
@@ -20305,7 +20305,9 @@ static void __attribute((unused)) dump_token(JSParseState *s,
         break;
     default:
         if (s->token.val >= TOK_NULL && s->token.val <= TOK_LAST_KEYWORD) {
-            goto dump_atom;
+            char buf[ATOM_GET_STR_BUF_SIZE];
+            printf("ident: '%s'\n",
+                   JS_AtomGetStr(s->ctx, buf, sizeof(buf), token->u.ident.atom));
         } else if (s->token.val >= 256) {
             printf("token: %d\n", token->val);
         } else {
