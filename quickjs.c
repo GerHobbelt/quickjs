@@ -15892,6 +15892,8 @@ static const uint16_t func_kind_to_class_id[] = {
     [JS_FUNC_ASYNC_GENERATOR] = JS_CLASS_ASYNC_GENERATOR_FUNCTION,
 };
 
+/* bfunc is freed when func_obj is freed */
+// goto removed
 static JSValue js_closure(JSContext *ctx, JSValue bfunc,
                           JSVarRef **cur_var_refs,
                           JSStackFrame *sf)
@@ -15902,14 +15904,12 @@ static JSValue js_closure(JSContext *ctx, JSValue bfunc,
 
     b = JS_VALUE_GET_PTR(bfunc);
     func_obj = JS_NewObjectClass(ctx, func_kind_to_class_id[b->func_kind]);
-    if (JS_IsException(func_obj)) {
-        JS_FreeValue(ctx, bfunc);
-        return JS_EXCEPTION;
-    }
+    if (JS_IsException(func_obj))
+        return free_and_ret_exception(ctx, bfunc);
     func_obj = js_closure2(ctx, func_obj, b, cur_var_refs, sf);
     if (JS_IsException(func_obj)) {
         /* bfunc has been freed */
-        goto fail;
+        return free_and_ret_exception(ctx, func_obj);
     }
     name_atom = b->func_name;
     if (name_atom == JS_ATOM_NULL)
@@ -15928,7 +15928,7 @@ static JSValue js_closure(JSContext *ctx, JSValue bfunc,
             proto_class_id = JS_CLASS_GENERATOR;
         proto = JS_NewObjectProto(ctx, ctx->class_proto[proto_class_id]);
         if (JS_IsException(proto))
-            goto fail;
+            return free_and_ret_exception(ctx, func_obj);
         JS_DefinePropertyValue(ctx, func_obj, JS_ATOM_prototype, proto,
                                JS_PROP_WRITABLE);
     } else if (b->has_prototype) {
@@ -15941,10 +15941,6 @@ static JSValue js_closure(JSContext *ctx, JSValue bfunc,
                                   JS_PROP_WRITABLE);
     }
     return func_obj;
- fail:
-    /* bfunc is freed when func_obj is freed */
-    JS_FreeValue(ctx, func_obj);
-    return JS_EXCEPTION;
 }
 
 #define JS_DEFINE_CLASS_HAS_HERITAGE     (1 << 0)
