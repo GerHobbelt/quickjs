@@ -15716,6 +15716,7 @@ static __exception int js_append_enumerate(JSContext *ctx, JSValue *sp)
     return ret;
 }
 
+// goto removed
 static __exception int JS_CopyDataProperties(JSContext *ctx,
                                              JSValueConst target,
                                              JSValueConst source,
@@ -15752,43 +15753,40 @@ static __exception int JS_CopyDataProperties(JSContext *ctx,
                                        gpn_flags))
         return -1;
     
+    ret = 0;
     for (i = 0; i < tab_atom_count; i++) {
         if (pexcl) {
             ret = JS_GetOwnPropertyInternal(ctx, NULL, pexcl, tab_atom[i].atom);
             if (ret) {
-                if (ret < 0)
-                    goto exception;
+                if (ret < 0) break;
                 continue;
             }
         }
         if (!(gpn_flags & JS_GPN_ENUM_ONLY)) {
             /* test if the property is enumerable */
             ret = JS_GetOwnPropertyInternal(ctx, &desc, p, tab_atom[i].atom);
-            if (ret < 0)
-                goto exception;
-            if (!ret)
-                continue;
+            if (ret < 0) break;
+            if (!ret) continue;
             is_enumerable = (desc.flags & JS_PROP_ENUMERABLE) != 0;
             js_free_desc(ctx, &desc);
             if (!is_enumerable)
                 continue;
         }
         val = JS_GetProperty(ctx, source, tab_atom[i].atom);
-        if (JS_IsException(val))
-            goto exception;
+        if (JS_IsException(val)) {
+            ret = -1;
+            break;
+        }
         if (setprop)
             ret = JS_SetProperty(ctx, target, tab_atom[i].atom, val);
         else
             ret = JS_DefinePropertyValue(ctx, target, tab_atom[i].atom, val,
                                          JS_PROP_C_W_E);
-        if (ret < 0)
-            goto exception;
+        if (ret < 0) break;
     }
     js_free_prop_enum(ctx, tab_atom, tab_atom_count);
-    return 0;
- exception:
-    js_free_prop_enum(ctx, tab_atom, tab_atom_count);
-    return -1;
+    if (ret < 0) return -1;
+    else return 0;
 }
 
 /* only valid inside C functions */
