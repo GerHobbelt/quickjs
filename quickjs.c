@@ -9880,7 +9880,7 @@ void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id)
 /* don't try Symbol.toPrimitive */
 #define HINT_FORCE_ORDINARY (1 << 4)
 
-static JSValue JS_ToPrimitiveFree_raise_exception(JSContext *ctx, JSValue val) {
+static JSValue free_and_ret_exception(JSContext *ctx, JSValue val) {
     JS_FreeValue(ctx, val);
     return JS_EXCEPTION;
 }
@@ -9901,7 +9901,7 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
     if (!force_ordinary) {
         method = JS_GetProperty(ctx, val, JS_ATOM_Symbol_toPrimitive);
         if (JS_IsException(method))
-            return JS_ToPrimitiveFree_raise_exception(ctx, val);
+            return free_and_ret_exception(ctx, val);
         /* ECMA says *If exoticToPrim is not undefined* but tests in
            test262 use null as a non callable converter */
         if (!JS_IsUndefined(method) && !JS_IsNull(method)) {
@@ -9923,7 +9923,7 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
             ret = JS_CallFree(ctx, method, val, 1, (JSValueConst *)&arg);
             JS_FreeValue(ctx, arg);
             if (JS_IsException(ret))
-                return JS_ToPrimitiveFree_raise_exception(ctx, val);
+                return free_and_ret_exception(ctx, val);
             JS_FreeValue(ctx, val);
             if (JS_VALUE_GET_TAG(ret) != JS_TAG_OBJECT)
                 return ret;
@@ -9941,11 +9941,11 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
         }
         method = JS_GetProperty(ctx, val, method_name);
         if (JS_IsException(method))
-            return JS_ToPrimitiveFree_raise_exception(ctx, val);
+            return free_and_ret_exception(ctx, val);
         if (JS_IsFunction(ctx, method)) {
             ret = JS_CallFree(ctx, method, val, 0, NULL);
             if (JS_IsException(ret))
-                return JS_ToPrimitiveFree_raise_exception(ctx, val);
+                return free_and_ret_exception(ctx, val);
             if (JS_VALUE_GET_TAG(ret) != JS_TAG_OBJECT) {
                 JS_FreeValue(ctx, val);
                 return ret;
@@ -9956,7 +9956,7 @@ static JSValue JS_ToPrimitiveFree(JSContext *ctx, JSValue val, int hint)
         }
     }
     JS_ThrowTypeError(ctx, "toPrimitive");
-    return JS_ToPrimitiveFree_raise_exception(ctx, val);
+    return free_and_ret_exception(ctx, val);
 }
 
 static JSValue JS_ToPrimitive(JSContext *ctx, JSValueConst val, int hint)
@@ -11694,9 +11694,8 @@ static JSValue JS_ToStringCheckObject(JSContext *ctx, JSValueConst val)
 }
 
 static JSValue JS_ToQuotedString_fail(JSContext *ctx, JSValue val, StringBuffer *buf) {
-    JS_FreeValue(ctx, val);
     string_buffer_free(buf);
-    return JS_EXCEPTION;
+    return free_and_ret_exception(ctx, val);
 }
 
 // goto removed
@@ -12308,10 +12307,8 @@ static __maybe_unused JSValue JS_ToBigIntValueFree(JSContext *ctx, JSValue val)
         if (JS_IsException(res))
             return JS_EXCEPTION;
         a = JS_ToBigIntFree(ctx, &a_s, val);
-        if (!a) {
-            JS_FreeValue(ctx, res);
-            return JS_EXCEPTION;
-        }
+        if (!a)
+            return free_and_ret_exception(ctx, res);
         r = JS_GetBigInt(res);
         ret = bf_set(r, a);
         JS_FreeBigInt(ctx, a, &a_s);
@@ -15040,10 +15037,8 @@ static JSValue js_build_arguments(JSContext *ctx, int argc, JSValueConst *argv)
     tab = NULL;
     if (argc > 0) {
         tab = js_malloc(ctx, sizeof(tab[0]) * argc);
-        if (!tab) {
-            JS_FreeValue(ctx, val);
-            return JS_EXCEPTION;
-        }
+        if (!tab)
+            return free_and_ret_exception(ctx, val);
         for(i = 0; i < argc; i++) {
             tab[i] = JS_DupValue(ctx, argv[i]);
         }
@@ -15089,15 +15084,12 @@ static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
     for(i = 0; i < arg_count; i++) {
         JSVarRef *var_ref;
         var_ref = get_var_ref(ctx, sf, i, TRUE);
-        if (!var_ref) {
-            JS_FreeValue(ctx, val);
-            return JS_EXCEPTION;
-        }
+        if (!var_ref)
+            return free_and_ret_exception(ctx, val);
         pr = add_property(ctx, p, __JS_AtomFromUInt32(i), JS_PROP_C_W_E | JS_PROP_VARREF);
         if (!pr) {
             free_var_ref(ctx->rt, var_ref);
-            JS_FreeValue(ctx, val);
-            return JS_EXCEPTION;
+            return free_and_ret_exception(ctx, val);
         }
         pr->u.var_ref = var_ref;
     }
@@ -15108,8 +15100,7 @@ static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
         if (JS_DefinePropertyValueUint32(ctx, val, i,
                                          JS_DupValue(ctx, argv[i]),
                                          JS_PROP_C_W_E) < 0) {
-            JS_FreeValue(ctx, val);
-            return JS_EXCEPTION;
+            return free_and_ret_exception(ctx, val);
         }
     }
 
@@ -15135,14 +15126,13 @@ static JSValue js_build_rest(JSContext *ctx, int first, int argc, JSValueConst *
         ret = JS_DefinePropertyValueUint32(ctx, val, i - first,
                                            JS_DupValue(ctx, argv[i]),
                                            JS_PROP_C_W_E);
-        if (ret < 0) {
-            JS_FreeValue(ctx, val);
-            return JS_EXCEPTION;
-        }
+        if (ret < 0)
+            return free_and_ret_exception(ctx, val);
     }
     return val;
 }
 
+// goto removed
 static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
 {
     JSObject *p;
@@ -15151,6 +15141,7 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
     JSValue enum_obj, obj1;
     JSForInIterator *it;
     uint32_t tag, tab_atom_count;
+    BOOL normal_case;
 
     tag = JS_VALUE_GET_TAG(obj);
     if (tag != JS_TAG_OBJECT && tag != JS_TAG_NULL && tag != JS_TAG_UNDEFINED) {
@@ -15158,15 +15149,12 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
     }
 
     it = js_malloc(ctx, sizeof(*it));
-    if (!it) {
-        JS_FreeValue(ctx, obj);
-        return JS_EXCEPTION;
-    }
+    if (!it)
+        return free_and_ret_exception(ctx, obj);
     enum_obj = JS_NewObjectProtoClass(ctx, JS_NULL, JS_CLASS_FOR_IN_ITERATOR);
     if (JS_IsException(enum_obj)) {
         js_free(ctx, it);
-        JS_FreeValue(ctx, obj);
-        return JS_EXCEPTION;
+        return free_and_ret_exception(ctx, obj);
     }
     it->is_array = FALSE;
     it->obj = obj;
@@ -15184,22 +15172,49 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
         if (JS_IsNull(obj1))
             break;
         if (JS_IsException(obj1))
-            goto fail;
+            return free_and_ret_exception(ctx, enum_obj);
         if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,
                                            JS_VALUE_GET_OBJ(obj1),
                                            JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) {
             JS_FreeValue(ctx, obj1);
-            goto fail;
+            return free_and_ret_exception(ctx, enum_obj);
         }
         js_free_prop_enum(ctx, tab_atom, tab_atom_count);
         if (tab_atom_count != 0) {
             JS_FreeValue(ctx, obj1);
-            goto slow_path;
+            /* non enumerable properties hide the enumerables ones in the
+               prototype chain */
+            obj1 = JS_DupValue(ctx, obj);
+            for(;;) {
+                if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,
+                                                   JS_VALUE_GET_OBJ(obj1),
+                                                   JS_GPN_STRING_MASK | JS_GPN_SET_ENUM)) {
+                    JS_FreeValue(ctx, obj1);
+                    return free_and_ret_exception(ctx, enum_obj);
+                }
+                for(i = 0; i < tab_atom_count; i++) {
+                    JS_DefinePropertyValue(ctx, enum_obj, tab_atom[i].atom, JS_NULL,
+                                           (tab_atom[i].is_enumerable ?
+                                            JS_PROP_ENUMERABLE : 0));
+                }
+                js_free_prop_enum(ctx, tab_atom, tab_atom_count);
+                obj1 = JS_GetPrototypeFree(ctx, obj1);
+                if (JS_IsNull(obj1))
+                    break;
+                if (JS_IsException(obj1))
+                    return free_and_ret_exception(ctx, enum_obj);
+                /* must check for timeout to avoid infinite loop */
+                if (js_poll_interrupts(ctx)) {
+                    JS_FreeValue(ctx, obj1);
+                    return free_and_ret_exception(ctx, enum_obj);
+                }
+            }
+            return enum_obj;
         }
         /* must check for timeout to avoid infinite loop */
         if (js_poll_interrupts(ctx)) {
             JS_FreeValue(ctx, obj1);
-            goto fail;
+            return free_and_ret_exception(ctx, enum_obj);
         }
     }
 
@@ -15209,59 +15224,30 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
         JSShape *sh;
         JSShapeProperty *prs;
         /* check that there are no enumerable normal fields */
+        normal_case = FALSE;
         sh = p->shape;
         for(i = 0, prs = get_shape_prop(sh); i < sh->prop_count; i++, prs++) {
-            if (prs->flags & JS_PROP_ENUMERABLE)
-                goto normal_case;
+            if (prs->flags & JS_PROP_ENUMERABLE) {
+                normal_case = TRUE;
+                break;
+            }
         }
-        /* for fast arrays, we only store the number of elements */
-        it->is_array = TRUE;
-        it->array_length = p->u.array.count;
-    } else {
-    normal_case:
-        if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count, p,
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY))
-            goto fail;
-        for(i = 0; i < tab_atom_count; i++) {
-            JS_SetPropertyInternal(ctx, enum_obj, tab_atom[i].atom, JS_NULL, 0);
-        }
-        js_free_prop_enum(ctx, tab_atom, tab_atom_count);
-    }
-    return enum_obj;
-
- slow_path:
-    /* non enumerable properties hide the enumerables ones in the
-       prototype chain */
-    obj1 = JS_DupValue(ctx, obj);
-    for(;;) {
-        if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,
-                                           JS_VALUE_GET_OBJ(obj1),
-                                           JS_GPN_STRING_MASK | JS_GPN_SET_ENUM)) {
-            JS_FreeValue(ctx, obj1);
-            goto fail;
-        }
-        for(i = 0; i < tab_atom_count; i++) {
-            JS_DefinePropertyValue(ctx, enum_obj, tab_atom[i].atom, JS_NULL,
-                                   (tab_atom[i].is_enumerable ?
-                                    JS_PROP_ENUMERABLE : 0));
-        }
-        js_free_prop_enum(ctx, tab_atom, tab_atom_count);
-        obj1 = JS_GetPrototypeFree(ctx, obj1);
-        if (JS_IsNull(obj1))
-            break;
-        if (JS_IsException(obj1))
-            goto fail;
-        /* must check for timeout to avoid infinite loop */
-        if (js_poll_interrupts(ctx)) {
-            JS_FreeValue(ctx, obj1);
-            goto fail;
+        if (!normal_case) {
+            /* for fast arrays, we only store the number of elements */
+            it->is_array = TRUE;
+            it->array_length = p->u.array.count;
+            return enum_obj;
         }
     }
-    return enum_obj;
 
- fail:
-    JS_FreeValue(ctx, enum_obj);
-    return JS_EXCEPTION;
+    if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count, p,
+                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY))
+        return free_and_ret_exception(ctx, enum_obj);
+    for(i = 0; i < tab_atom_count; i++) {
+        JS_SetPropertyInternal(ctx, enum_obj, tab_atom[i].atom, JS_NULL, 0);
+    }
+    js_free_prop_enum(ctx, tab_atom, tab_atom_count);
+    return enum_obj;
 }
 
 /* obj -> enum_obj */
