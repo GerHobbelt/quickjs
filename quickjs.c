@@ -15531,23 +15531,25 @@ static __exception int js_for_of_next(JSContext *ctx, JSValue *sp, int offset)
     return 0;
 }
 
+// goto removed
 static JSValue JS_IteratorGetCompleteValue(JSContext *ctx, JSValueConst obj,
                                            BOOL *pdone)
 {
     JSValue done_val, value;
     BOOL done;
     done_val = JS_GetProperty(ctx, obj, JS_ATOM_done);
-    if (JS_IsException(done_val))
-        goto fail;
-    done = JS_ToBoolFree(ctx, done_val);
-    value = JS_GetProperty(ctx, obj, JS_ATOM_value);
-    if (JS_IsException(value))
-        goto fail;
+    do { // goto replacement
+        if (!JS_IsException(done_val)){
+            done = JS_ToBoolFree(ctx, done_val);
+            value = JS_GetProperty(ctx, obj, JS_ATOM_value);
+            if (!JS_IsException(value))
+                break;
+        }
+        done = FALSE;
+        value = JS_EXCEPTION;
+    } while (FALSE);
     *pdone = done;
     return value;
- fail:
-    *pdone = FALSE;
-    return JS_EXCEPTION;
 }
 
 static __exception int js_iterator_get_value_done(JSContext *ctx, JSValue *sp)
