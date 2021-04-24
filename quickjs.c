@@ -19304,21 +19304,13 @@ static int js_async_function_resolve_create(JSContext *ctx,
     return 0;
 }
 
+// goto removed
 static void js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
 {
     JSValue func_ret, ret2;
 
     func_ret = async_func_resume(ctx, &s->func_state);
-    if (JS_IsException(func_ret)) {
-        JSValue error;
-    fail:
-        error = JS_GetException(ctx);
-        ret2 = JS_Call(ctx, s->resolving_funcs[1], JS_UNDEFINED,
-                       1, (JSValueConst *)&error);
-        JS_FreeValue(ctx, error);
-        js_async_function_terminate(ctx->rt, s);
-        JS_FreeValue(ctx, ret2); /* XXX: what to do if exception ? */
-    } else {
+    while (!JS_IsException(func_ret)) {
         JSValue value;
         value = s->func_state.frame.cur_sp[-1];
         s->func_state.frame.cur_sp[-1] = JS_UNDEFINED;
@@ -19339,10 +19331,10 @@ static void js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
                                          1, (JSValueConst *)&value, 0);
             JS_FreeValue(ctx, value);
             if (JS_IsException(promise))
-                goto fail;
+                break;
             if (js_async_function_resolve_create(ctx, s, resolving_funcs)) {
                 JS_FreeValue(ctx, promise);
-                goto fail;
+                break;
             }
 
             /* Note: no need to create 'thrownawayCapability' as in
@@ -19355,10 +19347,17 @@ static void js_async_function_resume(JSContext *ctx, JSAsyncFunctionData *s)
             JS_FreeValue(ctx, promise);
             for(i = 0; i < 2; i++)
                 JS_FreeValue(ctx, resolving_funcs[i]);
-            if (res)
-                goto fail;
+            if (res) break;
         }
+        return;
     }
+    JSValue error;
+    error = JS_GetException(ctx);
+    ret2 = JS_Call(ctx, s->resolving_funcs[1], JS_UNDEFINED,
+                   1, (JSValueConst *)&error);
+    JS_FreeValue(ctx, error);
+    js_async_function_terminate(ctx->rt, s);
+    JS_FreeValue(ctx, ret2); /* XXX: what to do if exception ? */
 }
 
 static JSValue js_async_function_resolve_call(JSContext *ctx,
