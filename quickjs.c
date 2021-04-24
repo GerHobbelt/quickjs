@@ -18880,6 +18880,7 @@ static JSValue js_create_from_ctor(JSContext *ctx, JSValueConst ctor,
 }
 
 /* argv[] is modified if (flags & JS_CALL_FLAG_COPY_ARGV) = 0. */
+// goto removed
 static JSValue JS_CallConstructorInternal(JSContext *ctx,
                                           JSValueConst func_obj,
                                           JSValueConst new_target,
@@ -18887,12 +18888,13 @@ static JSValue JS_CallConstructorInternal(JSContext *ctx,
 {
     JSObject *p;
     JSFunctionBytecode *b;
+    const static char not_a_function[] = "not a function";
 
     if (js_poll_interrupts(ctx))
         return JS_EXCEPTION;
     flags |= JS_CALL_FLAG_CONSTRUCTOR;
     if (unlikely(JS_VALUE_GET_TAG(func_obj) != JS_TAG_OBJECT))
-        goto not_a_function;
+        return JS_ThrowTypeError(ctx, not_a_function);
     p = JS_VALUE_GET_OBJ(func_obj);
     if (unlikely(!p->is_constructor))
         return JS_ThrowTypeError(ctx, "not a constructor");
@@ -18900,8 +18902,7 @@ static JSValue JS_CallConstructorInternal(JSContext *ctx,
         JSClassCall *call_func;
         call_func = ctx->rt->class_array[p->class_id].call;
         if (!call_func) {
-        not_a_function:
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, not_a_function);
         }
         return call_func(ctx, func_obj, new_target, argc,
                          (JSValueConst *)argv, flags);
