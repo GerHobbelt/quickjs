@@ -19386,6 +19386,7 @@ static JSValue js_async_function_resolve_call(JSContext *ctx,
     return JS_UNDEFINED;
 }
 
+// goto removed
 static JSValue js_async_function_call(JSContext *ctx, JSValueConst func_obj,
                                       JSValueConst this_obj,
                                       int argc, JSValueConst *argv, int flags)
@@ -19403,21 +19404,16 @@ static JSValue js_async_function_call(JSContext *ctx, JSValueConst func_obj,
     s->resolving_funcs[1] = JS_UNDEFINED;
 
     promise = JS_NewPromiseCapability(ctx, s->resolving_funcs);
-    if (JS_IsException(promise))
-        goto fail;
-
-    if (async_func_init(ctx, &s->func_state, func_obj, this_obj, argc, argv)) {
-    fail:
+    if (JS_IsException(promise) || async_func_init(ctx,
+        &s->func_state, func_obj, this_obj, argc, argv)) {
         JS_FreeValue(ctx, promise);
         js_async_function_free(ctx->rt, s);
         return JS_EXCEPTION;
     }
+
     s->is_active = TRUE;
-
     js_async_function_resume(ctx, s);
-
     js_async_function_free(ctx->rt, s);
-
     return promise;
 }
 
