@@ -16084,6 +16084,7 @@ static void close_lexical_var(JSContext *ctx, JSStackFrame *sf, int idx, int is_
 #define JS_CALL_FLAG_COPY_ARGV   (1 << 1)
 #define JS_CALL_FLAG_GENERATOR   (1 << 2)
 
+// goto removed
 static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
                                   JSValueConst this_obj,
                                   int argc, JSValueConst *argv, int flags)
@@ -16096,6 +16097,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
     JSValueConst *arg_buf;
     int arg_count, i;
     JSCFunctionEnum cproto;
+    const static char must_be_called_with_new[] = "must be called with new";
 
     p = JS_VALUE_GET_OBJ(func_obj);
     cproto = p->u.cfunc.cproto;
@@ -16141,8 +16143,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
     case JS_CFUNC_constructor_or_func:
         if (!(flags & JS_CALL_FLAG_CONSTRUCTOR)) {
             if (cproto == JS_CFUNC_constructor) {
-            not_a_constructor:
-                ret_val = JS_ThrowTypeError(ctx, "must be called with new");
+                ret_val = JS_ThrowTypeError(ctx, must_be_called_with_new);
                 break;
             } else {
                 this_obj = JS_UNDEFINED;
@@ -16157,7 +16158,8 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
     case JS_CFUNC_constructor_or_func_magic:
         if (!(flags & JS_CALL_FLAG_CONSTRUCTOR)) {
             if (cproto == JS_CFUNC_constructor_magic) {
-                goto not_a_constructor;
+                ret_val = JS_ThrowTypeError(ctx, must_be_called_with_new);
+                break;
             } else {
                 this_obj = JS_UNDEFINED;
             }
