@@ -19522,6 +19522,7 @@ static int js_async_generator_resolve_function_create(JSContext *ctx,
     return 0;
 }
 
+// goto removed
 static int js_async_generator_await(JSContext *ctx,
                                     JSAsyncGeneratorData *s,
                                     JSValueConst value)
@@ -19532,12 +19533,12 @@ static int js_async_generator_await(JSContext *ctx,
     promise = js_promise_resolve(ctx, ctx->promise_ctor,
                                  1, &value, 0);
     if (JS_IsException(promise))
-        goto fail;
+        return -1;
 
     if (js_async_generator_resolve_function_create(ctx, JS_MKPTR(JS_TAG_OBJECT, s->generator),
                                                    resolving_funcs, FALSE)) {
         JS_FreeValue(ctx, promise);
-        goto fail;
+        return -1;
     }
 
     /* Note: no need to create 'thrownawayCapability' as in
@@ -19550,11 +19551,8 @@ static int js_async_generator_await(JSContext *ctx,
     JS_FreeValue(ctx, promise);
     for(i = 0; i < 2; i++)
         JS_FreeValue(ctx, resolving_funcs[i]);
-    if (res)
-        goto fail;
+    if (res) return -1;
     return 0;
- fail:
-    return -1;
 }
 
 static void js_async_generator_resolve_or_reject(JSContext *ctx,
