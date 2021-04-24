@@ -15368,6 +15368,7 @@ static JSValue JS_GetIterator(JSContext *ctx, JSValueConst obj, BOOL is_async)
 }
 
 /* return *pdone = 2 if the iterator object is not parsed */
+// goto removed
 static JSValue JS_IteratorNext2(JSContext *ctx, JSValueConst enum_obj,
                                 JSValueConst method,
                                 int argc, JSValueConst *argv, int *pdone)
@@ -15394,18 +15395,17 @@ static JSValue JS_IteratorNext2(JSContext *ctx, JSValueConst enum_obj,
         }
     }
     obj = JS_Call(ctx, method, enum_obj, argc, argv);
-    if (JS_IsException(obj))
-        goto fail;
+    if (JS_IsException(obj)) {
+        *pdone = FALSE;
+        return JS_EXCEPTION;
+    }
     if (!JS_IsObject(obj)) {
-        JS_FreeValue(ctx, obj);
         JS_ThrowTypeError(ctx, "iterator must return an object");
-        goto fail;
+        *pdone = FALSE;
+        return free_and_ret_exception(ctx, obj);
     }
     *pdone = 2;
     return obj;
- fail:
-    *pdone = FALSE;
-    return JS_EXCEPTION;
 }
 
 static JSValue JS_IteratorNext(JSContext *ctx, JSValueConst enum_obj,
