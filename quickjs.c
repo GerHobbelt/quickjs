@@ -19632,25 +19632,31 @@ static int js_async_generator_completed_return(JSContext *ctx,
     return res;
 }
 
+// goto removed
 static void js_async_generator_resume_next(JSContext *ctx,
                                            JSAsyncGeneratorData *s)
 {
     JSAsyncGeneratorRequest *next;
     JSValue func_ret, value;
+    BOOL resume_exec;
 
     for(;;) {
         if (list_empty(&s->queue))
             break;
         next = list_entry(s->queue.next, JSAsyncGeneratorRequest, link);
+        resume_exec = FALSE;
         switch(s->state) {
         case JS_ASYNC_GENERATOR_STATE_EXECUTING:
             /* only happens when restarting execution after await() */
-            goto resume_exec;
+            resume_exec = TRUE;
+            break;
         case JS_ASYNC_GENERATOR_STATE_AWAITING_RETURN:
-            goto done;
+            return;
         case JS_ASYNC_GENERATOR_STATE_SUSPENDED_START:
             if (next->completion_type == GEN_MAGIC_NEXT) {
-                goto exec_no_arg;
+                s->func_state.throw_flag = FALSE;
+                s->state = JS_ASYNC_GENERATOR_STATE_EXECUTING;
+                resume_exec = TRUE;
             } else {
                 js_async_generator_complete(ctx, s);
             }
@@ -19661,11 +19667,11 @@ static void js_async_generator_resume_next(JSContext *ctx,
             } else if (next->completion_type == GEN_MAGIC_RETURN) {
                 s->state = JS_ASYNC_GENERATOR_STATE_AWAITING_RETURN;
                 js_async_generator_completed_return(ctx, s, next->result);
-                goto done;
+                return;
             } else {
                 js_async_generator_reject(ctx, s, next->result);
             }
-            goto done;
+            return;
         case JS_ASYNC_GENERATOR_STATE_SUSPENDED_YIELD:
         case JS_ASYNC_GENERATOR_STATE_SUSPENDED_YIELD_STAR:
             value = JS_DupValue(ctx, next->result);
@@ -19680,11 +19686,15 @@ static void js_async_generator_resume_next(JSContext *ctx,
                 s->func_state.frame.cur_sp[0] =
                     JS_NewInt32(ctx, next->completion_type);
                 s->func_state.frame.cur_sp++;
-            exec_no_arg:
                 s->func_state.throw_flag = FALSE;
             }
             s->state = JS_ASYNC_GENERATOR_STATE_EXECUTING;
-        resume_exec:
+            resume_exec = TRUE;
+            break;
+        default:
+            abort();
+        }
+        if (resume_exec) {
             func_ret = async_func_resume(ctx, &s->func_state);
             if (JS_IsException(func_ret)) {
                 value = JS_GetException(ctx);
@@ -19709,7 +19719,7 @@ static void js_async_generator_resume_next(JSContext *ctx,
                 case FUNC_RET_AWAIT:
                     js_async_generator_await(ctx, s, value);
                     JS_FreeValue(ctx, value);
-                    goto done;
+                    return;
                 default:
                     abort();
                 }
@@ -19722,12 +19732,8 @@ static void js_async_generator_resume_next(JSContext *ctx,
                 js_async_generator_resolve(ctx, s, value, TRUE);
                 JS_FreeValue(ctx, value);
             }
-            break;
-        default:
-            abort();
         }
     }
- done: ;
 }
 
 static JSValue js_async_generator_resolve_function(JSContext *ctx,
