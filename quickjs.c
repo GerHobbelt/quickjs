@@ -19108,6 +19108,7 @@ static void js_generator_mark(JSRuntime *rt, JSValueConst val,
 #define GEN_MAGIC_RETURN 1
 #define GEN_MAGIC_THROW  2
 
+// goto removed
 static JSValue js_generator_next(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv,
                                  BOOL *pdone, int magic)
@@ -19115,6 +19116,8 @@ static JSValue js_generator_next(JSContext *ctx, JSValueConst this_val,
     JSGeneratorData *s = JS_GetOpaque(this_val, JS_CLASS_GENERATOR);
     JSStackFrame *sf;
     JSValue ret, func_ret;
+    BOOL done = FALSE;
+    BOOL exec_no_arg = FALSE;
 
     *pdone = TRUE;
     if (!s)
@@ -19124,25 +19127,28 @@ static JSValue js_generator_next(JSContext *ctx, JSValueConst this_val,
     default:
     case JS_GENERATOR_STATE_SUSPENDED_START:
         if (magic == GEN_MAGIC_NEXT) {
-            goto exec_no_arg;
+            exec_no_arg = TRUE;
         } else {
             free_generator_stack(ctx, s);
-            goto done;
+            done = TRUE;
+            break;
         }
-        break;
     case JS_GENERATOR_STATE_SUSPENDED_YIELD_STAR:
     case JS_GENERATOR_STATE_SUSPENDED_YIELD:
-        /* cur_sp[-1] was set to JS_UNDEFINED in the previous call */
-        ret = JS_DupValue(ctx, argv[0]);
-        if (magic == GEN_MAGIC_THROW &&
-            s->state == JS_GENERATOR_STATE_SUSPENDED_YIELD) {
-            JS_Throw(ctx, ret);
-            s->func_state.throw_flag = TRUE;
+        if (!exec_no_arg) {
+            /* cur_sp[-1] was set to JS_UNDEFINED in the previous call */
+            ret = JS_DupValue(ctx, argv[0]);
+            if (magic == GEN_MAGIC_THROW &&
+                s->state == JS_GENERATOR_STATE_SUSPENDED_YIELD) {
+                JS_Throw(ctx, ret);
+                s->func_state.throw_flag = TRUE;
+            } else {
+                sf->cur_sp[-1] = ret;
+                sf->cur_sp[0] = JS_NewInt32(ctx, magic);
+                sf->cur_sp++;
+                s->func_state.throw_flag = FALSE;
+            }
         } else {
-            sf->cur_sp[-1] = ret;
-            sf->cur_sp[0] = JS_NewInt32(ctx, magic);
-            sf->cur_sp++;
-        exec_no_arg:
             s->func_state.throw_flag = FALSE;
         }
         s->state = JS_GENERATOR_STATE_EXECUTING;
@@ -19173,7 +19179,13 @@ static JSValue js_generator_next(JSContext *ctx, JSValueConst this_val,
         }
         break;
     case JS_GENERATOR_STATE_COMPLETED:
-    done:
+        done = TRUE;
+        break;
+    case JS_GENERATOR_STATE_EXECUTING:
+        ret = JS_ThrowTypeError(ctx, "cannot invoke a running generator");
+        break;
+    }
+    if (done) {
         /* execution is finished */
         switch(magic) {
         default:
@@ -19187,10 +19199,6 @@ static JSValue js_generator_next(JSContext *ctx, JSValueConst this_val,
             ret = JS_Throw(ctx, JS_DupValue(ctx, argv[0]));
             break;
         }
-        break;
-    case JS_GENERATOR_STATE_EXECUTING:
-        ret = JS_ThrowTypeError(ctx, "cannot invoke a running generator");
-        break;
     }
     return ret;
 }
