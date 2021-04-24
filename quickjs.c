@@ -15260,34 +15260,39 @@ static __exception int js_for_in_start(JSContext *ctx, JSValue *sp)
 }
 
 /* enum_obj -> enum_obj value done */
+// goto removed
 static __exception int js_for_in_next(JSContext *ctx, JSValue *sp)
 {
     JSValueConst enum_obj;
     JSObject *p;
     JSAtom prop;
     JSForInIterator *it;
-    int ret;
+    int ret = 0;
 
     enum_obj = sp[-1];
     /* fail safe */
     if (JS_VALUE_GET_TAG(enum_obj) != JS_TAG_OBJECT)
-        goto done;
-    p = JS_VALUE_GET_OBJ(enum_obj);
-    if (p->class_id != JS_CLASS_FOR_IN_ITERATOR)
-        goto done;
-    it = p->u.for_in_iterator;
+        ret = -1;
+    else {
+        p = JS_VALUE_GET_OBJ(enum_obj);
+        if (p->class_id != JS_CLASS_FOR_IN_ITERATOR)
+            ret = -1;
+        else
+            it = p->u.for_in_iterator;
+    }
 
-    for(;;) {
+    while (ret >= 0) {
+        ret = -1;
         if (it->is_array) {
             if (it->idx >= it->array_length)
-                goto done;
+                break;
             prop = __JS_AtomFromUInt32(it->idx);
             it->idx++;
         } else {
             JSShape *sh = p->shape;
             JSShapeProperty *prs;
             if (it->idx >= sh->prop_count)
-                goto done;
+                break;
             prs = get_shape_prop(sh) + it->idx;
             prop = prs->atom;
             it->idx++;
@@ -15301,14 +15306,15 @@ static __exception int js_for_in_next(JSContext *ctx, JSValue *sp)
         if (ret)
             break;
     }
-    /* return the property */
-    sp[0] = JS_AtomToValue(ctx, prop);
-    sp[1] = JS_FALSE;
-    return 0;
- done:
-    /* return the end */
-    sp[0] = JS_UNDEFINED;
-    sp[1] = JS_TRUE;
+    if (ret < 0) {
+        /* return the end */
+        sp[0] = JS_UNDEFINED;
+        sp[1] = JS_TRUE;
+    } else {
+        /* return the property */
+        sp[0] = JS_AtomToValue(ctx, prop);
+        sp[1] = JS_FALSE;
+    }
     return 0;
 }
 
