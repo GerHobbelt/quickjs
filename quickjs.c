@@ -15629,12 +15629,14 @@ static BOOL js_get_fast_array(JSContext *ctx, JSValueConst obj,
     return FALSE;
 }
 
+// goto removed
 static __exception int js_append_enumerate(JSContext *ctx, JSValue *sp)
 {
     JSValue iterator, enumobj, method, value;
-    int is_array_iterator;
+    int ret, is_array_iterator;
     JSValue *arrp;
     uint32_t i, count32, pos;
+    BOOL exception;
     
     if (JS_VALUE_GET_TAG(sp[-2]) != JS_TAG_INT) {
         JS_ThrowInternalError(ctx, "invalid index for append");
@@ -15665,48 +15667,53 @@ static __exception int js_append_enumerate(JSContext *ctx, JSValue *sp)
         JS_FreeValue(ctx, enumobj);
         return -1;
     }
-    if (is_array_iterator
-    &&  JS_IsCFunction(ctx, method, (JSCFunction *)js_array_iterator_next, 0)
-    &&  js_get_fast_array(ctx, sp[-1], &arrp, &count32)) {
-        uint32_t len;
-        if (js_get_length32(ctx, &len, sp[-1]))
-            goto exception;
-        /* if len > count32, the elements >= count32 might be read in
-           the prototypes and might have side effects */
-        if (len != count32)
-            goto general_case;
-        /* Handle fast arrays explicitly */
-        for (i = 0; i < count32; i++) {
-            if (JS_DefinePropertyValueUint32(ctx, sp[-3], pos++,
-                                             JS_DupValue(ctx, arrp[i]), JS_PROP_C_W_E) < 0)
-                goto exception;
+    while (TRUE){ // goto replacement
+        exception = FALSE;
+        if (is_array_iterator
+        &&  JS_IsCFunction(ctx, method, (JSCFunction *)js_array_iterator_next, 0)
+        &&  js_get_fast_array(ctx, sp[-1], &arrp, &count32)) {
+            uint32_t len;
+            if (js_get_length32(ctx, &len, sp[-1]))
+                exception = TRUE;
+            /* if len > count32, the elements >= count32 might be read in
+               the prototypes and might have side effects */
+            else if (len == count32) {
+                /* Handle fast arrays explicitly */
+                for (i = 0; i < count32; i++) {
+                    if (JS_DefinePropertyValueUint32(ctx, sp[-3], pos++,
+                                                     JS_DupValue(ctx, arrp[i]), JS_PROP_C_W_E) < 0) {
+                        exception = TRUE;
+                        break;
+                    }
+                }
+                break;
+            }
         }
-    } else {
-    general_case:
-        for (;;) {
+        while (!exception) {
             BOOL done;
             value = JS_IteratorNext(ctx, enumobj, method, 0, NULL, &done);
             if (JS_IsException(value))
-                goto exception;
-            if (done) {
+                exception = TRUE;
+            else if (done) {
                 /* value is JS_UNDEFINED */
                 break;
             }
             if (JS_DefinePropertyValueUint32(ctx, sp[-3], pos++, value, JS_PROP_C_W_E) < 0)
-                goto exception;
+                exception = TRUE;
         }
+        break;
     }
-    /* Note: could raise an error if too many elements */
-    sp[-2] = JS_NewInt32(ctx, pos);
+    if (exception) {
+        JS_IteratorClose(ctx, enumobj, TRUE);
+        ret = -1;
+    } else {
+        /* Note: could raise an error if too many elements */
+        sp[-2] = JS_NewInt32(ctx, pos);
+        ret = 0;
+    }
     JS_FreeValue(ctx, enumobj);
     JS_FreeValue(ctx, method);
-    return 0;
-
-exception:
-    JS_IteratorClose(ctx, enumobj, TRUE);
-    JS_FreeValue(ctx, enumobj);
-    JS_FreeValue(ctx, method);
-    return -1;
+    return ret;
 }
 
 static __exception int JS_CopyDataProperties(JSContext *ctx,
