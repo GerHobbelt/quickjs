@@ -15408,6 +15408,7 @@ static JSValue JS_IteratorNext2(JSContext *ctx, JSValueConst enum_obj,
     return obj;
 }
 
+// goto removed
 static JSValue JS_IteratorNext(JSContext *ctx, JSValueConst enum_obj,
                                JSValueConst method,
                                int argc, JSValueConst *argv, BOOL *pdone)
@@ -15416,15 +15417,19 @@ static JSValue JS_IteratorNext(JSContext *ctx, JSValueConst enum_obj,
     int done;
 
     obj = JS_IteratorNext2(ctx, enum_obj, method, argc, argv, &done);
-    if (JS_IsException(obj))
-        goto fail;
+    if (JS_IsException(obj)) {
+        *pdone = FALSE;
+        return free_and_ret_exception(ctx, obj);
+    }
     if (done != 2) {
         *pdone = done;
         return obj;
     } else {
         done_val = JS_GetProperty(ctx, obj, JS_ATOM_done);
-        if (JS_IsException(done_val))
-            goto fail;
+        if (JS_IsException(done_val)) {
+            *pdone = FALSE;
+            return free_and_ret_exception(ctx, obj);
+        }
         *pdone = JS_ToBoolFree(ctx, done_val);
         value = JS_UNDEFINED;
         if (!*pdone) {
@@ -15433,10 +15438,6 @@ static JSValue JS_IteratorNext(JSContext *ctx, JSValueConst enum_obj,
         JS_FreeValue(ctx, obj);
         return value;
     }
- fail:
-    JS_FreeValue(ctx, obj);
-    *pdone = FALSE;
-    return JS_EXCEPTION;
 }
 
 /* return < 0 in case of exception */
