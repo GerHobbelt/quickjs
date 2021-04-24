@@ -15945,6 +15945,7 @@ static JSValue js_closure(JSContext *ctx, JSValue bfunc,
 
 #define JS_DEFINE_CLASS_HAS_HERITAGE     (1 << 0)
 
+// goto removed
 static int js_op_define_class(JSContext *ctx, JSValue *sp,
                               JSAtom class_name, int class_flags,
                               JSVarRef **cur_var_refs,
@@ -15957,79 +15958,80 @@ static int js_op_define_class(JSContext *ctx, JSValue *sp,
     parent_class = sp[-2];
     bfunc = sp[-1];
 
-    if (class_flags & JS_DEFINE_CLASS_HAS_HERITAGE) {
-        if (JS_IsNull(parent_class)) {
-            parent_proto = JS_NULL;
-            parent_class = JS_DupValue(ctx, ctx->function_proto);
+    while (TRUE) { // goto replacement
+        if (class_flags & JS_DEFINE_CLASS_HAS_HERITAGE) {
+            if (JS_IsNull(parent_class)) {
+                parent_proto = JS_NULL;
+                parent_class = JS_DupValue(ctx, ctx->function_proto);
+            } else {
+                if (!JS_IsConstructor(ctx, parent_class)) {
+                    JS_ThrowTypeError(ctx, "parent class must be constructor");
+                    break;
+                }
+                parent_proto = JS_GetProperty(ctx, parent_class, JS_ATOM_prototype);
+                if (JS_IsException(parent_proto))
+                    break;
+                if (!JS_IsNull(parent_proto) && !JS_IsObject(parent_proto)) {
+                    JS_ThrowTypeError(ctx, "parent prototype must be an object or null");
+                    break;
+                }
+            }
         } else {
-            if (!JS_IsConstructor(ctx, parent_class)) {
-                JS_ThrowTypeError(ctx, "parent class must be constructor");
-                goto fail;
-            }
-            parent_proto = JS_GetProperty(ctx, parent_class, JS_ATOM_prototype);
-            if (JS_IsException(parent_proto))
-                goto fail;
-            if (!JS_IsNull(parent_proto) && !JS_IsObject(parent_proto)) {
-                JS_ThrowTypeError(ctx, "parent prototype must be an object or null");
-                goto fail;
-            }
+            /* parent_class is JS_UNDEFINED in this case */
+            parent_proto = JS_DupValue(ctx, ctx->class_proto[JS_CLASS_OBJECT]);
+            parent_class = JS_DupValue(ctx, ctx->function_proto);
         }
-    } else {
-        /* parent_class is JS_UNDEFINED in this case */
-        parent_proto = JS_DupValue(ctx, ctx->class_proto[JS_CLASS_OBJECT]);
-        parent_class = JS_DupValue(ctx, ctx->function_proto);
+        proto = JS_NewObjectProto(ctx, parent_proto);
+        if (JS_IsException(proto))
+            break;
+
+        b = JS_VALUE_GET_PTR(bfunc);
+        assert(b->func_kind == JS_FUNC_NORMAL);
+        ctor = JS_NewObjectProtoClass(ctx, parent_class,
+                                      JS_CLASS_BYTECODE_FUNCTION);
+        if (JS_IsException(ctor))
+            break;
+        ctor = js_closure2(ctx, ctor, b, cur_var_refs, sf);
+        bfunc = JS_UNDEFINED;
+        if (JS_IsException(ctor))
+            break;
+        js_method_set_home_object(ctx, ctor, proto);
+        JS_SetConstructorBit(ctx, ctor, TRUE);
+
+        JS_DefinePropertyValue(ctx, ctor, JS_ATOM_length,
+                               JS_NewInt32(ctx, b->defined_arg_count),
+                               JS_PROP_CONFIGURABLE);
+
+        if (is_computed_name) {
+            if (JS_DefineObjectNameComputed(ctx, ctor, sp[-3],
+                                            JS_PROP_CONFIGURABLE) < 0)
+                break;
+        } else {
+            if (JS_DefineObjectName(ctx, ctor, class_name, JS_PROP_CONFIGURABLE) < 0)
+                break;
+        }
+
+        /* the constructor property must be first. It can be overriden by
+           computed property names */
+        if (JS_DefinePropertyValue(ctx, proto, JS_ATOM_constructor,
+                                   JS_DupValue(ctx, ctor),
+                                   JS_PROP_CONFIGURABLE |
+                                   JS_PROP_WRITABLE | JS_PROP_THROW) < 0)
+            break;
+        /* set the prototype property */
+        if (JS_DefinePropertyValue(ctx, ctor, JS_ATOM_prototype,
+                                   JS_DupValue(ctx, proto), JS_PROP_THROW) < 0)
+            break;
+        set_cycle_flag(ctx, ctor);
+        set_cycle_flag(ctx, proto);
+
+        JS_FreeValue(ctx, parent_proto);
+        JS_FreeValue(ctx, parent_class);
+
+        sp[-2] = ctor;
+        sp[-1] = proto;
+        return 0;
     }
-    proto = JS_NewObjectProto(ctx, parent_proto);
-    if (JS_IsException(proto))
-        goto fail;
-
-    b = JS_VALUE_GET_PTR(bfunc);
-    assert(b->func_kind == JS_FUNC_NORMAL);
-    ctor = JS_NewObjectProtoClass(ctx, parent_class,
-                                  JS_CLASS_BYTECODE_FUNCTION);
-    if (JS_IsException(ctor))
-        goto fail;
-    ctor = js_closure2(ctx, ctor, b, cur_var_refs, sf);
-    bfunc = JS_UNDEFINED;
-    if (JS_IsException(ctor))
-        goto fail;
-    js_method_set_home_object(ctx, ctor, proto);
-    JS_SetConstructorBit(ctx, ctor, TRUE);
-
-    JS_DefinePropertyValue(ctx, ctor, JS_ATOM_length,
-                           JS_NewInt32(ctx, b->defined_arg_count),
-                           JS_PROP_CONFIGURABLE);
-
-    if (is_computed_name) {
-        if (JS_DefineObjectNameComputed(ctx, ctor, sp[-3],
-                                        JS_PROP_CONFIGURABLE) < 0)
-            goto fail;
-    } else {
-        if (JS_DefineObjectName(ctx, ctor, class_name, JS_PROP_CONFIGURABLE) < 0)
-            goto fail;
-    }
-
-    /* the constructor property must be first. It can be overriden by
-       computed property names */
-    if (JS_DefinePropertyValue(ctx, proto, JS_ATOM_constructor,
-                               JS_DupValue(ctx, ctor),
-                               JS_PROP_CONFIGURABLE |
-                               JS_PROP_WRITABLE | JS_PROP_THROW) < 0)
-        goto fail;
-    /* set the prototype property */
-    if (JS_DefinePropertyValue(ctx, ctor, JS_ATOM_prototype,
-                               JS_DupValue(ctx, proto), JS_PROP_THROW) < 0)
-        goto fail;
-    set_cycle_flag(ctx, ctor);
-    set_cycle_flag(ctx, proto);
-
-    JS_FreeValue(ctx, parent_proto);
-    JS_FreeValue(ctx, parent_class);
-
-    sp[-2] = ctor;
-    sp[-1] = proto;
-    return 0;
- fail:
     JS_FreeValue(ctx, parent_class);
     JS_FreeValue(ctx, parent_proto);
     JS_FreeValue(ctx, bfunc);
