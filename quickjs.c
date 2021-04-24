@@ -19773,6 +19773,7 @@ static JSValue js_async_generator_resolve_function(JSContext *ctx,
 }
 
 /* magic = GEN_MAGIC_x */
+// goto removed
 static JSValue js_async_generator_next(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv,
                                        int magic)
@@ -19797,8 +19798,12 @@ static JSValue js_async_generator_next(JSContext *ctx, JSValueConst this_val,
         return promise;
     }
     req = js_mallocz(ctx, sizeof(*req));
-    if (!req)
-        goto fail;
+    if (!req) {
+        JS_FreeValue(ctx, resolving_funcs[0]);
+        JS_FreeValue(ctx, resolving_funcs[1]);
+        JS_FreeValue(ctx, promise);
+        return JS_EXCEPTION;
+    }
     req->completion_type = magic;
     req->result = JS_DupValue(ctx, argv[0]);
     req->promise = JS_DupValue(ctx, promise);
@@ -19809,11 +19814,6 @@ static JSValue js_async_generator_next(JSContext *ctx, JSValueConst this_val,
         js_async_generator_resume_next(ctx, s);
     }
     return promise;
- fail:
-    JS_FreeValue(ctx, resolving_funcs[0]);
-    JS_FreeValue(ctx, resolving_funcs[1]);
-    JS_FreeValue(ctx, promise);
-    return JS_EXCEPTION;
 }
 
 static JSValue js_async_generator_function_call(JSContext *ctx, JSValueConst func_obj,
