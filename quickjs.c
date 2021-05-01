@@ -34,6 +34,8 @@
 #include <math.h>
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
+#elif defined(__FreeBSD__)
+#include <malloc_np.h>
 #elif defined(__linux__)
 #include <malloc.h>
 #elif defined(__FreeBSD__)
@@ -3890,26 +3892,17 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
             } else {
                 /* parse utf-8 sequence, return 0xFFFFFFFF for error */
                 c = unicode_from_utf8(p, p_end - p, &p_next);
-                if (c < 0x10000) {
+                if (c < 0xd800 || (c >= 0xe000 && c < 0x10000)) {
                     p = p_next;
-                } else if (c <= 0x10FFFF) {
+                } else if (c >= 0x10000 && c <= 0x10FFFF) {
                     p = p_next;
                     /* surrogate pair */
                     c -= 0x10000;
                     string_buffer_putc16(b, (c >> 10) + 0xd800);
                     c = (c & 0x3ff) + 0xdc00;
                 } else {
-                    /* invalid char */
-                    c = 0xfffd;
-                    /* skip the invalid chars */
-                    /* XXX: seems incorrect. Why not just use c = *p++; ? */
-                    while (p < p_end && (*p >= 0x80 && *p < 0xc0))
-                        p++;
-                    if (p < p_end) {
-                        p++;
-                        while (p < p_end && (*p >= 0x80 && *p < 0xc0))
-                            p++;
-                    }
+                    /* XXX: PEP 383-style non-decodable byte smuggling */
+                    c = 0xdc80 | *p++;
                 }
                 string_buffer_putc16(b, c);
             }
@@ -4029,6 +4022,9 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BO
                 c = src[pos++];
                 if (c < 0x80) {
                     *q++ = c;
+            } else if (c >= 0xdc80 && c < 0xdd00) {
+                /* XXX: PEP 383-style non-decodable byte smuggling */
+                *q++ = c & 0xff;
                 } else {
                     if (c >= 0xd800 && c < 0xdc00) {
                         if (pos < len && !cesu8) {
