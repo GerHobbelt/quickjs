@@ -1,0 +1,12 @@
+*.a
+*.o
+*.o.d
+qjs
+qjsc
+qjscalc
+run-test262
+repl.c
+test_fib.c
+examples/hello
+examples/hello_module
+examples/test_fib
