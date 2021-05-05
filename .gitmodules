@@ -1,8 +1,8 @@
 [submodule "ffi"]
 	path = ffi
-	url = https://github.com/rsenn/qjs-ffi.git
+	url = https://github.com/GerHobbelt/qjs-ffi.git
 	branch = master
 [submodule "net"]
 	path = net
-	url = https://github.com/rsenn/minnet-quickjs.git
+	url = https://github.com/GerHobbelt/minnet-quickjs.git
 	branch = master
