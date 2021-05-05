@@ -3881,7 +3881,7 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
     if (p == p_end) {
         /* ASCII string */
         return js_new_string8(ctx, (const uint8_t *)buf, buf_len);
-    } else if (string_buffer_init(ctx, b, buf_len)){
+    } else if (string_buffer_init(ctx, b, buf_len)) {
         string_buffer_free(b);
         return JS_EXCEPTION;
     } else {
@@ -4808,6 +4808,7 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     case JS_CLASS_REGEXP:
         p->u.regexp.pattern = NULL;
         p->u.regexp.bytecode = NULL;
+        // fallthrough
     default:
         if (ctx->rt->class_array[class_id].exotic) {
             p->is_exotic = 1;
