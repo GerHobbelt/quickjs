@@ -2955,7 +2955,7 @@ void normalization_test(const char *filename)
 }
 #endif
 
-int main(int argc, char **argv)
+int main(int argc, const char **argv)
 {
     const char *unicode_db_path, *outfilename;
     char filename[1024];

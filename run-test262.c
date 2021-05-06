@@ -29,11 +29,13 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
-#include <unistd.h>
 #include <errno.h>
 #include <time.h>
+#ifndef _MSC_VER
+#include <unistd.h>
 #include <dirent.h>
 #include <ftw.h>
+#endif
 
 #include "cutils.h"
 #include "list.h"
@@ -1924,7 +1926,6 @@ void help(void)
            "-f file        execute single test from 'file'\n"
            "-r file        set the report file name (default=none)\n"
            "-x file        exclude tests listed in 'file'\n");
-    exit(1);
 }
 
 char *get_opt_arg(const char *option, char *arg)
@@ -1935,7 +1936,11 @@ char *get_opt_arg(const char *option, char *arg)
     return arg;
 }
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+int qjs_test262_main(int argc, const char** argv)
+#else
+int main(int argc, const char **argv)
+#endif
 {
     int optind, start_index, stop_index;
     BOOL is_dir_list;
@@ -1960,6 +1965,7 @@ int main(int argc, char **argv)
         optind++;
         if (str_equal(arg, "-h")) {
             help();
+			return EXIT_FAILURE;
         } else if (str_equal(arg, "-m")) {
             dump_memory++;
         } else if (str_equal(arg, "-n")) {
@@ -1998,8 +2004,11 @@ int main(int argc, char **argv)
         }
     }
     
-    if (optind >= argc && !test_list.count)
-        help();
+	if (optind >= argc && !test_list.count)
+	{
+		help();
+		return EXIT_FAILURE;
+	}
 
     if (is_test262_harness) {
         return run_test262_harness_test(argv[optind], is_module);
@@ -2103,5 +2112,5 @@ int main(int argc, char **argv)
     free(harness_exclude);
     free(error_file);
 
-    return 0;
+    return EXIT_SUCCESS;
 }

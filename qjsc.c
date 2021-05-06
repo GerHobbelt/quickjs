@@ -27,7 +27,9 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #include <errno.h>
 #if !defined(_WIN32)
 #include <sys/wait.h>
@@ -35,6 +37,18 @@
 
 #include "cutils.h"
 #include "quickjs-libc.h"
+
+#if !defined(_MSC_VER) && !defined(BUILD_MONOLITHIC)
+#include "getopt.h"
+#else
+#define FZ_DATA
+#include "../../../include/mupdf/fitz/getopt.h"
+
+#define getopt fz_getopt
+#define optarg fz_optarg
+#define optind fz_optind
+#endif
+
 
 typedef struct {
     char *name;
@@ -481,7 +495,11 @@ typedef enum {
     OUTPUT_EXECUTABLE,
 } OutputTypeEnum;
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+int qjsc_main(int argc, const char** argv)
+#else
+int main(int argc, const char **argv)
+#endif
 {
     int c, i, verbose;
     const char *out_filename, *cname;

@@ -28,7 +28,9 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
@@ -282,7 +284,7 @@ static const JSMallocFunctions trace_mf = {
 
 #define PROG_NAME "qjs"
 
-void help(void)
+static void help(void)
 {
     printf("QuickJS version " CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [file [args]]\n"
@@ -303,10 +305,13 @@ void help(void)
            "    --stack-size n         limit the stack size to 'n' bytes\n"
            "    --unhandled-rejection  dump unhandled promise rejections\n"
            "-q  --quit         just instantiate the interpreter and quit\n");
-    exit(1);
 }
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+int qjs_main(int argc, const char** argv)
+#else
+int main(int argc, const char **argv)
+#endif
 {
     JSRuntime *rt;
     JSContext *ctx;
@@ -363,7 +368,7 @@ int main(int argc, char **argv)
                 arg++;
             if (opt == 'h' || opt == '?' || !strcmp(longopt, "help")) {
                 help();
-                continue;
+				return EXIT_FAILURE;
             }
             if (opt == 'e' || !strcmp(longopt, "eval")) {
                 dump_unhandled_promise_rejection = 1;
@@ -454,6 +459,7 @@ int main(int argc, char **argv)
                 fprintf(stderr, "qjs: unknown option '--%s'\n", longopt);
             }
             help();
+			return EXIT_FAILURE;
         }
     }
     
@@ -572,10 +578,11 @@ int main(int argc, char **argv)
                best[1] + best[2] + best[3] + best[4],
                best[1], best[2], best[3], best[4]);
     }
-    return 0;
+    return EXIT_SUCCESS;
+
  fail:
     js_std_free_handlers(rt);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
-    return 1;
+    return EXIT_FAILURE;
 }

@@ -28,19 +28,23 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
-#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/time.h>
 #include <time.h>
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
+#ifndef _MSC_VER
+#include <unistd.h>
+#include <sys/time.h>
 #include <dirent.h>
+#endif
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
+#ifndef _MSC_VER
 #include <utime.h>
+#endif
 #else
 #include <dlfcn.h>
 #include <termios.h>
