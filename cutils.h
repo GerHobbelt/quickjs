@@ -31,8 +31,6 @@
 #ifdef _MSC_VER
 #include <intrin.h>
 #include <malloc.h>
-#else
-#include <alloca.h>
 #endif
 
 /* set if CPU is big endian */
