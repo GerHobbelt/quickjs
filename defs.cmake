@@ -4,12 +4,10 @@ else(WIN32 OR MINGW)
   set(TRANSPORT_PLATFORM unix)
 endif(WIN32 OR MINGW)
 
-
 if(NOT quickjs_sources_root)
   set(quickjs_sources_root "${CMAKE_CURRENT_SOURCE_DIR}")
 endif(NOT quickjs_sources_root)
 
-message(STATUS "${quickjs_sources_root}/VERSION")
 file(READ "${quickjs_sources_root}/VERSION" version)
 string(STRIP "${version}" quickjs_version)
 
@@ -49,20 +47,34 @@ set(quickjs_includes
     quickjs.h
     unicode_gen_def.h)
 
+set(quickjs_sources
+    ${quickjs_sources_root}/cutils.c
+    ${quickjs_sources_root}/libbf.c
+    ${quickjs_sources_root}/libregexp.c
+    ${quickjs_sources_root}/libunicode.c
+    ${quickjs_sources_root}/quickjs.c
+    ${quickjs_sources_root}/quickjs-libc.c
+    ${quickjs_sources_root}/quickjs-find-module.c
+    ${quickjs_includes})
+
+if(QUICKJS_DEBUGGER)
   set(quickjs_sources
-      ${quickjs_sources_root}/cutils.c
-      ${quickjs_sources_root}/libbf.c
-      ${quickjs_sources_root}/libregexp.c
-      ${quickjs_sources_root}/libunicode.c
-      ${quickjs_sources_root}/quickjs.c
-      ${quickjs_sources_root}/quickjs-libc.c
+      ${quickjs_sources}
       ${quickjs_sources_root}/quickjs-debugger.c
       ${quickjs_sources_root}/quickjs-debugger-transport-${TRANSPORT_PLATFORM}.c
-      ${quickjs_sources_root}/quickjs-find-module.c
-      ${quickjs_includes})
+  )
+endif(QUICKJS_DEBUGGER)
+string(REPLACE ";" "\n" sources "${quickjs_sources}")
+message("quickjs_sources = ${sources}")
 
-execute_process(COMMAND cc -dumpmachine OUTPUT_VARIABLE HOST_SYSTEM_NAME OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpmachine OUTPUT_VARIABLE SYSTEM_NAME OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+  COMMAND cc -dumpmachine
+  OUTPUT_VARIABLE HOST_SYSTEM_NAME
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+  COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+  OUTPUT_VARIABLE SYSTEM_NAME
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 string(REGEX REPLACE "-pc-" "-" quickjs_host_arch "${SYSTEM_NAME}")
 
@@ -73,9 +85,8 @@ else(NOT "${HOST_SYSTEM_NAME}" STREQUAL "${SYSTEM_NAME}")
   set(quickjs_cross_arch "")
 endif(NOT "${HOST_SYSTEM_NAME}" STREQUAL "${SYSTEM_NAME}")
 
-message("HOST_SYSTEM_NAME = ${HOST_SYSTEM_NAME}")
-message("SYSTEM_NAME = ${SYSTEM_NAME}")
-message("quickjs_cross_arch = ${quickjs_cross_arch}")
+# message("HOST_SYSTEM_NAME = ${HOST_SYSTEM_NAME}") message("SYSTEM_NAME =
+# ${SYSTEM_NAME}") message("quickjs_cross_arch = ${quickjs_cross_arch}")
 
 if(quickjs_cross_arch)
   set(quickjs_libdir lib/${quickjs_cross_arch})
@@ -87,10 +98,10 @@ else(quickjs_cross_arch)
   set(quickjs_includedir include)
 endif(quickjs_cross_arch)
 
-message("libdir = ${quickjs_libdir}")
-message("bindir = ${quickjs_bindir}")
-message("includedir = ${quickjs_includedir}")
+# message("libdir = ${quickjs_libdir}") message("bindir = ${quickjs_bindir}")
+# message("includedir = ${quickjs_includedir}")
 
 option(CONFIG_BIGNUM "Enable bignum support" ON)
-set(CONFIG_VERSION "${quickjs_version}" CACHE STRING "QuickJS version")
-
+set(CONFIG_VERSION
+    "${quickjs_version}"
+    CACHE STRING "QuickJS version")
