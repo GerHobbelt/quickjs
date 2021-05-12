@@ -42,8 +42,18 @@
 #include <malloc.h>
 #endif
 
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#endif
+
 #include "cutils.h"
 #include "quickjs-libc.h"
+
+#ifdef HAVE_MALLOC_USABLE_SIZE
+#ifndef HAVE_MALLOC_USABLE_SIZE_DEFINITION
+extern size_t malloc_usable_size();
+#endif
+#endif
 
 extern const uint8_t qjsc_repl[];
 extern const uint32_t qjsc_repl_size;
@@ -150,9 +160,9 @@ static inline size_t js_trace_malloc_usable_size(void *ptr)
     return malloc_size(ptr);
 #elif defined(_WIN32)
     return _msize(ptr);
-#elif defined(EMSCRIPTEN)
+#elif defined(EMSCRIPTEN) || defined(__dietlibc__) || defined(__MSYS__) || defined(DONT_HAVE_MALLOC_USABLE_SIZE)
     return 0;
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(HAVE_MALLOC_USABLE_SIZE)
     return malloc_usable_size(ptr);
 #else
     /* change this to `return 0;` if compilation fails */
@@ -272,9 +282,9 @@ static const JSMallocFunctions trace_mf = {
     malloc_size,
 #elif defined(_WIN32)
     (size_t (*)(const void *))_msize,
-#elif defined(EMSCRIPTEN)
-    NULL,
-#elif defined(__linux__)
+#elif defined(EMSCRIPTEN) || defined(__dietlibc__) || defined(__MSYS__) || defined(DONT_HAVE_MALLOC_USABLE_SIZE_DEFINITION)
+    NULL, 
+#elif defined(__linux__) || defined(HAVE_MALLOC_USABLE_SIZE)
     (size_t (*)(const void *))malloc_usable_size,
 #else
     /* change this to `NULL,` if compilation fails */
@@ -306,6 +316,8 @@ static void help(void)
            "    --unhandled-rejection  dump unhandled promise rejections\n"
            "-q  --quit         just instantiate the interpreter and quit\n");
 }
+
+JSModuleDef* js_module_loader_path(JSContext* ctx, const char* module_name, void* opaque);
 
 #if defined(BUILD_MONOLITHIC)
 int qjs_main(int argc, const char** argv)
@@ -480,8 +492,8 @@ int main(int argc, const char **argv)
     }
     if (memory_limit != 0)
         JS_SetMemoryLimit(rt, memory_limit);
-    if (stack_size != 0)
-        JS_SetMaxStackSize(rt, stack_size);
+    //if (stack_size != 0)
+        JS_SetMaxStackSize(rt, stack_size != 0 ? stack_size : 8 * 1048576);
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
     ctx = JS_NewCustomContext(rt);
@@ -491,7 +503,7 @@ int main(int argc, const char **argv)
     }
 
     /* loader for ES6 modules */
-    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader_path, NULL);
 
     if (dump_unhandled_promise_rejection) {
         JS_SetHostPromiseRejectionTracker(rt, js_std_promise_rejection_tracker,

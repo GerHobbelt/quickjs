@@ -63,7 +63,11 @@ typedef sig_t sighandler_t;
 
 #endif
 
-#if !defined(_WIN32)
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#endif
+
+#if !defined(_WIN32) && !defined(USE_WORKER)
 /* enable the os.Worker API. IT relies on POSIX threads */
 #define USE_WORKER
 #endif
@@ -3294,7 +3298,7 @@ static void *worker_func(void *opaque)
     }        
     js_std_init_handlers(rt);
 
-    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader_path, NULL);
 
     /* set the pipe to communicate with the parent */
     ts = JS_GetRuntimeOpaque(rt);

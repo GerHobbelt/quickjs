@@ -96,7 +96,7 @@ else
   HOST_CC=gcc
   CC=$(CROSS_PREFIX)gcc
   CFLAGS=-g -Wall -MMD -MF $(OBJDIR)/$(@F).d
-  CFLAGS += -Wno-array-bounds -Wno-format-truncation
+  CFLAGS += -Wno-array-bounds
   ifdef CONFIG_LTO
     AR=$(CROSS_PREFIX)gcc-ar
   else
@@ -174,7 +174,15 @@ endif
 
 all: $(OBJDIR) $(OBJDIR)/quickjs.check.o $(OBJDIR)/qjs.check.o $(PROGS)
 
-QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o
+QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o $(OBJDIR)/quickjs-find-module.o
+
+# debugger
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
+ifndef CONFIG_WIN32
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-unix.o
+else
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-win.o
+endif
 
 QJS_OBJS=$(OBJDIR)/qjs.o $(OBJDIR)/repl.o $(QJS_LIB_OBJS)
 ifdef CONFIG_BIGNUM
@@ -216,6 +224,9 @@ endif
 QJSC_HOST_DEFINES:=-DCONFIG_CC=\"$(HOST_CC)\" -DCONFIG_PREFIX=\"$(prefix)\"
 
 $(OBJDIR)/qjsc.o: CFLAGS+=$(QJSC_DEFINES)
+libquickjs.a: CFLAGS+=$(QJSC_DEFINES)
+$(OBJDIR)/quickjs-find-module.o: CFLAGS+=$(QJSC_DEFINES)
+$(OBJDIR)/quickjs-find-module.nolto.o: CFLAGS_NOLTO+=$(QJSC_DEFINES)
 $(OBJDIR)/qjsc.host.o: CFLAGS+=$(QJSC_HOST_DEFINES)
 
 qjs32: $(patsubst %.o, %.m32.o, $(QJS_OBJS))
