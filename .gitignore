@@ -10,3 +10,4 @@ test_fib.c
 examples/hello
 examples/hello_module
 examples/test_fib
+/build
