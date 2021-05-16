@@ -82,7 +82,7 @@ int optopt = '?';   /* character checked for validity */
 #undef  optreset    /* see getopt.h */
 #define optreset    __mingw_optreset
 int optreset;   /* reset getopt */
-char    *optarg;    /* argument associated with option */
+const char    *optarg;    /* argument associated with option */
 #endif
 
 //extern int optind;    /* index of first non-option in argv      */
@@ -115,14 +115,14 @@ static char EMSG[] = "";
 #define EMSG    ""
 #endif
 
-static int getopt_internal(int, char * const *, const char *,
+static int getopt_internal(int, const char * const *, const char *,
          const struct option *, int *, int);
-static int parse_long_options(char * const *, const char *,
+static int parse_long_options(const char * const *, const char *,
             const struct option *, int *, int);
 static int gcd(int, int);
-static void permute_args(int, int, int, char * const *);
+static void permute_args(int, int, int, const char * const *);
 
-static char *place = EMSG; /* option letter processing */
+static const char *place = EMSG; /* option letter processing */
 
 /* XXX: set optreset to 1 rather than these two */
 static int nonopt_start = -1; /* first non option argument (for permute) */
@@ -179,10 +179,10 @@ gcd(int a, int b)
  */
 static void
 permute_args(int panonopt_start, int panonopt_end, int opt_end,
-  char * const *nargv)
+  const char * const *nargv)
 {
   int cstart, cyclelen, i, j, ncycle, nnonopts, nopts, pos;
-  char *swap;
+  const char *swap;
 
   /*
    * compute lengths of blocks and number and size of cycles
@@ -202,9 +202,9 @@ permute_args(int panonopt_start, int panonopt_end, int opt_end,
         pos += nopts;
       swap = nargv[pos];
       /* LINTED const cast */
-      ((char **) nargv)[pos] = nargv[cstart];
+      ((const char **) nargv)[pos] = nargv[cstart];
       /* LINTED const cast */
-      ((char **)nargv)[cstart] = swap;
+      ((const char **)nargv)[cstart] = swap;
     }
   }
 }
@@ -217,7 +217,7 @@ permute_args(int panonopt_start, int panonopt_end, int opt_end,
  * [eventually this will replace the BSD getopt]
  */
 int
-getopt(int nargc, char * const *nargv, const char *options)
+getopt(int nargc, const char * const *nargv, const char *options)
 {
 
   /*
@@ -286,14 +286,14 @@ enum        /* permitted values for its `has_arg' field...  */
  * Returns -1 if short_too is set and the option does not match long_options.
  */
 static int
-parse_long_options(char * const *nargv, const char *options,
+parse_long_options(const char * const *nargv, const char *options,
   const struct option *long_options, int *idx, int short_too)
 {
-  char *current_argv, *has_equal;
+  const char *current_argv, *has_equal;
   size_t current_argv_len;
   int i, ambiguous, match;
 
-#define IDENTICAL_INTERPRETATION(_x, _y)                                \
+#define IDENTICAL_INTERPRETATION(_x, _y)                          \
   (long_options[(_x)].has_arg == long_options[(_y)].has_arg &&    \
    long_options[(_x)].flag == long_options[(_y)].flag &&          \
    long_options[(_x)].val == long_options[(_y)].val)
@@ -414,7 +414,7 @@ parse_long_options(char * const *nargv, const char *options,
  *  Parse argc/argv argument vector.  Called by user level routines.
  */
 static int
-getopt_internal(int nargc, char * const *nargv, const char *options,
+getopt_internal(int nargc, const char * const *nargv, const char *options,
   const struct option *long_options, int *idx, int flags)
 {
   char *oli;        /* option letter list index */

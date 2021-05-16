@@ -3022,6 +3022,7 @@ static JSValue js_os_kill(JSContext *ctx, JSValueConst this_val,
 }
 
 #endif /* !_WIN32 */
+#endif
 
 /* pipe() -> [read_fd, write_fd] or null if error */
 static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
@@ -3691,7 +3692,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-void js_std_add_helpers(JSContext *ctx, int argc, char **argv)
+void js_std_add_helpers(JSContext *ctx, int argc, const char **argv)
 {
     JSValue global_obj, console, args;
     int i;

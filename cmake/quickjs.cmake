@@ -29,6 +29,7 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/libunicode.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-find-module.c
   ${QUICKJS_SOURCE_DIR}/quickjs-port.c
 )
 qjs_setup_common_flags(quickjs)

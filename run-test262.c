@@ -1943,7 +1943,7 @@ void help(void)
            "-x file        exclude tests listed in 'file'\n");
 }
 
-char *get_opt_arg(const char *option, char *arg)
+char *get_opt_arg(const char *option, const char *arg)
 {
     if (!arg) {
         fatal(2, "missing argument for option %s", option);
@@ -1974,7 +1974,7 @@ int main(int argc, const char **argv)
     optind = 1;
     is_dir_list = TRUE;
     while (optind < argc) {
-        char *arg = argv[optind];
+        const char *arg = argv[optind];
         if (*arg != '-')
             break;
         optind++;

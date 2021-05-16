@@ -31,14 +31,8 @@
 #if !defined(_WIN32)
 #include <sys/wait.h>
 #include <unistd.h>
-#include "getopt.h"
 #else
 #include <process.h>
-#if defined(__GNUC__)
-#include <getopt.h>
-#else
-#include "win/getopt.h"
-#endif
 #endif
 
 #ifdef HAVE_QUICKJS_CONFIG_H
@@ -48,15 +42,19 @@
 #include "cutils.h"
 #include "quickjs-libc.h"
 
-#if !defined(_MSC_VER) && !defined(BUILD_MONOLITHIC)
-#include "getopt.h"
-#else
+#if defined(BUILD_MONOLITHIC)
 #define FZ_DATA
 #include "../../../include/mupdf/fitz/getopt.h"
 
 #define getopt fz_getopt
 #define optarg fz_optarg
 #define optind fz_optind
+#else
+#if defined(__GNUC__)
+#include <getopt.h>
+#else
+#include "win/getopt.h"
+#endif
 #endif
 
 

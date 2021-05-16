@@ -294,7 +294,7 @@ int main(int argc, const char **argv)
     JSContext *ctx;
     struct trace_malloc_data trace_data = { NULL };
     int optind;
-    char *expr = NULL;
+    const char *expr = NULL;
     int interactive = 0;
     int dump_memory = 0;
     int trace_memory = 0;
@@ -334,7 +334,7 @@ int main(int argc, const char **argv)
        the script */
     optind = 1;
     while (optind < argc && *argv[optind] == '-') {
-        char *arg = argv[optind] + 1;
+        const char *arg = argv[optind] + 1;
         const char *longopt = "";
         /* a single - is not an option, it also stops argument scanning */
         if (!*arg)
