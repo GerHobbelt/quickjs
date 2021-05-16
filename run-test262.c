@@ -31,15 +31,11 @@
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>
-#ifndef _MSC_VER
-#include <unistd.h>
-#include <dirent.h>
-#include <ftw.h>
-#endif
 
 #include "cutils.h"
 #include "list.h"
 #include "quickjs-libc.h"
+#include "quickjs-port.h"
 
 /* enable test262 thread support to test SharedArrayBuffer and Atomics */
 #define CONFIG_AGENT
@@ -212,6 +208,13 @@ char *compose_path(const char *path, const char *name)
             memcpy(q, name, name_len + 1);
         }
     }
+#if defined(_WIN32)
+    for (char *x =d; *x; x++) {
+        if (*x == '\\') {
+            *x = '/';
+        }
+    }
+#endif
     return d;
 }
 
@@ -354,10 +357,10 @@ void namelist_free(namelist_t *lp)
     lp->size = 0;
 }
 
-static int add_test_file(const char *filename, const struct stat *ptr, int flag)
+static int add_test_file(void *context, const char *filename, int is_dir)
 {
-    namelist_t *lp = &test_list;
-    if (has_suffix(filename, ".js") && !has_suffix(filename, "_FIXTURE.js"))
+    namelist_t *lp = (namelist_t *)context;
+    if (!is_dir && has_suffix(filename, ".js") && !has_suffix(filename, "_FIXTURE.js"))
         namelist_add(lp, NULL, filename);
     return 0;
 }
@@ -367,7 +370,7 @@ static void enumerate_tests(const char *path)
 {
     namelist_t *lp = &test_list;
     int start = lp->count;
-    ftw(path, add_test_file, 100);
+    qjs_listdir((void*)lp,  path, 1, add_test_file);
     qsort(lp->array + start, lp->count - start, sizeof(*lp->array),
           namelist_cmp_indirect);
 }
@@ -421,11 +424,9 @@ static JSValue js_evalScript(JSContext *ctx, JSValue this_val,
 
 #ifdef CONFIG_AGENT
 
-#include <pthread.h>
-
 typedef struct {
     struct list_head link;
-    pthread_t tid;
+    qjs_thread tid;
     char *script;
     JSValue broadcast_func;
     BOOL broadcast_pending;
@@ -443,16 +444,16 @@ typedef struct {
 static JSValue add_helpers1(JSContext *ctx);
 static void add_helpers(JSContext *ctx);
 
-static pthread_mutex_t agent_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t agent_cond = PTHREAD_COND_INITIALIZER;
+static qjs_mutex agent_mutex = QJS_MUTEX_INITIALIZER;
+static qjs_condition agent_cond;
 /* list of Test262Agent.link */
 static struct list_head agent_list = LIST_HEAD_INIT(agent_list);
 
-static pthread_mutex_t report_mutex = PTHREAD_MUTEX_INITIALIZER;
+static qjs_mutex report_mutex = QJS_MUTEX_INITIALIZER;
 /* list of AgentReport.link */
 static struct list_head report_list = LIST_HEAD_INIT(report_list);
 
-static void *agent_start(void *arg)
+static void agent_start(void *arg)
 {
     Test262Agent *agent = arg;
     JSRuntime *rt;
@@ -494,15 +495,15 @@ static void *agent_start(void *arg)
             } else {
                 JSValue args[2];
                 
-                pthread_mutex_lock(&agent_mutex);
+                qjs_mutex_lock(&agent_mutex);
                 while (!agent->broadcast_pending) {
-                    pthread_cond_wait(&agent_cond, &agent_mutex);
+                    qjs_condition_wait(&agent_cond, &agent_mutex);
                 }
                 
                 agent->broadcast_pending = FALSE;
-                pthread_cond_signal(&agent_cond);
+                qjs_condition_signal(&agent_cond);
 
-                pthread_mutex_unlock(&agent_mutex);
+                qjs_mutex_unlock(&agent_mutex);
 
                 args[0] = JS_NewArrayBuffer(ctx, agent->broadcast_sab_buf,
                                             agent->broadcast_sab_size,
@@ -524,7 +525,6 @@ static void *agent_start(void *arg)
 
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
-    return NULL;
 }
 
 static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
@@ -546,7 +546,7 @@ static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
     agent->script = strdup(script);
     JS_FreeCString(ctx, script);
     list_add_tail(&agent->link, &agent_list);
-    pthread_create(&agent->tid, NULL, agent_start, agent);
+    qjs_thread_create(&agent->tid, agent_start, agent, 0);
     return JS_UNDEFINED;
 }
 
@@ -557,7 +557,7 @@ static void js_agent_free(JSContext *ctx)
     
     list_for_each_safe(el, el1, &agent_list) {
         agent = list_entry(el, Test262Agent, link);
-        pthread_join(agent->tid, NULL);
+        qjs_thread_join(&agent->tid);
         JS_FreeValue(ctx, agent->broadcast_sab);
         list_del(&agent->link);
         free(agent);
@@ -607,7 +607,7 @@ static JSValue js_agent_broadcast(JSContext *ctx, JSValue this_val,
     
     /* broadcast the values and wait until all agents have started
        calling their callbacks */
-    pthread_mutex_lock(&agent_mutex);
+    qjs_mutex_lock(&agent_mutex);
     list_for_each(el, &agent_list) {
         agent = list_entry(el, Test262Agent, link);
         agent->broadcast_pending = TRUE;
@@ -618,12 +618,12 @@ static JSValue js_agent_broadcast(JSContext *ctx, JSValue this_val,
         agent->broadcast_sab_size = buf_size;
         agent->broadcast_val = val;
     }
-    pthread_cond_broadcast(&agent_cond);
+    qjs_condition_broadcast(&agent_cond);
 
     while (is_broadcast_pending()) {
-        pthread_cond_wait(&agent_cond, &agent_mutex);
+        qjs_condition_wait(&agent_cond, &agent_mutex);
     }
-    pthread_mutex_unlock(&agent_mutex);
+    qjs_mutex_unlock(&agent_mutex);
     return JS_UNDEFINED;
 }
 
@@ -646,21 +646,15 @@ static JSValue js_agent_sleep(JSContext *ctx, JSValue this_val,
     uint32_t duration;
     if (JS_ToUint32(ctx, &duration, argv[0]))
         return JS_EXCEPTION;
-    usleep(duration * 1000);
+    qjs_usleep(duration * 1000);
     return JS_UNDEFINED;
 }
 
-static int64_t get_clock_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
-}
 
 static JSValue js_agent_monotonicNow(JSContext *ctx, JSValue this_val,
                                      int argc, JSValue *argv)
 {
-    return JS_NewInt64(ctx, get_clock_ms());
+    return JS_NewInt64(ctx, qjs_get_time_ms());
 }
 
 static JSValue js_agent_getReport(JSContext *ctx, JSValue this_val,
@@ -669,14 +663,14 @@ static JSValue js_agent_getReport(JSContext *ctx, JSValue this_val,
     AgentReport *rep;
     JSValue ret;
 
-    pthread_mutex_lock(&report_mutex);
+    qjs_mutex_lock(&report_mutex);
     if (list_empty(&report_list)) {
         rep = NULL;
     } else {
         rep = list_entry(report_list.next, AgentReport, link);
         list_del(&rep->link);
     }
-    pthread_mutex_unlock(&report_mutex);
+    qjs_mutex_unlock(&report_mutex);
     if (rep) {
         ret = JS_NewString(ctx, rep->str);
         free(rep->str);
@@ -700,9 +694,9 @@ static JSValue js_agent_report(JSContext *ctx, JSValue this_val,
     rep->str = strdup(str);
     JS_FreeCString(ctx, str);
     
-    pthread_mutex_lock(&report_mutex);
+    qjs_mutex_lock(&report_mutex);
     list_add_tail(&rep->link, &report_list);
-    pthread_mutex_unlock(&report_mutex);
+    qjs_mutex_unlock(&report_mutex);
     return JS_UNDEFINED;
 }
 
@@ -1500,6 +1494,24 @@ void update_stats(JSRuntime *rt, const char *filename) {
 #undef update
 }
 
+void run_test262_initialize() {
+    JS_Initialize();
+#ifdef CONFIG_AGENT
+    qjs_mutex_init(&agent_mutex);
+    qjs_mutex_init(&report_mutex);
+    qjs_condition_init(&agent_cond);
+#endif
+}
+
+void run_test262_finalize() {
+    JS_Finalize();
+#ifdef CONFIG_AGENT
+    qjs_mutex_destroy(&agent_mutex);
+    qjs_mutex_destroy(&report_mutex);
+    qjs_condition_destroy(&agent_cond);
+#endif
+}
+
 int run_test_buf(const char *filename, char *harness, namelist_t *ip,
                  char *buf, size_t buf_len, const char* error_type,
                  int eval_flags, BOOL is_negative, BOOL is_async,
@@ -1508,7 +1520,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     JSRuntime *rt;
     JSContext *ctx;
     int i, ret;
-        
+    run_test262_initialize();
     rt = JS_NewRuntime();
     if (rt == NULL) {
         fatal(1, "JS_NewRuntime failure");
@@ -1530,7 +1542,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     for (i = 0; i < ip->count; i++) {
         if (eval_file(ctx, harness, ip->array[i],
                       JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRIP)) {
-            fatal(1, "error including %s for %s", ip->array[i], filename);
+            fprintf(stderr, "error including %s for %s", ip->array[i], filename);
         }
     }
 
@@ -1546,6 +1558,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
 #endif
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    run_test262_finalize();
 
     test_count++;
     if (ret) {
@@ -1804,6 +1817,7 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
     BOOL can_block;
     
     outfile = stdout; /* for js_print */
+    run_test262_initialize();
 
     rt = JS_NewRuntime();
     if (rt == NULL) {
@@ -1855,6 +1869,7 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
 #endif
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    run_test262_finalize();
     return ret_code;
 }
 
@@ -1889,13 +1904,13 @@ void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
         } else {
             int ti;
             if (slow_test_threshold != 0) {
-                ti = get_clock_ms();
+                ti = qjs_get_time_ms();
             } else {
                 ti = 0;
             }
             run_test(p, test_index);
             if (slow_test_threshold != 0) {
-                ti = get_clock_ms() - ti;
+                ti = qjs_get_time_ms() - ti;
                 if (ti >= slow_test_threshold)
                     fprintf(stderr, "\n%s (%d ms)\n", p, ti);
             }
@@ -2112,5 +2127,9 @@ int main(int argc, const char **argv)
     free(harness_exclude);
     free(error_file);
 
-    return EXIT_SUCCESS;
+    if (new_errors) {
+        return EXIT_FAILURE;
+    } else {
+        return EXIT_SUCCESS;
+    }
 }

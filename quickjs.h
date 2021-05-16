@@ -28,6 +28,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+  #define JS_EXPORT __declspec(dllexport)
+#else
+  #define JS_EXPORT /* nothing */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -126,7 +132,8 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 {
     return 0;
 }
-    
+
+#define JSValueCast(x) (JSValue)(x)
 #elif defined(JS_NAN_BOXING)
 
 typedef uint64_t JSValue;
@@ -191,7 +198,8 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     tag = JS_VALUE_GET_TAG(v);
     return tag == (JS_NAN >> 32);
 }
-    
+
+#define JSValueCast(x) (x)
 #else /* !JS_NAN_BOXING */
 
 typedef union JSValueUnion {
@@ -242,6 +250,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     return (u.u64 & 0x7fffffffffffffff) > 0x7ff0000000000000;
 }
 
+#define JSValueCast(x) (x)
 #endif /* !JS_NAN_BOXING */
 
 #define JS_VALUE_IS_BOTH_INT(v1, v2) ((JS_VALUE_GET_TAG(v1) | JS_VALUE_GET_TAG(v2)) == 0)
@@ -327,6 +336,10 @@ typedef struct JSMallocFunctions {
 } JSMallocFunctions;
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
+
+/* These pair of function should be called at the very beginning and the very end */
+void JS_Initialize(void);
+void JS_Finalize(void);
 
 JSRuntime *JS_NewRuntime(void);
 /* info lifetime must exceed that of rt */
@@ -521,9 +534,9 @@ static js_force_inline JSValue JS_NewInt64(JSContext *ctx, int64_t val)
 {
     JSValue v;
     if (val == (int32_t)val) {
-        v = JS_NewInt32(ctx, val);
+        v = JS_NewInt32(ctx, (int32_t)val);
     } else {
-        v = __JS_NewFloat64(ctx, val);
+        v = __JS_NewFloat64(ctx, (double)val);
     }
     return v;
 }
@@ -666,7 +679,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
-    return (JSValue)v;
+    return JSValueCast(v);
 }
 
 static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
@@ -675,7 +688,7 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
-    return (JSValue)v;
+    return JSValueCast(v);
 }
 
 int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
