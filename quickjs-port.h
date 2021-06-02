@@ -24,14 +24,19 @@
 #ifndef QUICKJS_PORT_H
 #define QUICKJS_PORT_H
 
+/* define to include Atomics.* operations which depend on the OS
+   threads */
+#if !defined(EMSCRIPTEN)
+#define CONFIG_ATOMICS
+#endif
+
 #include <stdlib.h>
 #include <stdint.h>
 #if defined(_MSC_VER)
 #include <intrin.h>
 #include "win/stdatomic.h"
-#elif defined(FREERTOS)
-#include <FreeRTOS.h>
-#include <stdatomic.h>
+#elif defined(QJS_CUSTOM_THREAD)
+#include "quickjs-port-custom.h"
 #else
 #include <pthread.h>
 #include <stdatomic.h>
@@ -39,12 +44,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-/* define to include Atomics.* operations which depend on the OS
-   threads */
-#if !defined(EMSCRIPTEN) && !defined(FREERTOS)
-#define CONFIG_ATOMICS
 #endif
 
 #define QJS_FE_DOWNWARD 1
@@ -100,8 +99,7 @@ typedef struct qjs_condition_s {
     void* Ptr;
 } qjs_condition;
 #define QJS_MUTEX_INITIALIZER NULL
-#elif defined(FREERTOS)
-#else
+#elif !defined(QJS_CUSTOM_THREAD)
 typedef pthread_t qjs_thread;
 typedef pthread_mutex_t qjs_mutex;
 typedef pthread_cond_t qjs_condition;
