@@ -50,6 +50,8 @@
 #include "quickjs-libc.h"
 #include "quickjs-port.h"
 
+JSModuleLoaderFunc* js_std_get_module_loader_func();
+
 #define malloc(s) malloc_is_forbidden(s)
 #define free(p) free_is_forbidden(p)
 #define realloc(p,s) realloc_is_forbidden(p,s)
@@ -282,8 +284,6 @@ static void help(void)
            "-q  --quit         just instantiate the interpreter and quit\n");
 }
 
-JSModuleDef* js_module_loader_path(JSContext* ctx, const char* module_name, void* opaque);
-
 #if defined(BUILD_MONOLITHIC)
 int qjs_main(int argc, const char** argv)
 #else
@@ -476,7 +476,7 @@ int main(int argc, const char **argv)
     }
 
     /* loader for ES6 modules */
-    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader_path, NULL);
+    JS_SetModuleLoaderFunc(rt, NULL, js_std_get_module_loader_func(), NULL);
 
     if (dump_unhandled_promise_rejection) {
         JS_SetHostPromiseRejectionTracker(rt, js_std_promise_rejection_tracker,
