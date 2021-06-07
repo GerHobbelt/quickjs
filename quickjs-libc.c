@@ -1045,6 +1045,25 @@ static JSValue js_std_file_clearerr(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+static JSValue js_std_file_error(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    FILE *f = js_std_file_get(ctx, this_val);
+    if (!f)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, ferror(f));
+}
+
+static JSValue js_std_file_clearerr(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    FILE *f = js_std_file_get(ctx, this_val);
+    if (!f)
+        return JS_EXCEPTION;
+    clearerr(f);
+    return JS_UNDEFINED;
+}
+
 static JSValue js_std_file_fileno(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv)
 {
