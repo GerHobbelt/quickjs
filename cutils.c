@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 #include "cutils.h"
 
@@ -90,14 +89,15 @@ static void *dbuf_default_realloc(void *opaque, void *ptr, size_t size)
 void dbuf_init2(DynBuf *s, void *opaque, DynBufReallocFunc *realloc_func)
 {
     memset(s, 0, sizeof(*s));
-    assert(realloc_func != NULL);
+    if (!realloc_func)
+        realloc_func = dbuf_default_realloc;
     s->opaque = opaque;
     s->realloc_func = realloc_func;
 }
 
 void dbuf_init(DynBuf *s)
 {
-    dbuf_init2(s, NULL, dbuf_default_realloc);
+    dbuf_init2(s, NULL, NULL);
 }
 
 /* return < 0 if error */
