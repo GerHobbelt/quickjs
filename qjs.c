@@ -48,6 +48,8 @@ extern const uint8_t qjsc_qjscalc[];
 extern const uint32_t qjsc_qjscalc_size;
 #endif
 
+// eval_flags是执行标志位，表示代码环境，比如 JS_EVAL_TYPE_GLOBAL 全局，模块，直接调用等，如果执行用户输入的代码段，就是全局
+// return 0成功， -1失败
 static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
                     const char *filename, int eval_flags)
 {
@@ -57,6 +59,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
     if ((eval_flags & JS_EVAL_TYPE_MASK) == JS_EVAL_TYPE_MODULE) {
         /* for the modules, we compile then run to be able to set
            import.meta */
+        //对于模块，我们编译然后运行以能够设置 import.meta
         val = JS_Eval(ctx, buf, buf_len, filename,
                       eval_flags | JS_EVAL_FLAG_COMPILE_ONLY);
         if (!JS_IsException(val)) {
@@ -64,6 +67,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
             val = JS_EvalFunction(ctx, val);
         }
     } else {
+        // 通常模式。  JS_Eval 是执行的核心函数
         val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
     }
     if (JS_IsException(val)) {
@@ -312,6 +316,8 @@ int main(int argc, char **argv)
     
     /* cannot use getopt because we want to pass the command line to
        the script */
+    // 无法使用getopt , 因为我们要把命令传递给脚本
+    // 参数解析
     optind = 1;
     while (optind < argc && *argv[optind] == '-') {
         char *arg = argv[optind] + 1;
@@ -457,13 +463,16 @@ int main(int argc, char **argv)
 #endif
     
     /* loader for ES6 modules */
+    // 加载系统模块
     JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 
+    // 
     if (dump_unhandled_promise_rejection) {
         JS_SetHostPromiseRejectionTracker(rt, js_std_promise_rejection_tracker,
                                           NULL);
     }
     
+    // 执行文件，执行代码段[核心部分]
     if (!empty_run) {
 #ifdef CONFIG_BIGNUM
         if (load_jscalc) {
@@ -473,10 +482,12 @@ int main(int argc, char **argv)
         js_std_add_helpers(ctx, argc - optind, argv + optind);
 
         /* system modules */
+        // 加载系统库 std , os
         js_init_module_std(ctx, "std");
         js_init_module_os(ctx, "os");
 
         /* make 'std' and 'os' visible to non module code */
+        // 加载std和os
         if (load_std) {
             const char *str = "import * as std from 'std';\n"
                 "import * as os from 'os';\n"
@@ -491,6 +502,7 @@ int main(int argc, char **argv)
         }
 
         if (expr) {
+            // expr 使用户输入的代码段
             if (eval_buf(ctx, expr, strlen(expr), "<cmdline>", 0))
                 goto fail;
         } else
@@ -509,6 +521,7 @@ int main(int argc, char **argv)
         js_std_loop(ctx);
     }
     
+    // 释放内存
     if (dump_memory) {
         JSMemoryUsage stats;
         JS_ComputeMemoryUsage(rt, &stats);
