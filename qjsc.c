@@ -1,7 +1,7 @@
 /*
  * QuickJS command line compiler
  * 
- * Copyright (c) 2018-2019 Fabrice Bellard
+ * Copyright (c) 2018-2020 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -76,6 +76,9 @@ static const FeatureEntry feature_list[] = {
     { "promise", "Promise" },
 #define FE_MODULE_LOADER 9
     { "module-loader", NULL },
+#ifdef CONFIG_BIGNUM
+    { "bigint", "BigInt" },
+#endif
 };
 
 void namelist_add(namelist_t *lp, const char *name, const char *short_name,
@@ -323,6 +326,7 @@ static const char main_c_template1[] =
     "  JSRuntime *rt;\n"
     "  JSContext *ctx;\n"
     "  rt = JS_NewRuntime();\n"
+    "  js_std_init_handlers(rt);\n"
     ;
 
 static const char main_c_template2[] =
@@ -332,11 +336,7 @@ static const char main_c_template2[] =
     "  return 0;\n"
     "}\n";
 
-#ifdef CONFIG_BIGNUM
-#define PROG_NAME "qjscbn"
-#else
 #define PROG_NAME "qjsc"
-#endif
 
 void help(void)
 {
@@ -352,11 +352,13 @@ void help(void)
            "-M module_name[,cname] add initialization code for an external C module\n"
            "-x          byte swapped output\n"
            "-p prefix   set the prefix of the generated C names\n"
-           );
+           "-S n        set the maximum stack size to 'n' bytes (default=%d)\n",
+           JS_DEFAULT_STACK_SIZE);
 #ifdef CONFIG_LTO
     {
         int i;
         printf("-flto       use link time optimization\n");
+        printf("-fbignum    enable bignum extensions\n");
         printf("-fno-[");
         for(i = 0; i < countof(feature_list); i++) {
             if (i != 0)
@@ -420,11 +422,7 @@ static int output_executable(const char *out_filename, const char *cfilename,
     }
     
     lto_suffix = "";
-#ifdef CONFIG_BIGNUM
-    bn_suffix = ".bn";
-#else
     bn_suffix = "";
-#endif
     
     arg = argv;
     *arg++ = CONFIG_CC;
@@ -451,6 +449,7 @@ static int output_executable(const char *out_filename, const char *cfilename,
     *arg++ = libjsname;
     *arg++ = "-lm";
     *arg++ = "-ldl";
+    *arg++ = "-lpthread";
     *arg = NULL;
     
     if (verbose) {
@@ -491,6 +490,10 @@ int main(int argc, char **argv)
     BOOL use_lto;
     int module;
     OutputTypeEnum output_type;
+    size_t stack_size;
+#ifdef CONFIG_BIGNUM
+    BOOL bignum_ext = FALSE;
+#endif
     
     out_filename = NULL;
     output_type = OUTPUT_EXECUTABLE;
@@ -500,13 +503,14 @@ int main(int argc, char **argv)
     byte_swap = FALSE;
     verbose = 0;
     use_lto = FALSE;
-
+    stack_size = 0;
+    
     /* add system modules */
     namelist_add(&cmodule_list, "std", "std", 0);
     namelist_add(&cmodule_list, "os", "os", 0);
 
     for(;;) {
-        c = getopt(argc, argv, "ho:cN:f:mxevM:p:");
+        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:");
         if (c == -1)
             break;
         switch(c) {
@@ -540,7 +544,13 @@ int main(int argc, char **argv)
                     }
                     if (i == countof(feature_list))
                         goto bad_feature;
-                } else {
+                } else
+#ifdef CONFIG_BIGNUM
+                if (!strcmp(optarg, "bignum")) {
+                    bignum_ext = TRUE;
+                } else
+#endif
+                {
                 bad_feature:
                     fprintf(stderr, "unsupported feature: %s\n", optarg);
                     exit(1);
@@ -574,6 +584,9 @@ int main(int argc, char **argv)
             break;
         case 'p':
             c_ident_prefix = optarg;
+            break;
+        case 'S':
+            stack_size = (size_t)strtod(optarg, NULL);
             break;
         default:
             break;
@@ -610,9 +623,15 @@ int main(int argc, char **argv)
     outfile = fo;
     
     rt = JS_NewRuntime();
-    ctx = JS_NewContextRaw(rt);
-    JS_AddIntrinsicEval(ctx);
-    JS_AddIntrinsicRegExpCompiler(ctx);
+    ctx = JS_NewContext(rt);
+#ifdef CONFIG_BIGNUM
+    if (bignum_ext) {
+        JS_AddIntrinsicBigFloat(ctx);
+        JS_AddIntrinsicBigDecimal(ctx);
+        JS_AddIntrinsicOperators(ctx);
+        JS_EnableBignumExt(ctx, TRUE);
+    }
+#endif
     
     /* loader for ES6 modules */
     JS_SetModuleLoaderFunc(rt, NULL, jsc_module_loader, NULL);
@@ -641,6 +660,11 @@ int main(int argc, char **argv)
         fputs(main_c_template1, fo);
         fprintf(fo, "  ctx = JS_NewContextRaw(rt);\n");
 
+        if (stack_size != 0) {
+            fprintf(fo, "  JS_SetMaxStackSize(rt, %u);\n",
+                    (unsigned int)stack_size);
+        }
+        
         /* add the module loader if necessary */
         if (feature_bitmap & (1 << FE_MODULE_LOADER)) {
             fprintf(fo, "  JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);\n");
@@ -656,7 +680,15 @@ int main(int argc, char **argv)
                         feature_list[i].init_name);
             }
         }
-
+#ifdef CONFIG_BIGNUM
+        if (bignum_ext) {
+            fprintf(fo,
+                    "  JS_AddIntrinsicBigFloat(ctx);\n"
+                    "  JS_AddIntrinsicBigDecimal(ctx);\n"
+                    "  JS_AddIntrinsicOperators(ctx);\n"
+                    "  JS_EnableBignumExt(ctx, 1);\n");
+        }
+#endif
         fprintf(fo, "  js_std_add_helpers(ctx, argc, argv);\n");
 
         for(i = 0; i < init_module_list.count; i++) {
