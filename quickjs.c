@@ -74,7 +74,7 @@
 #define CONFIG_ATOMICS
 #endif
 
-#if !defined(EMSCRIPTEN)
+#if !defined(EMSCRIPTEN) && !defined(CONFIG_DISABLE_STACK_CHECK)
 /* enable stack limitation */
 #define CONFIG_STACK_CHECK
 #endif
@@ -2916,7 +2916,7 @@ static void __JS_FreeAtom(JSRuntime *rt, uint32_t i)
 }
 
 /* Warning: 'p' is freed */
-static JSAtom JS_NewAtomStr(JSContext *ctx, JSString *p)
+static JSAtom JS_NewAtomStr2(JSContext *ctx, JSString *p, int type)
 {
     JSRuntime *rt = ctx->rt;
     uint32_t n;
@@ -2927,22 +2927,37 @@ static JSAtom JS_NewAtomStr(JSContext *ctx, JSString *p)
         }
     }
     /* XXX: should generate an exception */
-    return __JS_NewAtom(rt, p, JS_ATOM_TYPE_STRING);
+    return __JS_NewAtom(rt, p, type);
 }
 
-JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len)
+static JSAtom JS_NewAtomStr(JSContext *ctx, JSString *p)
+{
+    return JS_NewAtomStr2(ctx, p, JS_ATOM_TYPE_STRING);
+}
+
+static JSAtom JS_NewAtomLen2(JSContext *ctx, const char *str, size_t len, int type)
 {
     JSValue val;
 
     if (len == 0 || !is_digit(*str)) {
-        JSAtom atom = __JS_FindAtom(ctx->rt, str, len, JS_ATOM_TYPE_STRING);
+        JSAtom atom = __JS_FindAtom(ctx->rt, str, len, type);
         if (atom)
             return atom;
     }
     val = JS_NewStringLen(ctx, str, len);
     if (JS_IsException(val))
         return JS_ATOM_NULL;
-    return JS_NewAtomStr(ctx, JS_VALUE_GET_STRING(val));
+    return JS_NewAtomStr2(ctx, JS_VALUE_GET_STRING(val), type);
+}
+
+JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len)
+{
+    return JS_NewAtomLen2(ctx, str, len, JS_ATOM_TYPE_STRING);
+}
+
+JSAtom JS_NewAtomLenPrivate(JSContext *ctx, const char *str, size_t len)
+{
+    return JS_NewAtomLen2(ctx, str, len, JS_ATOM_TYPE_PRIVATE);
 }
 
 JSAtom JS_NewAtom(JSContext *ctx, const char *str)

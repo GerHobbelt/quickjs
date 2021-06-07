@@ -57,7 +57,7 @@ typedef sig_t sighandler_t;
 
 #endif
 
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(CONFIG_DISABLE_WORKER)
 /* enable the os.Worker API. IT relies on POSIX threads */
 #define USE_WORKER
 #endif
@@ -672,6 +672,14 @@ static JSValue js_evalScript(JSContext *ctx, JSValueConst this_val,
     str = JS_ToCStringLen(ctx, &len, argv[0]);
     if (!str)
         return JS_EXCEPTION;
+    const char *filename = "<evalScript>";
+    if (argc == 2) {
+        filename = JS_ToCString(ctx, argv[1]);
+        if (!filename) {
+            JS_FreeCString(ctx, str);
+            return JS_EXCEPTION;
+        }
+    }
     if (!ts->recv_pipe && ++ts->eval_script_recurse == 1) {
         /* install the interrupt handler */
         JS_SetInterruptHandler(JS_GetRuntime(ctx), interrupt_handler, NULL);
@@ -679,8 +687,10 @@ static JSValue js_evalScript(JSContext *ctx, JSValueConst this_val,
     flags = JS_EVAL_TYPE_GLOBAL; 
     if (backtrace_barrier)
         flags |= JS_EVAL_FLAG_BACKTRACE_BARRIER;
-    ret = JS_Eval(ctx, str, len, "<evalScript>", flags);
+    ret = JS_Eval(ctx, str, len, filename, flags);
     JS_FreeCString(ctx, str);
+    if (argc == 2)
+        JS_FreeCString(ctx, filename);
     if (!ts->recv_pipe && --ts->eval_script_recurse == 0) {
         /* remove the interrupt handler */
         JS_SetInterruptHandler(JS_GetRuntime(ctx), NULL, NULL);
@@ -1444,7 +1454,7 @@ static const JSCFunctionListEntry js_std_error_props[] = {
 static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("exit", 1, js_std_exit ),
     JS_CFUNC_DEF("gc", 0, js_std_gc ),
-    JS_CFUNC_DEF("evalScript", 1, js_evalScript ),
+    JS_CFUNC_DEF("evalScript", 2, js_evalScript ),
     JS_CFUNC_DEF("loadScript", 1, js_loadScript ),
     JS_CFUNC_DEF("getenv", 1, js_std_getenv ),
     JS_CFUNC_DEF("urlGet", 1, js_std_urlGet ),
