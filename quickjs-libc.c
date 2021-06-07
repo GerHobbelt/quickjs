@@ -1604,6 +1604,7 @@ static JSValue js_os_open(JSContext *ctx, JSValueConst this_val,
     }
 #if defined(_WIN32)
     /* force binary mode on win32, don't support TEXT on win32 for consistence with other platform */
+    flags &= ~O_TEXT;
     flags |= O_BINARY;
 #endif
     ret = js_get_errno(open(filename, flags, mode));
