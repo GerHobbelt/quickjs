@@ -4751,19 +4751,7 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
         p->prop[0].u.value = JS_UNDEFINED;
         break;
     case JS_CLASS_ARGUMENTS:
-    case JS_CLASS_UINT8C_ARRAY:
-    case JS_CLASS_INT8_ARRAY:
-    case JS_CLASS_UINT8_ARRAY:
-    case JS_CLASS_INT16_ARRAY:
-    case JS_CLASS_UINT16_ARRAY:
-    case JS_CLASS_INT32_ARRAY:
-    case JS_CLASS_UINT32_ARRAY:
-#ifdef CONFIG_BIGNUM
-    case JS_CLASS_BIG_INT64_ARRAY:
-    case JS_CLASS_BIG_UINT64_ARRAY:
-#endif
-    case JS_CLASS_FLOAT32_ARRAY:
-    case JS_CLASS_FLOAT64_ARRAY:
+    case JS_CLASS_UINT8C_ARRAY ... JS_CLASS_FLOAT64_ARRAY:
         p->is_exotic = 1;
         p->fast_array = 1;
         p->u.array.u.ptr = NULL;

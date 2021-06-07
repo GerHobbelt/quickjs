@@ -120,7 +120,7 @@ Load as ES6 script (default=autodetect).
 
 @item --bignum
 Enable the bignum extensions: BigDecimal object, BigFloat object and
-the @code{"use math"} directive.
+the @code{"use bigint"} and @code{"use math"} directives.
 
 @item -I file
 @item --include file
@@ -190,7 +190,7 @@ Disable selected language features to produce a smaller executable file.
 
 @item -fbignum
 Enable the bignum extensions: BigDecimal object, BigFloat object and
-the @code{"use math"} directive.
+the @code{"use bigint"} and @code{"use math"} directives.
 
 @end table
 
