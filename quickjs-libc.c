@@ -577,6 +577,15 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
 }
 #endif /* !_WIN32 */
 
+#endif //GPAC_HAS_QJS
+
+#endif //GPAC_DISABLE_QJS_LIBC
+
+#ifdef GPAC_DISABLE_QJS_LIBC
+#include "cutils.h"
+#include "quickjs-libc.h"
+#endif
+
 int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
                               JS_BOOL use_realpath, JS_BOOL is_main)
 {
@@ -594,7 +603,7 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
     JS_FreeAtom(ctx, module_name_atom);
     if (!module_name)
         return -1;
-    if (!strchr(module_name, ':')) {
+    if (module_name[0] && (module_name[1]!=':') && !strchr(module_name, ':')) {
         strcpy(buf, "file://");
 #if !defined(_WIN32)
         /* realpath() cannot be used with modules compiled with qjsc
@@ -630,6 +639,10 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
     return 0;
 }
 
+
+#ifndef GPAC_DISABLE_QJS_LIBC
+
+#ifndef GPAC_HAS_QJS
 JSModuleDef *js_module_loader(JSContext *ctx,
                               const char *module_name, void *opaque)
 {
