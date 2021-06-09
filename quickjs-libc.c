@@ -22,54 +22,118 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include <gpac/setup.h>
+
+#ifndef GPAC_DISABLE_QJS_LIBC
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
+#if !defined(_MSC_VER)
 #include <unistd.h>
+#include <sys/time.h>
+#include <dirent.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/time.h>
 #include <time.h>
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <dirent.h>
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
+#if !defined(_MSC_VER)
 #include <utime.h>
 #else
+#include <sys/utime.h>
+#include <sys/timeb.h>
+#include <gpac/tools.h>
+#include <io.h>
+#include <direct.h>
+#endif
+#else //_WIN32
 #include <dlfcn.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
 #if defined(__APPLE__)
-typedef sig_t sighandler_t;
+typedef sig_t mysighandler_t;
 #if !defined(environ)
+#ifdef GPAC_CONFIG_IOS
+char *environ[1] = {NULL};
+#else
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
 #endif
-#endif /* __APPLE__ */
+#endif
+
+#else /* __APPLE__ */
+extern char **environ;
+typedef void (*mysighandler_t)(int sig_num);
+#endif
 
 #endif
 
-#if !defined(_WIN32)
-/* enable the os.Worker API. IT relies on POSIX threads */
+
+#if defined(_WIN32) && defined(_MSC_VER)
+#ifndef PATH_MAX
+#define PATH_MAX GF_MAX_PATH
+#endif
+
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+#define popen _popen
+#define pclose _pclose
+#define pipe(_a)  _pipe(_a, 1024, 0)
+
+#if !defined(S_IFIFO)
+#define S_IFIFO _S_IFIFO                     /* Pipe */
+#endif
+#if !defined(S_IFBLK)
+#define S_IFBLK   0                          /* Block device */
+#endif
+#if !defined(S_ISDIR)
+#define	S_ISDIR(mode)  (((mode) & S_IFMT) == S_IFDIR)
+#endif
+
+#endif
+
+/* enable the os.Worker API. We rely on GF_Thread */
 #define USE_WORKER
-#endif
 
 #ifdef USE_WORKER
-#include <pthread.h>
+#include <gpac/thread.h>
+#if defined(WIN32) && !defined(__GNUC__)
+
+#else
 #include <stdatomic.h>
+#endif
+
 #endif
 
 #include "cutils.h"
 #include "list.h"
 #include "quickjs-libc.h"
+
+#ifdef GPAC_HAS_QJS
+void js_dump_error(JSContext *ctx);
+void js_dump_error_exc(JSContext *ctx, const JSValue exception_val);
+#define js_std_dump_error js_dump_error
+#define js_std_dump_error1 js_dump_error_exc
+
+//use our own loader
+JSModuleDef *qjs_module_loader(JSContext *ctx, const char *module_name, void *opaque);
+#define js_module_loader qjs_module_loader
+
+#endif //GPAC_HAS_QJS
 
 /* TODO:
    - add socket calls
@@ -106,7 +170,7 @@ typedef struct {
 typedef struct {
     int ref_count;
 #ifdef USE_WORKER
-    pthread_mutex_t mutex;
+    GF_Mutex *mutex;
 #endif
     struct list_head msg_queue; /* list of JSWorkerMessage.link */
     int read_fd;
@@ -127,6 +191,7 @@ typedef struct JSThreadState {
     int eval_script_recurse; /* only used in the main thread */
     /* not used in the main thread */
     JSWorkerMessagePipe *recv_pipe, *send_pipe;
+	int terminated;
 } JSThreadState;
 
 static uint64_t os_pending_signals;
@@ -344,7 +409,7 @@ static JSValue js_printf_internal(JSContext *ctx,
         res = JS_ThrowOutOfMemory(ctx);
     } else {
         if (fp) {
-            len = fwrite(dbuf.buf, 1, dbuf.size, fp);
+            len = (int) fwrite(dbuf.buf, 1, dbuf.size, fp);
             res = JS_NewInt32(ctx, len);
         } else {
             res = JS_NewStringLen(ctx, (char *)dbuf.buf, dbuf.size);
@@ -452,6 +517,7 @@ static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
+#ifndef GPAC_HAS_QJS
 
 #if defined(_WIN32)
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
@@ -597,6 +663,7 @@ JSModuleDef *js_module_loader(JSContext *ctx,
     }
     return m;
 }
+#endif
 
 static JSValue js_std_exit(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
@@ -1042,9 +1109,9 @@ static JSValue js_std_file_close(JSContext *ctx, JSValueConst this_val,
     if (!s->f)
         return JS_ThrowTypeError(ctx, "invalid file handle");
     if (s->is_popen)
-        err = js_get_errno(pclose(s->f));
+        err = (int) js_get_errno(pclose(s->f));
     else
-        err = js_get_errno(fclose(s->f));
+        err = (int) js_get_errno(fclose(s->f));
     s->f = NULL;
     return JS_NewInt32(ctx, err);
 }
@@ -1075,11 +1142,7 @@ static JSValue js_std_file_tell(JSContext *ctx, JSValueConst this_val,
     int64_t pos;
     if (!f)
         return JS_EXCEPTION;
-#if defined(__linux__)
-    pos = ftello(f);
-#else
-    pos = ftell(f);
-#endif
+    pos = gf_ftell(f);
     if (is_bigint)
         return JS_NewBigInt64(ctx, pos);
     else
@@ -1098,11 +1161,7 @@ static JSValue js_std_file_seek(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[1]))
         return JS_EXCEPTION;
-#if defined(__linux__)
-    ret = fseeko(f, pos, whence);
-#else
-    ret = fseek(f, pos, whence);
-#endif
+    ret = gf_fseek(f, pos, whence);
     if (ret < 0)
         ret = -errno;
     return JS_NewInt32(ctx, ret);
@@ -1288,7 +1347,7 @@ static int http_get_header_line(FILE *f, char *buf, size_t buf_size,
         c = fgetc(f);
         if (c < 0)
             return -1;
-        if ((p - buf) < buf_size - 1)
+        if ((size_t) (p - buf) < buf_size - 1)
             *p++ = c;
         if (dbuf)
             dbuf_putc(dbuf, c);
@@ -1592,7 +1651,7 @@ static JSValue js_os_open(JSContext *ctx, JSValueConst this_val,
     if (!(flags & O_TEXT))
         flags |= O_BINARY;
 #endif
-    ret = js_get_errno(open(filename, flags, mode));
+    ret = (int) js_get_errno(open(filename, flags, mode));
     JS_FreeCString(ctx, filename);
     return JS_NewInt32(ctx, ret);
 }
@@ -1603,7 +1662,7 @@ static JSValue js_os_close(JSContext *ctx, JSValueConst this_val,
     int fd, ret;
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
-    ret = js_get_errno(close(fd));
+    ret = (int) js_get_errno(close(fd));
     return JS_NewInt32(ctx, ret);
 }
 
@@ -1621,8 +1680,12 @@ static JSValue js_os_seek(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[2]))
         return JS_EXCEPTION;
-    ret = lseek(fd, pos, whence);
-    if (ret == -1)
+#ifdef _MSC_VER
+	ret = _lseeki64(fd, pos, whence);
+#else
+	ret = lseek(fd, pos, whence);
+#endif
+	if (ret == -1)
         ret = -errno;
     if (is_bigint)
         return JS_NewBigInt64(ctx, ret);
@@ -1650,11 +1713,19 @@ static JSValue js_os_read_write(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (pos + len > size)
         return JS_ThrowRangeError(ctx, "read/write array buffer overflow");
-    if (magic)
+
+#ifdef _MSC_VER
+	if (magic)
+		ret = js_get_errno(write(fd, buf + pos, (unsigned int) len));
+	else
+		ret = js_get_errno(read(fd, buf + pos, (unsigned int) len));
+#else
+	if (magic)
         ret = js_get_errno(write(fd, buf + pos, len));
     else
         ret = js_get_errno(read(fd, buf + pos, len));
-    return JS_NewInt64(ctx, ret);
+#endif
+	return JS_NewInt64(ctx, ret);
 }
 
 static JSValue js_os_isatty(JSContext *ctx, JSValueConst this_val,
@@ -1792,7 +1863,7 @@ static JSValue js_os_remove(JSContext *ctx, JSValueConst this_val,
 #else
     ret = remove(filename);
 #endif
-    ret = js_get_errno(ret);
+    ret = (int) js_get_errno(ret);
     JS_FreeCString(ctx, filename);
     return JS_NewInt32(ctx, ret);
 }
@@ -1811,7 +1882,7 @@ static JSValue js_os_rename(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, oldpath);
         return JS_EXCEPTION;
     }
-    ret = js_get_errno(rename(oldpath, newpath));
+    ret = (int) js_get_errno(rename(oldpath, newpath));
     JS_FreeCString(ctx, oldpath);
     JS_FreeCString(ctx, newpath);
     return JS_NewInt32(ctx, ret);
@@ -1913,7 +1984,7 @@ static void os_signal_handler(int sig_num)
 }
 
 #if defined(_WIN32)
-typedef void (*sighandler_t)(int sig_num);
+typedef void (*mysighandler_t)(int sig_num);
 #endif
 
 static JSValue js_os_signal(JSContext *ctx, JSValueConst this_val,
@@ -1924,7 +1995,7 @@ static JSValue js_os_signal(JSContext *ctx, JSValueConst this_val,
     JSOSSignalHandler *sh;
     uint32_t sig_num;
     JSValueConst func;
-    sighandler_t handler;
+    mysighandler_t handler;
 
     if (!is_main_thread(rt))
         return JS_ThrowTypeError(ctx, "signal handler can only be set in the main thread");
@@ -1970,6 +2041,17 @@ static int64_t get_time_ms(void)
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 }
+#elif defined(_WIN32) && defined(_MSC_VER)
+/* more portable, but does not work if the date is updated */
+static int64_t get_time_ms(void)
+{
+	struct _timeb tb;
+
+	_ftime(&tb);
+	return (int64_t)tb.time * 1000 + (tb.millitm);
+
+}
+
 #else
 /* more portable, but does not work if the date is updated */
 static int64_t get_time_ms(void)
@@ -2075,6 +2157,86 @@ static void call_handler(JSContext *ctx, JSValueConst func)
     JS_FreeValue(ctx, ret);
 }
 
+
+#ifdef USE_WORKER
+
+static void js_free_message(JSWorkerMessage *msg);
+
+/* return 1 if a message was handled, 0 if no message */
+static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
+	JSWorkerMessageHandler *port)
+{
+	JSWorkerMessagePipe *ps = port->recv_pipe;
+	int ret;
+	struct list_head *el;
+	JSWorkerMessage *msg;
+	JSValue obj, data_obj, func, retval;
+
+	gf_mx_p(ps->mutex);
+	if (!list_empty(&ps->msg_queue)) {
+		el = ps->msg_queue.next;
+		msg = list_entry(el, JSWorkerMessage, link);
+
+		/* remove the message from the queue */
+		list_del(&msg->link);
+
+		if (list_empty(&ps->msg_queue)) {
+			uint8_t buf[16];
+			int ret;
+			for (;;) {
+				ret = read(ps->read_fd, buf, sizeof(buf));
+				if (ret >= 0)
+					break;
+				if (errno != EAGAIN && errno != EINTR)
+					break;
+			}
+		}
+
+		gf_mx_v(ps->mutex);
+
+		data_obj = JS_ReadObject(ctx, msg->data, msg->data_len,
+			JS_READ_OBJ_SAB | JS_READ_OBJ_REFERENCE);
+
+		js_free_message(msg);
+
+		if (JS_IsException(data_obj))
+			goto fail;
+		obj = JS_NewObject(ctx);
+		if (JS_IsException(obj)) {
+			JS_FreeValue(ctx, data_obj);
+			goto fail;
+		}
+		JS_DefinePropertyValueStr(ctx, obj, "data", data_obj, JS_PROP_C_W_E);
+
+		/* 'func' might be destroyed when calling itself (if it frees the
+		handler), so must take extra care */
+		func = JS_DupValue(ctx, port->on_message_func);
+		retval = JS_Call(ctx, func, JS_UNDEFINED, 1, (JSValueConst *)&obj);
+		JS_FreeValue(ctx, obj);
+		JS_FreeValue(ctx, func);
+		if (JS_IsException(retval)) {
+		fail:
+			js_std_dump_error(ctx);
+		}
+		else {
+			JS_FreeValue(ctx, retval);
+		}
+		ret = 1;
+	}
+	else {
+		gf_mx_v(ps->mutex);
+		ret = 0;
+	}
+	return ret;
+}
+#else
+static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
+	JSWorkerMessageHandler *port)
+{
+	return 0;
+}
+#endif
+
 #if defined(_WIN32)
 
 static int js_os_poll(JSContext *ctx)
@@ -2088,8 +2250,8 @@ static int js_os_poll(JSContext *ctx)
     
     /* XXX: handle signals if useful */
 
-    if (list_empty(&ts->os_rw_handlers) && list_empty(&ts->os_timers))
-        return -1; /* no more events */
+    if (list_empty(&ts->os_rw_handlers) && list_empty(&ts->os_timers) && list_empty(&ts->port_list))
+		return -1; /* no more events */
     
     /* XXX: only timers and basic console input are supported */
     if (!list_empty(&ts->os_timers)) {
@@ -2110,7 +2272,7 @@ static int js_os_poll(JSContext *ctx)
                 JS_FreeValue(ctx, func);
                 return 0;
             } else if (delay < min_delay) {
-                min_delay = delay;
+                min_delay = (int) delay;
             }
         }
     } else {
@@ -2125,6 +2287,20 @@ static int js_os_poll(JSContext *ctx)
             break;
         }
     }
+
+	list_for_each(el, &ts->port_list) {
+		JSWorkerMessageHandler *port = list_entry(el, JSWorkerMessageHandler, link);
+		if (!JS_IsNull(port->on_message_func)) {
+			JSWorkerMessagePipe *ps = port->recv_pipe;
+			gf_mx_p(ps->mutex);
+			if (!list_empty(&ps->msg_queue)) {
+				console_fd = ps->read_fd;
+				gf_mx_v(ps->mutex);
+				break;
+			}
+			gf_mx_v(ps->mutex);
+		}
+	}
 
     if (console_fd >= 0) {
         DWORD ti, ret;
@@ -2144,90 +2320,27 @@ static int js_os_poll(JSContext *ctx)
                     break;
                 }
             }
-        }
-    } else {
-        Sleep(min_delay);
+
+			list_for_each(el, &ts->port_list) {
+				JSWorkerMessageHandler *port = list_entry(el, JSWorkerMessageHandler, link);
+				if (!JS_IsNull(port->on_message_func)) {
+					JSWorkerMessagePipe *ps = port->recv_pipe;
+					if (ps->read_fd == console_fd) {
+						if (handle_posted_message(rt, ctx, port))
+							break;
+					}
+				}
+			}
+		}
+	}
+	//do not block if main thread !
+	else if (!ts->recv_pipe || ts->terminated) {
+		return -1;
     }
     return 0;
 }
 #else
 
-#ifdef USE_WORKER
-
-static void js_free_message(JSWorkerMessage *msg);
-
-/* return 1 if a message was handled, 0 if no message */
-static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
-                                 JSWorkerMessageHandler *port)
-{
-    JSWorkerMessagePipe *ps = port->recv_pipe;
-    int ret;
-    struct list_head *el;
-    JSWorkerMessage *msg;
-    JSValue obj, data_obj, func, retval;
-    
-    pthread_mutex_lock(&ps->mutex);
-    if (!list_empty(&ps->msg_queue)) {
-        el = ps->msg_queue.next;
-        msg = list_entry(el, JSWorkerMessage, link);
-
-        /* remove the message from the queue */
-        list_del(&msg->link);
-
-        if (list_empty(&ps->msg_queue)) {
-            uint8_t buf[16];
-            int ret;
-            for(;;) {
-                ret = read(ps->read_fd, buf, sizeof(buf));
-                if (ret >= 0)
-                    break;
-                if (errno != EAGAIN && errno != EINTR)
-                    break;
-            }
-        }
-
-        pthread_mutex_unlock(&ps->mutex);
-
-        data_obj = JS_ReadObject(ctx, msg->data, msg->data_len,
-                                 JS_READ_OBJ_SAB | JS_READ_OBJ_REFERENCE);
-
-        js_free_message(msg);
-        
-        if (JS_IsException(data_obj))
-            goto fail;
-        obj = JS_NewObject(ctx);
-        if (JS_IsException(obj)) {
-            JS_FreeValue(ctx, data_obj);
-            goto fail;
-        }
-        JS_DefinePropertyValueStr(ctx, obj, "data", data_obj, JS_PROP_C_W_E);
-
-        /* 'func' might be destroyed when calling itself (if it frees the
-           handler), so must take extra care */
-        func = JS_DupValue(ctx, port->on_message_func);
-        retval = JS_Call(ctx, func, JS_UNDEFINED, 1, (JSValueConst *)&obj);
-        JS_FreeValue(ctx, obj);
-        JS_FreeValue(ctx, func);
-        if (JS_IsException(retval)) {
-        fail:
-            js_std_dump_error(ctx);
-        } else {
-            JS_FreeValue(ctx, retval);
-        }
-        ret = 1;
-    } else {
-        pthread_mutex_unlock(&ps->mutex);
-        ret = 0;
-    }
-    return ret;
-}
-#else
-static int handle_posted_message(JSRuntime *rt, JSContext *ctx,
-                                 JSWorkerMessageHandler *port)
-{
-    return 0;
-}
-#endif
 
 static int js_os_poll(JSContext *ctx)
 {
@@ -2286,8 +2399,14 @@ static int js_os_poll(JSContext *ctx)
         tv.tv_usec = (min_delay % 1000) * 1000;
         tvp = &tv;
     } else {
+#ifdef GPAC_HAS_QJS
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+        tvp = &tv;
+#else
         tvp = NULL;
-    }
+#endif
+	}
     
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
@@ -2339,7 +2458,11 @@ static int js_os_poll(JSContext *ctx)
             }
         }
     }
-    done:
+    //do not block if main thread !
+    else if (!ts->recv_pipe || ts->terminated) {
+		return -1;
+	}
+done:
     return 0;
 }
 #endif /* !_WIN32 */
@@ -2393,7 +2516,7 @@ static JSValue js_os_chdir(JSContext *ctx, JSValueConst this_val,
     target = JS_ToCString(ctx, argv[0]);
     if (!target)
         return JS_EXCEPTION;
-    err = js_get_errno(chdir(target));
+    err = (int) js_get_errno(chdir(target));
     JS_FreeCString(ctx, target);
     return JS_NewInt32(ctx, err);
 }
@@ -2415,7 +2538,7 @@ static JSValue js_os_mkdir(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 #if defined(_WIN32)
     (void)mode;
-    ret = js_get_errno(mkdir(path));
+    ret = (int) js_get_errno(mkdir(path));
 #else
     ret = js_get_errno(mkdir(path, mode));
 #endif
@@ -2427,7 +2550,10 @@ static JSValue js_os_mkdir(JSContext *ctx, JSValueConst this_val,
 static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path;
+#if defined(_WIN32) && defined(_MSC_VER)
+	return JS_EXCEPTION;
+#else
+	const char *path;
     DIR *f;
     struct dirent *d;
     JSValue obj;
@@ -2465,6 +2591,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
     closedir(f);
  done:
     return make_obj_error(ctx, obj, err);
+#endif
 }
 
 #if !defined(_WIN32)
@@ -2594,7 +2721,7 @@ static JSValue js_os_utimes(JSContext *ctx, JSValueConst this_val,
         struct _utimbuf times;
         times.actime = atime / 1000;
         times.modtime = mtime / 1000;
-        ret = js_get_errno(_utime(path, &times));
+        ret = (int) js_get_errno(_utime(path, &times));
     }
 #else
     {
@@ -2623,7 +2750,7 @@ static JSValue js_os_sleep(JSContext *ctx, JSValueConst this_val,
     {
         if (delay > INT32_MAX)
             delay = INT32_MAX;
-        Sleep(delay);
+        Sleep((DWORD) delay);
         ret = 0;
     }
 #else
@@ -3058,26 +3185,6 @@ static JSValue js_os_waitpid(JSContext *ctx, JSValueConst this_val,
     return obj;
 }    
 
-/* pipe() -> [read_fd, write_fd] or null if error */
-static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    int pipe_fds[2], ret;
-    JSValue obj;
-    
-    ret = pipe(pipe_fds);
-    if (ret < 0)
-        return JS_NULL;
-    obj = JS_NewArray(ctx);
-    if (JS_IsException(obj))
-        return obj;
-    JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, pipe_fds[0]),
-                                 JS_PROP_C_W_E);
-    JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, pipe_fds[1]),
-                                 JS_PROP_C_W_E);
-    return obj;
-}
-
 /* kill(pid, sig) */
 static JSValue js_os_kill(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
@@ -3092,33 +3199,328 @@ static JSValue js_os_kill(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, ret);
 }
 
+#else //_WIN32
+
+static char *build_envp_win(JSContext *ctx, JSValueConst obj)
+{
+	uint32_t len, i;
+	JSPropertyEnum *tab;
+	char *envp = NULL;
+	int envp_len = 0;
+	const char *key, *str;
+	JSValue val;
+	size_t key_len, str_len;
+
+	if (JS_GetOwnPropertyNames(ctx, &tab, &len, obj, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
+		return NULL;
+
+	for (i = 0; i < len; i++) {
+		val = JS_GetProperty(ctx, obj, tab[i].atom);
+		if (JS_IsException(val))
+			goto fail;
+		str = JS_ToCString(ctx, val);
+		JS_FreeValue(ctx, val);
+		if (!str)
+			goto fail;
+		key = JS_AtomToCString(ctx, tab[i].atom);
+		if (!key) {
+			JS_FreeCString(ctx, str);
+			goto fail;
+		}
+		key_len = strlen(key);
+		str_len = strlen(str);
+		envp = js_realloc(ctx, envp, envp_len + key_len + str_len + 3);
+		if (!envp) {
+			JS_FreeCString(ctx, key);
+			JS_FreeCString(ctx, str);
+			goto fail;
+		}
+		memcpy(envp + envp_len, key, key_len);
+		envp[envp_len+key_len] = '=';
+		memcpy(envp + envp_len + key_len + 1, str, str_len);
+		envp[envp_len + key_len + 1 + str_len] = '\0';
+		//prepare final \0
+		envp[envp_len + key_len + 2 + str_len] = '\0';
+		envp_len += (int) (key_len + 2 + str_len);
+
+		JS_FreeCString(ctx, key);
+		JS_FreeCString(ctx, str);
+	}
+done:
+	for (i = 0; i < len; i++)
+		JS_FreeAtom(ctx, tab[i].atom);
+	js_free(ctx, tab);
+	return envp;
+fail:
+	if (envp) {
+		js_free(ctx, envp);
+		envp = NULL;
+	}
+	goto done;
+}
+
+/* exec(args[, options]) -> exitcode */
+static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
+	int argc, JSValueConst *argv)
+{
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	JSValueConst options, args = argv[0];
+	JSValue val, ret_val;
+	char *exec_argv = NULL, *file = NULL, *cwd = NULL;
+	char *envp = NULL;
+	uint32_t exec_argc, i;
+	int ret;
+	BOOL block_flag = TRUE, use_path = TRUE;
+
+	val = JS_GetPropertyStr(ctx, args, "length");
+	if (JS_IsException(val))
+		return JS_EXCEPTION;
+	ret = JS_ToUint32(ctx, &exec_argc, val);
+	JS_FreeValue(ctx, val);
+	if (ret)
+		return JS_EXCEPTION;
+	/* arbitrary limit to avoid overflow */
+	if (exec_argc < 1 || exec_argc > 65535) {
+		return JS_ThrowTypeError(ctx, "invalid number of arguments");
+	}
+	for (i = 0; i < exec_argc; i++) {
+		char *str;
+		val = JS_GetPropertyUint32(ctx, args, i);
+		if (JS_IsException(val))
+			goto exception;
+		str = (char *) JS_ToCString(ctx, val);
+		JS_FreeValue(ctx, val);
+		if (!str)
+			goto exception;
+		gf_dynstrcat(&exec_argv, str, " ");
+		JS_FreeCString(ctx, str);
+	}
+
+	/* get the options, if any */
+	if (argc >= 2) {
+		options = argv[1];
+
+		if (get_bool_option(ctx, &block_flag, options, "block"))
+			goto exception;
+		if (get_bool_option(ctx, &use_path, options, "usePath"))
+			goto exception;
+
+		val = JS_GetPropertyStr(ctx, options, "cwd");
+		if (JS_IsException(val))
+			goto exception;
+		if (!JS_IsUndefined(val)) {
+			cwd = (char *) JS_ToCString(ctx, val);
+			JS_FreeValue(ctx, val);
+			if (!cwd)
+				goto exception;
+		}
+
+		val = JS_GetPropertyStr(ctx, options, "file");
+		if (JS_IsException(val))
+			goto exception;
+		if (!JS_IsUndefined(val)) {
+			file = (char *) JS_ToCString(ctx, val);
+			JS_FreeValue(ctx, val);
+			if (!file)
+				goto exception;
+		}
+
+		val = JS_GetPropertyStr(ctx, options, "env");
+		if (JS_IsException(val))
+			goto exception;
+		if (!JS_IsUndefined(val)) {
+			envp = build_envp_win(ctx, val);
+			JS_FreeValue(ctx, val);
+			if (!envp)
+				goto exception;
+		}
+	}
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+
+	// Start the child process. 
+	if (!CreateProcess(file, exec_argv, NULL, NULL, FALSE, 0, envp, cwd, &si, &pi)) {
+		JS_ThrowTypeError(ctx, "CreateProcess error");
+		goto exception;
+	}
+
+	/* parent */
+	if (block_flag) {
+		// Wait until child process exits.
+		WaitForSingleObject(pi.hProcess, INFINITE);
+
+		GetExitCodeProcess(pi.hProcess, &ret);
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+		ret_val = JS_NewInt32(ctx, ret);
+	} else {
+		ret_val = JS_NewArray(ctx);
+		if (JS_IsException(ret_val))
+			return ret_val;
+		JS_DefinePropertyValueUint32(ctx, ret_val, 0, JS_NewInt64(ctx, (int64_t) pi.hProcess), JS_PROP_C_W_E);
+		JS_DefinePropertyValueUint32(ctx, ret_val, 1, JS_NewInt64(ctx, (int64_t) pi.hThread), JS_PROP_C_W_E);
+	}
+
+done:
+	JS_FreeCString(ctx, file);
+	JS_FreeCString(ctx, cwd);
+
+	gf_free(exec_argv);
+	if (envp) js_free(ctx, envp);
+	return ret_val;
+
+exception:
+	ret_val = JS_EXCEPTION;
+	goto done;
+}
+
+/* waitpid(pid, block) -> [pid, status] */
+static JSValue js_os_waitpid(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+	HANDLE hProcess, hThread;
+	int64_t lval;
+	int status, options, ret, is_over=0;
+	JSValue obj, val;
+	DWORD rval;
+	if (argc < 2) return JS_EXCEPTION;
+
+	val = JS_GetPropertyUint32(ctx, argv[0], 0);
+	if (JS_IsException(val)) return JS_EXCEPTION;
+	ret = JS_ToInt64(ctx, &lval, val);
+	JS_FreeValue(ctx, val);
+	if (ret) return JS_EXCEPTION;
+	hProcess = (HANDLE) lval;
+
+	val = JS_GetPropertyUint32(ctx, argv[0], 1);
+	if (JS_IsException(val)) return JS_EXCEPTION;
+	ret = JS_ToInt64(ctx, &lval, val);
+	JS_FreeValue(ctx, val);
+	if (ret) return JS_EXCEPTION;
+	hThread = (HANDLE)lval;
+
+	if (JS_ToInt32(ctx, &options, argv[1]))
+		return JS_EXCEPTION;
+
+	if (!hProcess || !hThread) {
+		ret = 0;
+		status = 0;
+		is_over = 1;
+	} else {
+		rval = WaitForSingleObject(hProcess, options ? 1 : INFINITE);
+		if (rval == WAIT_TIMEOUT) {
+			ret = 0;
+			status = 0;
+		}
+		else if (rval == WAIT_OBJECT_0) {
+			ret = 0;
+			GetExitCodeProcess(hProcess, &status);
+			CloseHandle(hProcess);
+			CloseHandle(hThread);
+			JS_SetPropertyUint32(ctx, argv[0], 0, JS_NewInt64(ctx, 0));
+			JS_SetPropertyUint32(ctx, argv[0], 1, JS_NewInt64(ctx, 0));
+			is_over = 1;
+		}
+		else {
+			status = GetLastError();
+		}
+	}
+	obj = JS_NewArray(ctx);
+	if (JS_IsException(obj))
+		return obj;
+	JS_DefinePropertyValueUint32(ctx, obj, 0, is_over ? JS_DupValue(ctx, argv[0]) : JS_NewInt32(ctx, ret), JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, status), JS_PROP_C_W_E);
+	return obj;
+}
+
+/* kill(pid, sig) */
+static JSValue js_os_kill(JSContext *ctx, JSValueConst this_val,
+	int argc, JSValueConst *argv)
+{
+	int sig, ret;
+	JSValue val;
+	int64_t lval;
+	HANDLE hProcess, hThread;
+
+	val = JS_GetPropertyUint32(ctx, argv[0], 0);
+	if (JS_IsException(val)) return JS_EXCEPTION;
+	ret = JS_ToInt64(ctx, &lval, val);
+	JS_FreeValue(ctx, val);
+	if (ret) return JS_EXCEPTION;
+	hProcess = (HANDLE)lval;
+	if (!hProcess) return JS_EXCEPTION;
+
+	val = JS_GetPropertyUint32(ctx, argv[0], 1);
+	if (JS_IsException(val)) return JS_EXCEPTION;
+	ret = JS_ToInt64(ctx, &lval, val);
+	JS_FreeValue(ctx, val);
+	if (ret) return JS_EXCEPTION;
+	hThread = (HANDLE)lval;
+	if (!hThread) return JS_EXCEPTION;
+
+	if (JS_ToInt32(ctx, &sig, argv[1]))
+		return JS_EXCEPTION;
+	ret = TerminateProcess(hProcess, sig);
+
+	CloseHandle(hProcess);
+	CloseHandle(hThread);
+	JS_SetPropertyUint32(ctx, argv[0], 0, JS_NewInt64(ctx, 0));
+	JS_SetPropertyUint32(ctx, argv[0], 1, JS_NewInt64(ctx, 0));
+
+	return JS_NewInt32(ctx, ret);
+}
+
+
+#endif /* !_WIN32 */
+
+/* pipe() -> [read_fd, write_fd] or null if error */
+static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
+	int argc, JSValueConst *argv)
+{
+	int pipe_fds[2], ret;
+	JSValue obj;
+
+	ret = pipe(pipe_fds);
+	if (ret < 0)
+		return JS_NULL;
+	obj = JS_NewArray(ctx);
+	if (JS_IsException(obj))
+		return obj;
+	JS_DefinePropertyValueUint32(ctx, obj, 0, JS_NewInt32(ctx, pipe_fds[0]),
+		JS_PROP_C_W_E);
+	JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, pipe_fds[1]),
+		JS_PROP_C_W_E);
+	return obj;
+}
+
 /* dup(fd) */
 static JSValue js_os_dup(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
+	int argc, JSValueConst *argv)
 {
-    int fd, ret;
-    
-    if (JS_ToInt32(ctx, &fd, argv[0]))
-        return JS_EXCEPTION;
-    ret = js_get_errno(dup(fd));
-    return JS_NewInt32(ctx, ret);
+	int fd, ret;
+
+	if (JS_ToInt32(ctx, &fd, argv[0]))
+		return JS_EXCEPTION;
+	ret = (int) js_get_errno(dup(fd));
+	return JS_NewInt32(ctx, ret);
 }
 
 /* dup2(fd) */
 static JSValue js_os_dup2(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
+	int argc, JSValueConst *argv)
 {
-    int fd, fd2, ret;
-    
-    if (JS_ToInt32(ctx, &fd, argv[0]))
-        return JS_EXCEPTION;
-    if (JS_ToInt32(ctx, &fd2, argv[1]))
-        return JS_EXCEPTION;
-    ret = js_get_errno(dup2(fd, fd2));
-    return JS_NewInt32(ctx, ret);
+	int fd, fd2, ret;
+
+	if (JS_ToInt32(ctx, &fd, argv[0]))
+		return JS_EXCEPTION;
+	if (JS_ToInt32(ctx, &fd2, argv[1]))
+		return JS_EXCEPTION;
+	ret = (int) js_get_errno(dup2(fd, fd2));
+	return JS_NewInt32(ctx, ret);
 }
 
-#endif /* !_WIN32 */
 
 #ifdef USE_WORKER
 
@@ -3128,12 +3530,15 @@ typedef struct {
     JSWorkerMessagePipe *recv_pipe;
     JSWorkerMessagePipe *send_pipe;
     JSWorkerMessageHandler *msg_handler;
+	JSThreadState *ts;
+	GF_Thread *th;
 } JSWorkerData;
 
 typedef struct {
     char *filename; /* module filename */
     char *basename; /* module base name */
     JSWorkerMessagePipe *recv_pipe, *send_pipe;
+	JSWorkerData *worker;
 } WorkerFuncArgs;
 
 typedef struct {
@@ -3146,7 +3551,11 @@ static JSContext *(*js_worker_new_context_func)(JSRuntime *rt);
 
 static int atomic_add_int(int *ptr, int v)
 {
-    return atomic_fetch_add((_Atomic(uint32_t) *)ptr, v) + v;
+#if defined(WIN32) && !defined(__GNUC__)
+	return _InterlockedExchangeAdd((long volatile*)ptr, (long)v) + v;
+#else
+	return atomic_fetch_add((_Atomic(uint32_t) *)ptr, v) + v;
+#endif
 }
 
 /* shared array buffer allocator */
@@ -3183,6 +3592,7 @@ static JSWorkerMessagePipe *js_new_message_pipe(void)
 {
     JSWorkerMessagePipe *ps;
     int pipe_fds[2];
+	char mxName[200];
     
     if (pipe(pipe_fds) < 0)
         return NULL;
@@ -3195,7 +3605,8 @@ static JSWorkerMessagePipe *js_new_message_pipe(void)
     }
     ps->ref_count = 1;
     init_list_head(&ps->msg_queue);
-    pthread_mutex_init(&ps->mutex, NULL);
+	sprintf(mxName, "Worker%pMx", ps);
+	ps->mutex = gf_mx_new(mxName);
     ps->read_fd = pipe_fds[0];
     ps->write_fd = pipe_fds[1];
     return ps;
@@ -3235,7 +3646,7 @@ static void js_free_message_pipe(JSWorkerMessagePipe *ps)
             msg = list_entry(el, JSWorkerMessage, link);
             js_free_message(msg);
         }
-        pthread_mutex_destroy(&ps->mutex);
+        gf_mx_del(ps->mutex);
         close(ps->read_fd);
         close(ps->write_fd);
         free(ps);
@@ -3256,9 +3667,15 @@ static void js_worker_finalizer(JSRuntime *rt, JSValue val)
 {
     JSWorkerData *worker = JS_GetOpaque(val, js_worker_class_id);
     if (worker) {
-        js_free_message_pipe(worker->recv_pipe);
+		js_free_message_pipe(worker->recv_pipe);
         js_free_message_pipe(worker->send_pipe);
         js_free_port(rt, worker->msg_handler);
+        //worker obj from parent script, indicate the worker can be terminated
+		if (worker->ts)
+			worker->ts->terminated = 1;
+        //worker obj from parent script, wait for thread exit
+        if (worker->th)
+			gf_th_del(worker->th);
         js_free_rt(rt, worker);
     }
 }
@@ -3268,10 +3685,13 @@ static JSClassDef js_worker_class = {
     .finalizer = js_worker_finalizer,
 }; 
 
-static void *worker_func(void *opaque)
+static void js_std_free_handlers_ex(JSRuntime *rt, int no_free_ts);
+
+static unsigned int worker_func(void *opaque)
 {
     WorkerFuncArgs *args = opaque;
     JSRuntime *rt;
+	JSWorkerData *worker;
     JSThreadState *ts;
     JSContext *ctx;
     
@@ -3288,17 +3708,25 @@ static void *worker_func(void *opaque)
     ts = JS_GetRuntimeOpaque(rt);
     ts->recv_pipe = args->recv_pipe;
     ts->send_pipe = args->send_pipe;
-    
+	worker = args->worker;
+	worker->ts = ts;
+
     /* function pointer to avoid linking the whole JS_NewContext() if
        not needed */
-    ctx = js_worker_new_context_func(rt);
+    ctx = js_worker_new_context_func ? js_worker_new_context_func(rt) : NULL;
     if (ctx == NULL) {
         fprintf(stderr, "JS_NewContext failure");
-    }
+		js_std_free_handlers(rt);
+		JS_FreeRuntime(rt);
+		return 1;
+	}
 
     JS_SetCanBlock(rt, TRUE);
 
+	//don't add log/pring/args in GPAC
+#ifndef GPAC_HAS_QJS
     js_std_add_helpers(ctx, -1, NULL);
+#endif
 
     if (!JS_RunModule(ctx, args->basename, args->filename))
         js_std_dump_error(ctx);
@@ -3306,12 +3734,17 @@ static void *worker_func(void *opaque)
     free(args->basename);
     free(args);
 
-    js_std_loop(ctx);
+	js_std_loop(ctx);
+	worker->ts = NULL;
+	worker->msg_handler = NULL;
 
     JS_FreeContext(ctx);
-    js_std_free_handlers(rt);
-    JS_FreeRuntime(rt);
-    return NULL;
+    //do not free JSThreadState yet, it is used to unlink ports in worker finalizer
+    js_std_free_handlers_ex(rt, 1);
+	JS_FreeRuntime(rt);
+
+    free(ts);
+    return 0;
 }
 
 static JSValue js_worker_ctor_internal(JSContext *ctx, JSValueConst new_target,
@@ -3351,9 +3784,7 @@ static JSValue js_worker_ctor(JSContext *ctx, JSValueConst new_target,
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
     WorkerFuncArgs *args = NULL;
-    pthread_t tid;
-    pthread_attr_t attr;
-    JSValue obj = JS_UNDEFINED;
+	JSValue obj = JS_UNDEFINED;
     int ret;
     const char *filename = NULL, *basename;
     JSAtom basename_atom;
@@ -3384,7 +3815,7 @@ static JSValue js_worker_ctor(JSContext *ctx, JSValueConst new_target,
         goto oom_fail;
     memset(args, 0, sizeof(*args));
     args->filename = strdup(filename);
-    args->basename = strdup(basename);
+	args->basename = strdup(basename);
 
     /* ports */
     args->recv_pipe = js_new_message_pipe();
@@ -3399,11 +3830,13 @@ static JSValue js_worker_ctor(JSContext *ctx, JSValueConst new_target,
     if (JS_IsException(obj))
         goto fail;
     
-    pthread_attr_init(&attr);
-    /* no join at the end */
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    ret = pthread_create(&tid, &attr, worker_func, args);
-    pthread_attr_destroy(&attr);
+    args->worker = JS_GetOpaque(obj, js_worker_class_id);
+    args->worker->th = gf_th_new(NULL);
+    if (!args->worker->th) {
+        goto oom_fail;
+    }
+
+	ret = gf_th_run(args->worker->th, worker_func, args);
     if (ret != 0) {
         JS_ThrowTypeError(ctx, "could not create worker");
         goto fail;
@@ -3474,7 +3907,7 @@ static JSValue js_worker_postMessage(JSContext *ctx, JSValueConst this_val,
     }
 
     ps = worker->send_pipe;
-    pthread_mutex_lock(&ps->mutex);
+    gf_mx_p(ps->mutex);
     /* indicate that data is present */
     if (list_empty(&ps->msg_queue)) {
         uint8_t ch = '\0';
@@ -3488,7 +3921,7 @@ static JSValue js_worker_postMessage(JSContext *ctx, JSValueConst this_val,
         }
     }
     list_add_tail(&msg->link, &ps->msg_queue);
-    pthread_mutex_unlock(&ps->mutex);
+    gf_mx_v(ps->mutex);
     return JS_UNDEFINED;
  fail:
     if (msg) {
@@ -3649,14 +4082,16 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_MAGIC_DEF("lstat", 1, js_os_stat, 1 ),
     JS_CFUNC_DEF("symlink", 2, js_os_symlink ),
     JS_CFUNC_DEF("readlink", 1, js_os_readlink ),
-    JS_CFUNC_DEF("exec", 1, js_os_exec ),
+	OS_FLAG(WNOHANG),
+#else
+	JS_PROP_INT32_DEF("WNOHANG", 1, JS_PROP_CONFIGURABLE),
+#endif
+	JS_CFUNC_DEF("exec", 1, js_os_exec ),
     JS_CFUNC_DEF("waitpid", 2, js_os_waitpid ),
-    OS_FLAG(WNOHANG),
     JS_CFUNC_DEF("pipe", 0, js_os_pipe ),
     JS_CFUNC_DEF("kill", 2, js_os_kill ),
-    JS_CFUNC_DEF("dup", 1, js_os_dup ),
-    JS_CFUNC_DEF("dup2", 2, js_os_dup2 ),
-#endif
+	JS_CFUNC_DEF("dup", 1, js_os_dup),
+	JS_CFUNC_DEF("dup2", 2, js_os_dup2),
 };
 
 static int js_os_init(JSContext *ctx, JSModuleDef *m)
@@ -3713,7 +4148,7 @@ JSModuleDef *js_init_module_os(JSContext *ctx, const char *module_name)
 }
 
 /**********************************************************/
-
+#ifndef GPAC_HAS_QJS
 static JSValue js_print(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
@@ -3763,6 +4198,7 @@ void js_std_add_helpers(JSContext *ctx, int argc, char **argv)
     
     JS_FreeValue(ctx, global_obj);
 }
+#endif
 
 void js_std_init_handlers(JSRuntime *rt)
 {
@@ -3794,7 +4230,7 @@ void js_std_init_handlers(JSRuntime *rt)
 #endif
 }
 
-void js_std_free_handlers(JSRuntime *rt)
+static void js_std_free_handlers_ex(JSRuntime *rt, int no_free_ts)
 {
     JSThreadState *ts = JS_GetRuntimeOpaque(rt);
     struct list_head *el, *el1;
@@ -3817,19 +4253,35 @@ void js_std_free_handlers(JSRuntime *rt)
     }
 
 #ifdef USE_WORKER
-    /* XXX: free port_list ? */
-    js_free_message_pipe(ts->recv_pipe);
+
+	//detach all ports (not doint so would result in leaks)
+	list_for_each(el, &ts->port_list) {
+		JSWorkerMessageHandler *port = list_entry(el, JSWorkerMessageHandler, link);
+		if (port && !JS_IsUndefined(port->on_message_func)) {
+			JS_FreeValueRT(rt, port->on_message_func);
+			port->on_message_func = JS_UNDEFINED;
+		}
+	}
+	js_free_message_pipe(ts->recv_pipe);
     js_free_message_pipe(ts->send_pipe);
 #endif
 
-    free(ts);
+    if (!no_free_ts)
+        free(ts);
     JS_SetRuntimeOpaque(rt, NULL); /* fail safe */
 }
 
+void js_std_free_handlers(JSRuntime *rt)
+{
+	js_std_free_handlers_ex(rt, 0);
+
+}
+//unused
+#ifndef GPAC_HAS_QJS
 static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
 {
     const char *str;
-    
+
     str = JS_ToCString(ctx, val);
     if (str) {
         fprintf(f, "%s\n", str);
@@ -3874,6 +4326,8 @@ void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
     }
 }
 
+#endif
+
 /* main loop which calls the user JS callbacks */
 void js_std_loop(JSContext *ctx)
 {
@@ -3896,6 +4350,9 @@ void js_std_loop(JSContext *ctx)
             break;
     }
 }
+
+//not exposed for now
+#ifndef GPAC_HAS_QJS
 
 void js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                         int load_only)
@@ -3925,3 +4382,6 @@ void js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
         JS_FreeValue(ctx, val);
     }
 }
+#endif
+
+#endif //GPAC_DISABLE_QJS_LIBC
