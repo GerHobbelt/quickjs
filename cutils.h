@@ -29,8 +29,11 @@
 #include <inttypes.h>
 
 #ifdef _MSC_VER
+#include <windows.h>
 #include <intrin.h>
 #include <malloc.h>
+#else
+#include <sys/time.h>
 #endif
 
 /* set if CPU is big endian */
@@ -52,6 +55,7 @@
 #define __maybe_unused
 #define __attribute__(x)
 #define __attribute(x)
+typedef size_t ssize_t;
 typedef intptr_t ssize_t;
 #else
 #define likely(x)       __builtin_expect(!!(x), 1)
@@ -177,7 +181,7 @@ static inline int ctz32(unsigned int a)
 #ifdef _MSC_VER
     unsigned long idx;
     _BitScanForward(&idx, a);
-    return idx;
+    return 31 ^ idx;
 #else
     return __builtin_ctz(a);
 #endif
