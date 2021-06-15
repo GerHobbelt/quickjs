@@ -83,7 +83,7 @@ install(TARGETS quickjs EXPORT quickjsTargets
 include(CMakePackageConfigHelpers)
 
 write_basic_package_version_file(quickjsConfigVersion.cmake
-  VERSION ${CONFIG_VERSION}
+  VERSION ${QUICKJS_CONFIG_VERSION}
   COMPATIBILITY SameMajorVersion
 )
 configure_package_config_file(quickjsConfig.cmake.in

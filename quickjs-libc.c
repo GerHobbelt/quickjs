@@ -54,7 +54,9 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 
-#if defined(__APPLE__)
+#if defined(__FreeBSD__)
+typedef sig_t sighandler_t;
+#elif defined(__APPLE__)
 #include <sys/syslimits.h>
 typedef sig_t sighandler_t;
 #if !defined(environ)
@@ -1090,7 +1092,7 @@ static JSValue js_std_file_tell(JSContext *ctx, JSValueConst this_val,
     int64_t pos;
     if (!f)
         return JS_EXCEPTION;
-#if defined(__linux__)
+#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24)
     pos = ftello(f);
 #else
     pos = ftell(f);
@@ -1113,7 +1115,7 @@ static JSValue js_std_file_seek(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[1]))
         return JS_EXCEPTION;
-#if defined(__linux__)
+#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24)
     ret = fseeko(f, pos, whence);
 #else
     ret = fseek(f, pos, whence);
@@ -1289,7 +1291,7 @@ static JSValue js_std_file_putByte(JSContext *ctx, JSValueConst this_val,
 
 /* urlGet */
 
-#define URL_GET_PROGRAM "curl -s -i"
+#define URL_GET_PROGRAM "curl -s -i --"
 #define URL_GET_BUF_SIZE 4096
 
 static int http_get_header_line(FILE *f, char *buf, size_t buf_size,
@@ -1362,16 +1364,22 @@ static JSValue js_std_urlGet(JSContext *ctx, JSValueConst this_val,
     }
     
     js_std_dbuf_init(ctx, &cmd_buf);
-    dbuf_printf(&cmd_buf, "%s ''", URL_GET_PROGRAM);
+    dbuf_printf(&cmd_buf, "%s '", URL_GET_PROGRAM);
     len = strlen(url);
     for(i = 0; i < len; i++) {
-        c = url[i];
-        if (c == '\'' || c == '\\')
+        switch (c = url[i]) {
+        case '\'':
+            dbuf_putstr(&cmd_buf, "'\\''");
+            break;
+        case '[': case ']': case '{': case '}': case '\\':
             dbuf_putc(&cmd_buf, '\\');
-        dbuf_putc(&cmd_buf, c);
+            /* FALLTHROUGH */
+        default:
+            dbuf_putc(&cmd_buf, c);
+        }
     }
     JS_FreeCString(ctx, url);
-    dbuf_putstr(&cmd_buf, "''");
+    dbuf_putstr(&cmd_buf, "'");
     dbuf_putc(&cmd_buf, '\0');
     if (dbuf_error(&cmd_buf)) {
         dbuf_free(&cmd_buf);
@@ -2701,7 +2709,7 @@ static char **build_envp(JSContext *ctx, JSValueConst obj)
 /* execvpe is not available on non GNU systems */
 static int my_execvpe(const char *filename, char **argv, char **envp)
 {
-    char *path, *p, *p_next, *p1;
+    const char *path, *p, *p_next, *p1;
     char buf[PATH_MAX];
     size_t filename_len, path_len;
     BOOL eacces_error;
@@ -2716,7 +2724,7 @@ static int my_execvpe(const char *filename, char **argv, char **envp)
     
     path = getenv("PATH");
     if (!path)
-        path = (char *)"/bin:/usr/bin";
+        path = "/bin:/usr/bin";
     eacces_error = FALSE;
     p = path;
     for(p = path; p != NULL; p = p_next) {

@@ -80,7 +80,7 @@
 /* dump objects freed by the garbage collector */
 //#define DUMP_GC_FREE
 /* dump objects leaking when freeing the runtime */
-//#define DUMP_LEAKS  1
+#define DUMP_LEAKS  1
 /* dump memory usage before running the garbage collector */
 //#define DUMP_MEM
 //#define DUMP_OBJECTS    /* dump objects in JS_FreeContext */
@@ -2165,15 +2165,13 @@ static inline void set_value(JSContext *ctx, JSValue *pval, JSValue new_val)
 
 void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj)
 {
-    JSRuntime *rt = ctx->rt;
-    assert(class_id < rt->class_count);
+    assert(class_id < ctx->rt->class_count);
     set_value(ctx, &ctx->class_proto[class_id], obj);
 }
 
 JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id)
 {
-    JSRuntime *rt = ctx->rt;
-    assert(class_id < rt->class_count);
+    assert(class_id < ctx->rt->class_count);
     return JS_DupValue(ctx, ctx->class_proto[class_id]);
 }
 
@@ -3866,26 +3864,17 @@ JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
             } else {
                 /* parse utf-8 sequence, return 0xFFFFFFFF for error */
                 c = unicode_from_utf8(p, p_end - p, &p_next);
-                if (c < 0x10000) {
+                if (c < 0xd800 || (c >= 0xe000 && c < 0x10000)) {
                     p = p_next;
-                } else if (c <= 0x10FFFF) {
+                } else if (c >= 0x10000 && c <= 0x10FFFF) {
                     p = p_next;
                     /* surrogate pair */
                     c -= 0x10000;
                     string_buffer_putc16(b, (c >> 10) + 0xd800);
                     c = (c & 0x3ff) + 0xdc00;
                 } else {
-                    /* invalid char */
-                    c = 0xfffd;
-                    /* skip the invalid chars */
-                    /* XXX: seems incorrect. Why not just use c = *p++; ? */
-                    while (p < p_end && (*p >= 0x80 && *p < 0xc0))
-                        p++;
-                    if (p < p_end) {
-                        p++;
-                        while (p < p_end && (*p >= 0x80 && *p < 0xc0))
-                            p++;
-                    }
+                    /* XXX: PEP 383-style non-decodable byte smuggling */
+                    c = 0xdc80 | *p++;
                 }
                 string_buffer_putc16(b, c);
             }
@@ -6170,7 +6159,7 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
 #ifdef CONFIG_BIGNUM
             "BigNum "
 #endif
-            CONFIG_VERSION " version, %d-bit, malloc limit: %"PRId64"\n\n",
+            QUICKJS_CONFIG_VERSION " version, %d-bit, malloc limit: %"PRId64"\n\n",
             (int)sizeof(void *) * 8, (int64_t)(ssize_t)s->malloc_limit);
 #if 1
     if (rt) {

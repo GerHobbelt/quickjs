@@ -34,9 +34,16 @@
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
 #include <unistd.h>
+#elif defined(__FreeBSD__)
+#include <malloc_np.h>
+#include <unistd.h>
 #elif defined(__linux__)
 #include <malloc.h>
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
 #endif
 
 #include "cutils.h"
@@ -252,9 +259,9 @@ static const JSMallocFunctions trace_mf = {
 
 #define PROG_NAME "qjs"
 
-void help(void)
+static void help(void)
 {
-    printf("QuickJS version " CONFIG_VERSION "\n"
+    printf("QuickJS version " QUICKJS_CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [file [args]]\n"
            "-h  --help         list options\n"
            "-e  --eval EXPR    evaluate EXPR\n"
@@ -273,16 +280,19 @@ void help(void)
            "    --stack-size n         limit the stack size to 'n' bytes\n"
            "    --unhandled-rejection  dump unhandled promise rejections\n"
            "-q  --quit         just instantiate the interpreter and quit\n");
-    exit(1);
 }
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+int qjs_main(int argc, const char** argv)
+#else
+int main(int argc, const char **argv)
+#endif
 {
     JSRuntime *rt;
     JSContext *ctx;
     struct trace_malloc_data trace_data = { NULL };
     int optind;
-    char *expr = NULL;
+    const char *expr = NULL;
     int interactive = 0;
     int dump_memory = 0;
     int trace_memory = 0;
@@ -322,7 +332,7 @@ int main(int argc, char **argv)
        the script */
     optind = 1;
     while (optind < argc && *argv[optind] == '-') {
-        char *arg = argv[optind] + 1;
+        const char *arg = argv[optind] + 1;
         const char *longopt = "";
         /* a single - is not an option, it also stops argument scanning */
         if (!*arg)
@@ -341,9 +351,10 @@ int main(int argc, char **argv)
                 arg++;
             if (opt == 'h' || opt == '?' || !strcmp(longopt, "help")) {
                 help();
-                continue;
+				return EXIT_FAILURE;
             }
             if (opt == 'e' || !strcmp(longopt, "eval")) {
+                dump_unhandled_promise_rejection = 1;
                 if (*arg) {
                     expr = arg;
                     break;
@@ -431,6 +442,7 @@ int main(int argc, char **argv)
                 fprintf(stderr, "qjs: unknown option '--%s'\n", longopt);
             }
             help();
+			return EXIT_FAILURE;
         }
     }
 
@@ -492,7 +504,13 @@ int main(int argc, char **argv)
         }
 
         if (expr) {
-            if (eval_buf(ctx, expr, strlen(expr), "<cmdline>", 0))
+            int eval_flags;
+            size_t buf_len = strlen(expr);
+            if (!module || (module < 0 && !JS_DetectModule(expr, buf_len)))
+                eval_flags = JS_EVAL_TYPE_GLOBAL;
+            else
+                eval_flags = JS_EVAL_TYPE_MODULE;
+            if (eval_buf(ctx, expr, buf_len, "<cmdline>", eval_flags))
                 goto fail;
         } else
         if (optind >= argc) {
@@ -543,11 +561,12 @@ int main(int argc, char **argv)
                best[1] + best[2] + best[3] + best[4],
                best[1], best[2], best[3], best[4]);
     }
-    return 0;
+    return EXIT_SUCCESS;
+
  fail:
     js_std_free_handlers(rt);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
     JS_Finalize();
-    return 1;
+    return EXIT_FAILURE;
 }
