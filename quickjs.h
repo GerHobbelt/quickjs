@@ -25,13 +25,18 @@
 #ifndef QUICKJS_H
 #define QUICKJS_H
 
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 
+#include "quickjs_version.h"
+
+#ifndef JS_EXPORT
 #ifdef _WIN32
   #define JS_EXPORT __declspec(dllexport)
 #else
   #define JS_EXPORT /* nothing */
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -46,7 +51,7 @@ extern "C" {
 #else
 #define js_likely(x)     (x)
 #define js_unlikely(x)   (x)
-#define js_force_inline  inline
+#define js_force_inline  __forceinline
 #define __js_printf_like(a, b)
 #endif
 
@@ -320,6 +325,11 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 typedef JSValue JSCFunction(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 typedef JSValue JSCFunctionData(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data);
+typedef JSValue JSCClosure(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, void *opaque);
+
+typedef struct JSRuntimeThreadState {
+    char data[64];
+} JSRuntimeThreadState;
 
 typedef struct JSMallocState {
     size_t malloc_count;
@@ -342,6 +352,10 @@ void JS_Initialize(void);
 void JS_Finalize(void);
 
 JSRuntime *JS_NewRuntime(void);
+void JS_Enter(JSRuntime *rt);
+void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state);
+void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state);
+void JS_Leave(JSRuntime *rt);
 /* info lifetime must exceed that of rt */
 void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit);
@@ -366,6 +380,12 @@ JSContext *JS_DupContext(JSContext *ctx);
 void *JS_GetContextOpaque(JSContext *ctx);
 void JS_SetContextOpaque(JSContext *ctx, void *opaque);
 JSRuntime *JS_GetRuntime(JSContext *ctx);
+typedef struct {
+    JSValue (*get)(JSContext *ctx, JSAtom name, void *opaque);
+    void *opaque;
+} JSGlobalAccessFunctions;
+void JS_SetGlobalAccessFunctions(JSContext *ctx,
+                                 const JSGlobalAccessFunctions *af);
 void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
 JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
 
@@ -510,6 +530,7 @@ typedef struct JSClassDef {
 } JSClassDef;
 
 JSClassID JS_NewClassID(JSClassID *pclass_id);
+JSClassID JS_GetClassID(JSValueConst v);
 int JS_NewClass(JSRuntime *rt, JSClassID class_id, const JSClassDef *class_def);
 int JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
 
@@ -645,8 +666,10 @@ JSValue JS_GetException(JSContext *ctx);
 JS_BOOL JS_IsError(JSContext *ctx, JSValueConst val);
 void JS_ResetUncatchableError(JSContext *ctx);
 JSValue JS_NewError(JSContext *ctx);
+JSValue JS_NewUncatchableError(JSContext *ctx);
 JSValue __js_printf_like(2, 3) JS_ThrowSyntaxError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowTypeError(JSContext *ctx, const char *fmt, ...);
+JSValue JS_ThrowTypeErrorInvalidClass(JSContext *ctx, JSClassID class_id);
 JSValue __js_printf_like(2, 3) JS_ThrowReferenceError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
@@ -690,6 +713,11 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
     }
     return JSValueCast(v);
 }
+
+#define QUICK_JS_HAS_SCRIPTX_PATCH
+JSValue JS_NewWeakRef(JSContext* ctx, JSValueConst v);
+JSValue JS_GetWeakRef(JSContext* ctx, JSValueConst w);
+int JS_StrictEqual(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 
 int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
 int JS_ToInt32(JSContext *ctx, int32_t *pres, JSValueConst val);
@@ -777,6 +805,8 @@ JSValue JS_GetPrototype(JSContext *ctx, JSValueConst val);
 
 int JS_GetOwnPropertyNames(JSContext *ctx, JSPropertyEnum **ptab,
                            uint32_t *plen, JSValueConst obj, int flags);
+int JS_GetOwnPropertyCount(JSContext *ctx, JSValueConst obj);
+int JS_GetOwnPropertyCountUnchecked(JSValueConst obj);
 int JS_GetOwnProperty(JSContext *ctx, JSPropertyDescriptor *desc,
                       JSValueConst obj, JSAtom prop);
 
@@ -814,6 +844,7 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
 void JS_SetOpaque(JSValue obj, void *opaque);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
+void *JS_GetAnyOpaque(JSValueConst obj, JSClassID *class_id);
 
 /* 'buf' must be zero terminated i.e. buf[buf_len] = '\0'. */
 JSValue JS_ParseJSON(JSContext *ctx, const char *buf, size_t buf_len,
@@ -957,6 +988,9 @@ JSValue JS_NewCFunction2(JSContext *ctx, JSCFunction *func,
 JSValue JS_NewCFunctionData(JSContext *ctx, JSCFunctionData *func,
                             int length, int magic, int data_len,
                             JSValueConst *data);
+JSValue JS_NewCClosure(JSContext *ctx, JSCClosure *func,
+                       int length, int magic, void *opaque,
+                       void (*opaque_finalize)(void*));
 
 static inline JSValue JS_NewCFunction(JSContext *ctx, JSCFunction *func, const char *name,
                                       int length)
@@ -1017,20 +1051,20 @@ typedef struct JSCFunctionListEntry {
 #define JS_DEF_ALIAS          9
 
 /* Note: c++ does not like nested designators */
-#define JS_CFUNC_DEF(name, length, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, .u = { .func = { length, JS_CFUNC_generic, { .generic = func1 } } } }
-#define JS_CFUNC_MAGIC_DEF(name, length, func1, magic) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, magic, .u = { .func = { length, JS_CFUNC_generic_magic, { .generic_magic = func1 } } } }
-#define JS_CFUNC_SPECIAL_DEF(name, length, cproto, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, .u = { .func = { length, JS_CFUNC_ ## cproto, { .cproto = func1 } } } }
-#define JS_ITERATOR_NEXT_DEF(name, length, func1, magic) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, magic, .u = { .func = { length, JS_CFUNC_iterator_next, { .iterator_next = func1 } } } }
-#define JS_CGETSET_DEF(name, fgetter, fsetter) { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET, 0, .u = { .getset = { .get = { .getter = fgetter }, .set = { .setter = fsetter } } } }
-#define JS_CGETSET_MAGIC_DEF(name, fgetter, fsetter, magic) { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET_MAGIC, magic, .u = { .getset = { .get = { .getter_magic = fgetter }, .set = { .setter_magic = fsetter } } } }
-#define JS_PROP_STRING_DEF(name, cstr, prop_flags) { name, prop_flags, JS_DEF_PROP_STRING, 0, .u = { .str = cstr } }
-#define JS_PROP_INT32_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT32, 0, .u = { .i32 = val } }
-#define JS_PROP_INT64_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT64, 0, .u = { .i64 = val } }
-#define JS_PROP_DOUBLE_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_DOUBLE, 0, .u = { .f64 = val } }
-#define JS_PROP_UNDEFINED_DEF(name, prop_flags) { name, prop_flags, JS_DEF_PROP_UNDEFINED, 0, .u = { .i32 = 0 } }
-#define JS_OBJECT_DEF(name, tab, len, prop_flags) { name, prop_flags, JS_DEF_OBJECT, 0, .u = { .prop_list = { tab, len } } }
-#define JS_ALIAS_DEF(name, from) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_ALIAS, 0, .u = { .alias = { from, -1 } } }
-#define JS_ALIAS_BASE_DEF(name, from, base) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_ALIAS, 0, .u = { .alias = { from, base } } }
+#define JS_CFUNC_DEF(prop_name, length, func1) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = 0, .u = {.func = {length, JS_CFUNC_generic, {.generic = func1}} } }
+#define JS_CFUNC_MAGIC_DEF(prop_name, length, func1, magic_num) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = magic_num, .u = {.func = {length, JS_CFUNC_generic_magic, {.generic_magic = func1}} } }
+#define JS_CFUNC_SPECIAL_DEF(prop_name, length, cproto, func1) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = 0, .u = {.func = {length, JS_CFUNC_##cproto, {.cproto = func1}} } }
+#define JS_ITERATOR_NEXT_DEF(prop_name, length, func1, magic_num) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = magic_num, .u = {.func = {length, JS_CFUNC_iterator_next, {.iterator_next = func1}} } }
+#define JS_CGETSET_DEF(prop_name, fgetter, fsetter) { .name = prop_name, .prop_flags = JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CGETSET, .magic = 0, .u = {.getset = {.get = {.getter = fgetter}, .set = {.setter = fsetter}} } }
+#define JS_CGETSET_MAGIC_DEF(prop_name, fgetter, fsetter, magic_num) { .name = prop_name, .prop_flags = JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CGETSET_MAGIC, .magic = magic_num, .u = { .getset = {.get = {.getter_magic = fgetter}, .set = {.setter_magic = fsetter}} } }
+#define JS_PROP_STRING_DEF(prop_name, cstr, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_STRING, .magic = 0, .u = {.str = cstr } }
+#define JS_PROP_INT32_DEF(prop_name, val, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_INT32, .magic = 0, .u = {.i32 = val } }
+#define JS_PROP_INT64_DEF(prop_name, val, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_INT64, .magic = 0, .u = {.i64 = val } }
+#define JS_PROP_DOUBLE_DEF(prop_name, val, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_DOUBLE, .magic = 0, .u = {.f64 = val } }
+#define JS_PROP_UNDEFINED_DEF(prop_name, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_UNDEFINED, .magic = 0, .u = {.i32 = 0 } }
+#define JS_OBJECT_DEF(prop_name, tab, len, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_OBJECT, .magic = 0, .u = {.prop_list = {tab, len} } }
+#define JS_ALIAS_DEF(prop_name, from) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_ALIAS, .magic = 0, .u = {.alias = {from, -1} } }
+#define JS_ALIAS_BASE_DEF(prop_name, from, base) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_ALIAS, .magic = 0, .u = {.alias = {from, base} } }
 
 void JS_SetPropertyFunctionList(JSContext *ctx, JSValueConst obj,
                                 const JSCFunctionListEntry *tab,
@@ -1051,6 +1085,11 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
                        JSValue val);
 int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                            const JSCFunctionListEntry *tab, int len);
+/* can only be called after the module is initialized */
+JSValueConst JS_GetModuleExport(JSContext *ctx, const JSModuleDef *m, const char *export_name);
+int JS_CountModuleExport(JSContext *ctx, const JSModuleDef *m);
+JSAtom JS_GetModuleExportName(JSContext *ctx, const JSModuleDef *m, int idx);
+JSValueConst JS_GetModuleExportValue(JSContext *ctx, const JSModuleDef *m, int idx);
 
 #undef js_unlikely
 #undef js_force_inline

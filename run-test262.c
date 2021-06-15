@@ -1941,10 +1941,9 @@ void help(void)
            "-f file        execute single test from 'file'\n"
            "-r file        set the report file name (default=none)\n"
            "-x file        exclude tests listed in 'file'\n");
-    exit(1);
 }
 
-char *get_opt_arg(const char *option, char *arg)
+char *get_opt_arg(const char *option, const char *arg)
 {
     if (!arg) {
         fatal(2, "missing argument for option %s", option);
@@ -1952,7 +1951,11 @@ char *get_opt_arg(const char *option, char *arg)
     return arg;
 }
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+int qjs_test262_main(int argc, const char** argv)
+#else
+int main(int argc, const char **argv)
+#endif
 {
     int optind, start_index, stop_index;
     BOOL is_dir_list;
@@ -1971,12 +1974,13 @@ int main(int argc, char **argv)
     optind = 1;
     is_dir_list = TRUE;
     while (optind < argc) {
-        char *arg = argv[optind];
+        const char *arg = argv[optind];
         if (*arg != '-')
             break;
         optind++;
         if (str_equal(arg, "-h")) {
             help();
+			return EXIT_FAILURE;
         } else if (str_equal(arg, "-m")) {
             dump_memory++;
         } else if (str_equal(arg, "-n")) {
@@ -2015,8 +2019,11 @@ int main(int argc, char **argv)
         }
     }
     
-    if (optind >= argc && !test_list.count)
-        help();
+	if (optind >= argc && !test_list.count)
+	{
+		help();
+		return EXIT_FAILURE;
+	}
 
     if (is_test262_harness) {
         return run_test262_harness_test(argv[optind], is_module);
@@ -2121,8 +2128,8 @@ int main(int argc, char **argv)
     free(error_file);
 
     if (new_errors) {
-        return -1;
+        return EXIT_FAILURE;
     } else {
-        return 0;
+        return EXIT_SUCCESS;
     }
 }
