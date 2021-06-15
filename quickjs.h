@@ -181,6 +181,8 @@ static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
 
 #define JS_VALUE_HAS_REF_COUNT(v) ((JS_VALUE_GET_TAG(v) & 0xFFF8) == 0x8)
 
+#define JSValueCast(x) (x)
+
 #else // !JS_STRICT_NAN_BOXING
 
 enum {

@@ -1,8 +1,6 @@
 #include "quickjs-debugger.h"
 #include <time.h>
 #include <math.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -83,8 +81,8 @@ static int js_transport_send_event(JSDebuggerInfo *info, JSValue event) {
 static int js_transport_send_response(JSDebuggerInfo *info, JSValue request, JSValue body) {
     JSContext *ctx = info->ctx;
     JSValue envelope = js_transport_new_envelope(info, "response");
-    JS_SetPropertyStr(ctx, envelope, "request_seq", JS_GetPropertyStr(ctx, request, "request_seq"));
     JS_SetPropertyStr(ctx, envelope, "body", body);
+    JS_SetPropertyStr(ctx, envelope, "request_seq", JS_GetPropertyStr(ctx, request, "request_seq"));
     return js_transport_write_value(info, envelope);
 }
 
@@ -411,12 +409,6 @@ static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char* path) {
     JSDebuggerInfo *info = js_debugger_info(JS_GetRuntime(ctx));
     JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, path);
-
-    if(JS_IsUndefined(path_data) && path[0] != '/') {
-        char buf[PATH_MAX];
-        realpath(path, buf);
-        path_data = JS_GetPropertyStr(ctx, info->breakpoints, buf);
-    }
     return path_data;
 }
 

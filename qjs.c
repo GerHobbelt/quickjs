@@ -303,7 +303,7 @@ int main(int argc, const char **argv)
     int load_std = 0;
     int dump_unhandled_promise_rejection = 0;
     size_t memory_limit = 0;
-    char *include_list[32];
+    const char *include_list[32];
     int i, include_count = 0;
 #ifdef CONFIG_BIGNUM
     int load_jscalc;
@@ -465,8 +465,9 @@ int main(int argc, const char **argv)
     }
     if (memory_limit != 0)
         JS_SetMemoryLimit(rt, memory_limit);
-    //if (stack_size != 0)
-        JS_SetMaxStackSize(rt, stack_size != 0 ? stack_size : 8 * 1048576);
+    if (stack_size != 0)
+        JS_SetMaxStackSize(rt, stack_size);
+    //JS_SetMaxStackSize(rt, stack_size != 0 ? stack_size : 8 * 1048576);
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
     ctx = JS_NewCustomContext(rt);

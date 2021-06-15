@@ -1,6 +1,6 @@
 
-# Read the version off the VERSION file
-file(READ ${QUICKJS_SOURCE_DIR}/VERSION QUICKJS_CONFIG_VERSION)
+# Read the version off the VERSION.txt file
+file(READ ${QUICKJS_SOURCE_DIR}/VERSION.txt QUICKJS_CONFIG_VERSION)
 message(STATUS "${QUICKJS_SOURCE_DIR}/VERSION ${QUICKJS_CONFIG_VERSION}")
 
 string(REGEX REPLACE "\n$" "" QUICKJS_CONFIG_VERSION "${QUICKJS_CONFIG_VERSION}")
@@ -28,6 +28,7 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/libregexp.c
   ${QUICKJS_SOURCE_DIR}/libunicode.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
+  ${QUICKJS_SOURCE_DIR}/quickjs-find-module.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
   ${QUICKJS_SOURCE_DIR}/quickjs-port.c
   ${QUICKJS_SOURCE_DIR}/quickjs-debugger.c

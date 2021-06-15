@@ -84,7 +84,6 @@ static BOOL dynamic_export;
 static BOOL save_temp;
 static const char *c_ident_prefix = "qjsc_";
 
-
 #define FE_ALL (-1)
 
 static const FeatureEntry feature_list[] = {
@@ -288,7 +287,7 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         }
         
         /* compile the module */
-        func_val = JS_Eval(ctx, (char *)buf, buf_len,   module_name,
+        func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
                            JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
         js_free(ctx, buf);
         if (JS_IsException(func_val))
@@ -449,7 +448,7 @@ static int output_executable(const char *out_filename, const char *cfilename,
         pstrcpy(lib_dir, sizeof(lib_dir), exe_dir);
     } else {
         snprintf(inc_dir, sizeof(inc_dir), "%s/include/quickjs", CONFIG_PREFIX);
-        snprintf(lib_dir, sizeof(lib_dir), "%s/lib", CONFIG_PREFIX);
+        snprintf(lib_dir, sizeof(lib_dir), "%s/lib/quickjs", CONFIG_PREFIX);
     }
     
     lto_suffix = "";
@@ -476,15 +475,15 @@ static int output_executable(const char *out_filename, const char *cfilename,
         *arg++ = "-rdynamic";
     *arg++ = cfilename;
 
-    if(1) {
-        snprintf(libjsname, sizeof(libjsname), "-L%s", lib_dir);
-        *arg++ = libjsname;
-        *arg++ = "-lquickjs";
-    } else {
-        snprintf(libjsname, sizeof(libjsname), "%s/libquickjs%s%s.a",
-                 lib_dir, bn_suffix, lto_suffix);
-        *arg++ = libjsname;
-    }
+#if 0
+    snprintf(libjsname, sizeof(libjsname), "-L%s", lib_dir);
+    *arg++ = libjsname;
+    *arg++ = "-lquickjs";
+#else
+    snprintf(libjsname, sizeof(libjsname), "%s/libquickjs%s%s.a",
+             lib_dir, bn_suffix, lto_suffix);
+    *arg++ = libjsname;
+#endif
     *arg++ = "-lm";
     *arg++ = "-ldl";
     *arg++ = "-lpthread";
