@@ -50,6 +50,8 @@
 #include "quickjs-libc.h"
 #include "quickjs-port.h"
 
+JSModuleLoaderFunc* js_std_get_module_loader_func();
+
 #define malloc(s) malloc_is_forbidden(s)
 #define free(p) free_is_forbidden(p)
 #define realloc(p,s) realloc_is_forbidden(p,s)
@@ -463,8 +465,8 @@ int main(int argc, const char **argv)
     }
     if (memory_limit != 0)
         JS_SetMemoryLimit(rt, memory_limit);
-    if (stack_size != 0)
-        JS_SetMaxStackSize(rt, stack_size);
+    //if (stack_size != 0)
+        JS_SetMaxStackSize(rt, stack_size != 0 ? stack_size : 8 * 1048576);
     js_std_set_worker_new_context_func(JS_NewCustomContext);
     js_std_init_handlers(rt);
     ctx = JS_NewCustomContext(rt);
@@ -474,7 +476,7 @@ int main(int argc, const char **argv)
     }
 
     /* loader for ES6 modules */
-    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+    JS_SetModuleLoaderFunc(rt, NULL, js_std_get_module_loader_func(), NULL);
 
     if (dump_unhandled_promise_rejection) {
         JS_SetHostPromiseRejectionTracker(rt, js_std_promise_rejection_tracker,

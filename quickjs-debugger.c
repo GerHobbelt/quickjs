@@ -1,9 +1,12 @@
 #include "quickjs-debugger.h"
 #include <time.h>
 #include <math.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 
 typedef struct DebuggerSuspendedState {
     uint32_t variable_reference_count;
@@ -80,8 +83,8 @@ static int js_transport_send_event(JSDebuggerInfo *info, JSValue event) {
 static int js_transport_send_response(JSDebuggerInfo *info, JSValue request, JSValue body) {
     JSContext *ctx = info->ctx;
     JSValue envelope = js_transport_new_envelope(info, "response");
-    JS_SetPropertyStr(ctx, envelope, "body", body);
     JS_SetPropertyStr(ctx, envelope, "request_seq", JS_GetPropertyStr(ctx, request, "request_seq"));
+    JS_SetPropertyStr(ctx, envelope, "body", body);
     return js_transport_write_value(info, envelope);
 }
 
@@ -408,6 +411,12 @@ static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
 JSValue js_debugger_file_breakpoints(JSContext *ctx, const char* path) {
     JSDebuggerInfo *info = js_debugger_info(JS_GetRuntime(ctx));
     JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, path);
+
+    if(JS_IsUndefined(path_data) && path[0] != '/') {
+        char buf[PATH_MAX];
+        realpath(path, buf);
+        path_data = JS_GetPropertyStr(ctx, info->breakpoints, buf);
+    }
     return path_data;
 }
 
@@ -452,22 +461,33 @@ static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur
 
         JSValue message = JS_ParseJSON(ctx, info->message_buffer, message_length, "<debugger>");
         const char *type = JS_ToCString(ctx, JS_GetPropertyStr(ctx, message, "type"));
-        if (strcmp("request", type) == 0) {
-            js_process_request(info, &state, JS_GetPropertyStr(ctx, message, "request"));
-            // done_processing = 1;
-        }
-        else if (strcmp("continue", type) == 0) {
-            info->is_paused = 0;
-        }
-        else if (strcmp("breakpoints", type) == 0) {
-            js_process_breakpoints(info, JS_GetPropertyStr(ctx, message, "breakpoints"));
-        }
-        else if (strcmp("stopOnException", type) == 0) {
-            JSValue stop = JS_GetPropertyStr(ctx, message, "stopOnException");
-            info->exception_breakpoint = JS_ToBool(ctx, stop);
-            JS_FreeValue(ctx, stop);
-        }
-
+		if (type) {
+	        if (strcmp("request", type) == 0) {
+	            js_process_request(info, &state, JS_GetPropertyStr(ctx, message, "request"));
+	            // done_processing = 1;
+	        }
+	        else if (strcmp("continue", type) == 0) {
+	            info->is_paused = 0;
+	        }
+	        else if (strcmp("breakpoints", type) == 0) {
+	            JSValue path;
+	            if(!JS_IsUndefined((path = JS_GetPropertyStr(ctx, message, "path")))) {
+	                const char* pathStr = JS_ToCString(ctx, path);
+	                JSValue response = js_transport_new_envelope(info, "breakpoints");
+	                JSValue breakpoints = js_debugger_file_breakpoints(ctx, pathStr);
+	                JS_SetPropertyStr(ctx, response, "breakpoints", breakpoints);
+	                js_transport_write_value(info, response);
+	                JS_FreeCString(ctx, pathStr);
+	            } else {
+	                js_process_breakpoints(info, JS_GetPropertyStr(ctx, message, "breakpoints"));
+	            }
+	        }
+	        else if (strcmp("stopOnException", type) == 0) {
+	            JSValue stop = JS_GetPropertyStr(ctx, message, "stopOnException");
+	            info->exception_breakpoint = JS_ToBool(ctx, stop);
+	            JS_FreeValue(ctx, stop);
+	        }
+		}
         JS_FreeCString(ctx, type);
         JS_FreeValue(ctx, message);
     }
@@ -540,14 +560,21 @@ void js_debugger_check(JSContext* ctx, const uint8_t *cur_pc) {
     if (!info->attempted_connect) {
         info->attempted_connect = 1;
         char *address = getenv("QUICKJS_DEBUG_ADDRESS");
-        if (address != NULL && !info->transport_close)
+        if (address != NULL && !info->transport_close) {
+            printf("QUICKJS_DEBUG_ADDRESS = %s\n", address);
+            fprintf(stdout, "QUICKJS_DEBUG_ADDRESS = %s\n", address);
+            fflush(stdout);
             js_debugger_connect(ctx, address);
+        }
     }
     else if (!info->attempted_wait) {
         info->attempted_wait = 1;
         char *address = getenv("QUICKJS_DEBUG_LISTEN_ADDRESS");
-        if (address != NULL && !info->transport_close)
+        if (address != NULL && !info->transport_close) {
+            printf("QUICKJS_DEBUG_LISTEN_ADDRESS = %s\n", address);
+            fflush(stdout);
             js_debugger_wait_connection(ctx, address);
+        }
     }
 
     if (info->transport_close == NULL)

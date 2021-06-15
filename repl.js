@@ -95,7 +95,7 @@ import * as os from "os";
             'type':       'bright_magenta',
             'identifier': 'bright_green',
             'error':      'red',
-            'result':     'bright_white',
+            'result':     'bright_blue',
             'error_msg':  'bright_red',
         };
     }
