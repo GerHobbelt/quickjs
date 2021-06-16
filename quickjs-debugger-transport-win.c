@@ -1,3 +1,5 @@
+#if defined(WIN32) || defined(WIN64)
+
 #include "quickjs-debugger.h"
 #include "quickjs-debugger-transport.h"
 
@@ -184,3 +186,5 @@ void js_debugger_wait_connection(JSContext *ctx, const char *address)
     data->handle = client;
     js_debugger_attach(ctx, js_transport_read, js_transport_write, js_transport_peek, js_transport_close, (void *)data);
 }
+
+#endif

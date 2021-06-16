@@ -42,10 +42,6 @@
 #include <unistd.h>
 #endif
 
-#ifdef HAVE_QUICKJS_CONFIG_H
-#include "quickjs-config.h"
-#endif
-
 #include "cutils.h"
 #include "quickjs-libc.h"
 #include "quickjs-port.h"
@@ -285,10 +281,10 @@ static void help(void)
 }
 
 #if defined(BUILD_MONOLITHIC)
-int qjs_main(int argc, const char** argv)
-#else
-int main(int argc, const char **argv)
+#define main(cnt, arr)      qjs_main(cnt, arr)
 #endif
+
+int main(int argc, const char **argv)
 {
     JSRuntime *rt;
     JSContext *ctx;

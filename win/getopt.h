@@ -1,4 +1,3 @@
-#ifndef __GETOPT_H__
 /**
  * DISCLAIMER
  * This file is part of the mingw-w64 runtime package.
@@ -56,11 +55,37 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma warning(disable:4996)
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#endif
 
+#if defined(BUILD_MONOLITHIC)
+
+#define FZ_DATA
+#include "../../../../include/mupdf/fitz/getopt.h"
+
+#define getopt fz_getopt
+#define optarg fz_optarg
+#define optind fz_optind
+
+#else
+
+#if defined(__GNUC__)
+#include <getopt.h>
+#else
+#define USE_QJS_GETOPT 1
+#endif
+
+#endif
+
+#if defined(USE_QJS_GETOPT)
+
+#ifndef __GETOPT_H__
 #define __GETOPT_H__
 
-/* All the headers include this file. */
+#pragma warning(disable:4996)
+
+ /* All the headers include this file. */
 #include <crtdefs.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -68,6 +93,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <windows.h>
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -651,3 +677,5 @@ getopt_long_only(int nargc, char * const *nargv, const char *options,
 #endif
 
 #endif /* !defined(__UNISTD_H_SOURCED__) && !defined(__GETOPT_LONG_H__) */
+
+#endif

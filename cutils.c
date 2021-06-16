@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <string.h>
 
+#include "quickjs.h"
 #include "cutils.h"
 
 void pstrcpy(char *buf, int buf_size, const char *str)

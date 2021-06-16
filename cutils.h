@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+#include "quickjs.h"
+
 #ifdef _MSC_VER
 #include <windows.h>
 #include <intrin.h>
@@ -35,6 +37,7 @@
 #else
 #include <alloca.h>
 #endif
+
 
 /* set if CPU is big endian */
 #undef WORDS_BIGENDIAN

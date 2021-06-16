@@ -29,6 +29,10 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#endif
+
 #include "quickjs_version.h"
 
 #ifndef JS_EXPORT
@@ -243,6 +247,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 }
 
 #define JSValueCast(x) (JSValue)(x)
+
 #elif defined(JS_NAN_BOXING)
 
 typedef uint64_t JSValue;
@@ -309,6 +314,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 }
 
 #define JSValueCast(x) (x)
+
 #else /* !JS_NAN_BOXING */
 
 typedef union JSValueUnion {
@@ -360,6 +366,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 }
 
 #define JSValueCast(x) (x)
+
 #endif /* !JS_NAN_BOXING */
 
 #define JS_VALUE_HAS_REF_COUNT(v) ((unsigned)JS_VALUE_GET_TAG(v) >= (unsigned)JS_TAG_FIRST)

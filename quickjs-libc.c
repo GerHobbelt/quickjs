@@ -38,6 +38,7 @@
 #include <windows.h>
 #include <conio.h>
 #include <io.h>
+#include <direct.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -72,8 +73,10 @@ typedef sig_t sighandler_t;
 #include "quickjs-libc.h"
 #include "quickjs-port.h"
 
+#ifndef USE_WORKER
 /* enable the os.Worker API */
 #define USE_WORKER
+#endif
 
 JSModuleLoaderFunc* js_std_get_module_loader_func();
 

@@ -49,44 +49,44 @@ typedef struct namelist_t {
     unsigned int sorted : 1;
 } namelist_t;
 
-namelist_t test_list;
-namelist_t exclude_list;
-namelist_t exclude_dir_list;
+static namelist_t test_list;
+static namelist_t exclude_list;
+static namelist_t exclude_dir_list;
 
-FILE *outfile;
-enum test_mode_t {
+static FILE *outfile;
+static enum test_mode_t {
     TEST_DEFAULT_NOSTRICT, /* run tests as nostrict unless test is flagged as strictonly */
     TEST_DEFAULT_STRICT,   /* run tests as strict unless test is flagged as nostrict */
     TEST_NOSTRICT,         /* run tests as nostrict, skip strictonly tests */
     TEST_STRICT,           /* run tests as strict, skip nostrict tests */
     TEST_ALL,              /* run tests in both strict and nostrict, unless restricted by spec */
 } test_mode = TEST_DEFAULT_NOSTRICT;
-int skip_async;
-int skip_module;
-int new_style;
-int dump_memory;
-int stats_count;
-JSMemoryUsage stats_all, stats_avg, stats_min, stats_max;
-char *stats_min_filename;
-char *stats_max_filename;
-int verbose;
-char *harness_dir;
-char *harness_exclude;
-char *harness_features;
-char *harness_skip_features;
-char *error_filename;
-char *error_file;
-FILE *error_out;
-char *report_filename;
-int update_errors;
-int test_count, test_failed, test_index, test_skipped, test_excluded;
-int new_errors, changed_errors, fixed_errors;
-int async_done;
+static int skip_async;
+static int skip_module;
+static int new_style;
+static int dump_memory;
+static int stats_count;
+static JSMemoryUsage stats_all, stats_avg, stats_min, stats_max;
+static char *stats_min_filename;
+static char *stats_max_filename;
+static int verbose;
+static char *harness_dir;
+static char *harness_exclude;
+static char *harness_features;
+static char *harness_skip_features;
+static const char *error_filename;
+static char *error_file;
+static FILE *error_out;
+static const char *report_filename;
+static int update_errors;
+static int test_count, test_failed, test_index, test_skipped, test_excluded;
+static int new_errors, changed_errors, fixed_errors;
+static int async_done;
 
-void warning(const char *, ...) __attribute__((__format__(__printf__, 1, 2)));
-void fatal(int, const char *, ...) __attribute__((__format__(__printf__, 2, 3)));
+static void warning(const char *, ...) __attribute__((__format__(__printf__, 1, 2)));
+static void fatal(int, const char *, ...) __attribute__((__format__(__printf__, 2, 3)));
 
-void warning(const char *fmt, ...)
+static void warning(const char *fmt, ...)
 {
     va_list ap;
 
@@ -98,7 +98,7 @@ void warning(const char *fmt, ...)
     fputc('\n', stderr);
 }
 
-void fatal(int errcode, const char *fmt, ...)
+static void fatal(int errcode, const char *fmt, ...)
 {
     va_list ap;
 
@@ -112,7 +112,7 @@ void fatal(int errcode, const char *fmt, ...)
     exit(errcode);
 }
 
-void perror_exit(int errcode, const char *s)
+static void perror_exit(int errcode, const char *s)
 {
     fflush(stdout);
     fprintf(stderr, "%s: ", CMD_NAME);
@@ -120,7 +120,7 @@ void perror_exit(int errcode, const char *s)
     exit(errcode);
 }
 
-char *strdup_len(const char *str, int len)
+static char *strdup_len(const char *str, int len)
 {
     char *p = malloc(len + 1);
     memcpy(p, str, len);
@@ -132,7 +132,7 @@ static inline int str_equal(const char *a, const char *b) {
     return !strcmp(a, b);
 }
 
-char *str_append(char **pp, const char *sep, const char *str) {
+static char *str_append(char **pp, const char *sep, const char *str) {
     char *res, *p;
     size_t len = 0;
     p = *pp;
@@ -149,7 +149,7 @@ char *str_append(char **pp, const char *sep, const char *str) {
     return *pp = res;
 }
 
-char *str_strip(char *p)
+static char *str_strip(char *p)
 {
     size_t len = strlen(p);
     while (len > 0 && isspace((unsigned char)p[len - 1]))
@@ -159,12 +159,12 @@ char *str_strip(char *p)
     return p;
 }
 
-int has_prefix(const char *str, const char *prefix)
+static int has_prefix(const char *str, const char *prefix)
 {
     return !strncmp(str, prefix, strlen(prefix));
 }
 
-char *skip_prefix(const char *str, const char *prefix)
+static char *skip_prefix(const char *str, const char *prefix)
 {
     int i;
     for (i = 0;; i++) {
@@ -178,7 +178,7 @@ char *skip_prefix(const char *str, const char *prefix)
     return (char *)str;
 }
 
-char *get_basename(const char *filename)
+static char *get_basename(const char *filename)
 {
     char *p;
 
@@ -188,7 +188,7 @@ char *get_basename(const char *filename)
     return strdup_len(filename, p - filename);
 }
 
-char *compose_path(const char *path, const char *name)
+static char *compose_path(const char *path, const char *name)
 {
     int path_len, name_len;
     char *d, *q;
@@ -218,7 +218,7 @@ char *compose_path(const char *path, const char *name)
     return d;
 }
 
-int namelist_cmp(const char *a, const char *b)
+static int namelist_cmp(const char *a, const char *b)
 {
     /* compare strings in modified lexicographical order */
     for (;;) {
@@ -245,12 +245,12 @@ int namelist_cmp(const char *a, const char *b)
     }
 }
 
-int namelist_cmp_indirect(const void *a, const void *b)
+static int namelist_cmp_indirect(const void *a, const void *b)
 {
     return namelist_cmp(*(const char **)a, *(const char **)b);
 }
 
-void namelist_sort(namelist_t *lp)
+static void namelist_sort(namelist_t *lp)
 {
     int i, count;
     if (lp->count > 1) {
@@ -268,7 +268,7 @@ void namelist_sort(namelist_t *lp)
     lp->sorted = 1;
 }
 
-int namelist_find(namelist_t *lp, const char *name)
+static int namelist_find(namelist_t *lp, const char *name)
 {
     int a, b, m, cmp;
 
@@ -288,7 +288,7 @@ int namelist_find(namelist_t *lp, const char *name)
     return -1;
 }
 
-void namelist_add(namelist_t *lp, const char *base, const char *name)
+static void namelist_add(namelist_t *lp, const char *base, const char *name)
 {
     char *s;
 
@@ -310,7 +310,7 @@ fail:
     fatal(1, "allocation failure\n");
 }
 
-void namelist_load(namelist_t *lp, const char *filename)
+static void namelist_load(namelist_t *lp, const char *filename)
 {
     char buf[1024];
     char *base_name;
@@ -333,7 +333,7 @@ void namelist_load(namelist_t *lp, const char *filename)
     fclose(f);
 }
 
-void namelist_add_from_error_file(namelist_t *lp, const char *file)
+static void namelist_add_from_error_file(namelist_t *lp, const char *file)
 {
     const char *p, *p0;
     char *pp;
@@ -347,7 +347,7 @@ void namelist_add_from_error_file(namelist_t *lp, const char *file)
     }
 }
 
-void namelist_free(namelist_t *lp)
+static void namelist_free(namelist_t *lp)
 {
     while (lp->count > 0) {
         free(lp->array[--lp->count]);
@@ -829,12 +829,12 @@ static JSModuleDef *js_module_loader_test(JSContext *ctx,
     return m;
 }
 
-int is_line_sep(char c)
+static int is_line_sep(char c)
 {
     return (c == '\0' || c == '\n' || c == '\r');
 }
 
-char *find_line(const char *str, const char *line)
+static char *find_line(const char *str, const char *line)
 {
     if (str) {
         const char *p;
@@ -847,12 +847,12 @@ char *find_line(const char *str, const char *line)
     return NULL;
 }
 
-int is_word_sep(char c)
+static int is_word_sep(char c)
 {
     return (c == '\0' || isspace((unsigned char)c) || c == ',');
 }
 
-char *find_word(const char *str, const char *word)
+static char *find_word(const char *str, const char *word)
 {
     const char *p;
     int len = strlen(word);
@@ -866,7 +866,7 @@ char *find_word(const char *str, const char *word)
 }
 
 /* handle exclude directories */
-void update_exclude_dirs(void)
+static void update_exclude_dirs(void)
 {
     namelist_t *lp = &test_list;
     namelist_t *ep = &exclude_list;
@@ -906,7 +906,7 @@ void update_exclude_dirs(void)
     lp->count = count;
 }
 
-void load_config(const char *filename)
+static void load_config(const char *filename)
 {
     char buf[1024];
     FILE *f;
@@ -1059,7 +1059,7 @@ void load_config(const char *filename)
     free(base_name);
 }
 
-char *find_error(const char *filename, int *pline, int is_strict)
+static char *find_error(const char *filename, int *pline, int is_strict)
 {
     if (error_file) {
         size_t len = strlen(filename);
@@ -1096,7 +1096,7 @@ char *find_error(const char *filename, int *pline, int is_strict)
     return NULL;
 }
 
-int skip_comments(const char *str, int line, int *pline)
+static int skip_comments(const char *str, int line, int *pline)
 {
     const char *p;
     int c;
@@ -1134,7 +1134,7 @@ int skip_comments(const char *str, int line, int *pline)
     return p - str;
 }
 
-int longest_match(const char *str, const char *find, int pos, int *ppos, int line, int *pline)
+static int longest_match(const char *str, const char *find, int pos, int *ppos, int line, int *pline)
 {
     int len, maxlen;
 
@@ -1365,7 +1365,7 @@ fail:
     return 1;
 }
 
-char *extract_desc(const char *buf, char style)
+static char *extract_desc(const char *buf, char style)
 {
     const char *p, *desc_start;
     char *desc;
@@ -1494,7 +1494,7 @@ void update_stats(JSRuntime *rt, const char *filename) {
 #undef update
 }
 
-void run_test262_initialize() {
+static void run_test262_initialize() {
     JS_Initialize();
 #ifdef CONFIG_AGENT
     qjs_mutex_init(&agent_mutex);
@@ -1503,7 +1503,7 @@ void run_test262_initialize() {
 #endif
 }
 
-void run_test262_finalize() {
+static void run_test262_finalize() {
     JS_Finalize();
 #ifdef CONFIG_AGENT
     qjs_mutex_destroy(&agent_mutex);
@@ -1512,7 +1512,7 @@ void run_test262_finalize() {
 #endif
 }
 
-int run_test_buf(const char *filename, char *harness, namelist_t *ip,
+static int run_test_buf(const char *filename, char *harness, namelist_t *ip,
                  char *buf, size_t buf_len, const char* error_type,
                  int eval_flags, BOOL is_negative, BOOL is_async,
                  BOOL can_block)
@@ -1571,7 +1571,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     return ret;
 }
 
-int run_test(const char *filename, int index)
+static int run_test(const char *filename, int index)
 {
     char harnessbuf[1024];
     char *harness;
@@ -1806,7 +1806,7 @@ int run_test(const char *filename, int index)
 }
 
 /* run a test when called by test262-harness+eshost */
-int run_test262_harness_test(const char *filename, BOOL is_module)
+static int run_test262_harness_test(const char *filename, BOOL is_module)
 {
     JSRuntime *rt;
     JSContext *ctx;
@@ -1873,9 +1873,9 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
     return ret_code;
 }
 
-clock_t last_clock;
+static clock_t last_clock;
 
-void show_progress(int force) {
+static void show_progress(int force) {
     clock_t t = clock();
     if (force || !last_clock || (t - last_clock) > CLOCKS_PER_SEC / 20) {
         last_clock = t;
@@ -1888,7 +1888,7 @@ void show_progress(int force) {
 
 static int slow_test_threshold;
 
-void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
+static void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
 {
     int i;
 
@@ -1921,7 +1921,7 @@ void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
     show_progress(TRUE);
 }
 
-void help(void)
+static void help(void)
 {
     printf("run-test262 version " QUICKJS_CONFIG_VERSION "\n"
            "usage: run-test262 [options] {-f file ... | [dir_list] [index range]}\n"
@@ -1943,7 +1943,7 @@ void help(void)
            "-x file        exclude tests listed in 'file'\n");
 }
 
-char *get_opt_arg(const char *option, const char *arg)
+static const char *get_opt_arg(const char *option, const char *arg)
 {
     if (!arg) {
         fatal(2, "missing argument for option %s", option);

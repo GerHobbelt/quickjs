@@ -2955,6 +2955,11 @@ void normalization_test(const char *filename)
 }
 #endif
 
+
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      qjs_unicode_gen_main(cnt, arr)
+#endif
+
 int main(int argc, const char **argv)
 {
     const char *unicode_db_path, *outfilename;

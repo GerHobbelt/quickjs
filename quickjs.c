@@ -55,8 +55,10 @@
 #define MALLOC_OVERHEAD  8
 #endif
 
+#if !defined(CONFIG_PRINTF_RNDN) && !defined(CONFIG_PRINTF_RNDNA)
 /* define it if printf uses the RNDN rounding mode instead of RNDNA */
 #define CONFIG_PRINTF_RNDN
+#endif
 
 #define abort qjs_abort
 #define malloc(s) malloc_is_forbidden(s)
@@ -9193,14 +9195,6 @@ static int js_update_property_flags(JSContext *ctx, JSObject *p,
         (*pprs)->flags = flags;
     }
     return 0;
-}
-
-static int JS_DefineProperty_throw_not_configurable(JSContext *ctx, int flags) {
-    return JS_ThrowTypeErrorOrFalse(ctx, flags, "property is not configurable");
-}
-
-static int JS_DefineProperty_throw_oob(JSContext *ctx, int flags) {
-    return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound index in typed array");
 }
 
 /* allowed flags:
@@ -31212,6 +31206,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
             }
             goto no_change;
         case OP_drop:
+#if 0
             if (0) {
                 /* remove drops before return_undef */
                 /* do not perform this optimization in pass2 because
@@ -31233,6 +31228,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     break;
                 }
             }
+#endif
             goto no_change;
         case OP_insert3:
             if (OPTIMIZE) {
@@ -46010,13 +46006,11 @@ static void map_decref_record(JSRuntime *rt, JSMapRecord *mr)
 static void reset_weak_ref(JSRuntime *rt, JSObject *p)
 {
     JSMapRecord *mr, *mr_next;
-    JSMapState *s;
 
     /* first pass to remove the records from the WeakMap/WeakSet
        lists */
     for(mr = p->first_weak_ref; mr != NULL; mr = mr->next_weak_ref) {
-        s = mr->map;
-        assert(s->is_weak);
+        assert(mr->map->is_weak);
         assert(!mr->empty); /* no iterator on WeakMap/WeakSet */
         list_del(&mr->hash_link);
         list_del(&mr->link);

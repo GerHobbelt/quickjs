@@ -21,12 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
 #include <assert.h>
+
+#include "quickjs.h"
+
+#ifdef CONFIG_BIGNUM
 
 #ifdef __AVX2__
 #include <immintrin.h>
@@ -8467,3 +8472,5 @@ int bf_get_fft_size(int *pdpl, int *pnb_mods, limb_t len)
 }
 
 #endif /* !USE_FFT_MUL */
+
+#endif

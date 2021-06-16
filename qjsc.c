@@ -35,27 +35,9 @@
 #include <process.h>
 #endif
 
-#ifdef HAVE_QUICKJS_CONFIG_H
-#include "quickjs-config.h"
-#endif
-
-#if defined(BUILD_MONOLITHIC)
-#define FZ_DATA
-#include "../../../include/mupdf/fitz/getopt.h"
-
-#define getopt fz_getopt
-#define optarg fz_optarg
-#define optind fz_optind
-#else
-#if defined(__GNUC__)
-#include <getopt.h>
-#else
-#include "win/getopt.h"
-#endif
-#endif
-
 #include "cutils.h"
 #include "quickjs-libc.h"
+#include "win/getopt.h"
 
 typedef struct {
     char *name;
@@ -103,7 +85,7 @@ static const FeatureEntry feature_list[] = {
 #endif
 };
 
-void namelist_add(namelist_t *lp, const char *name, const char *short_name,
+static void namelist_add(namelist_t *lp, const char *name, const char *short_name,
                   int flags)
 {
     namelist_entry_t *e;
@@ -124,7 +106,7 @@ void namelist_add(namelist_t *lp, const char *name, const char *short_name,
     e->flags = flags;
 }
 
-void namelist_free(namelist_t *lp)
+static void namelist_free(namelist_t *lp)
 {
     while (lp->count > 0) {
         namelist_entry_t *e = &lp->array[--lp->count];
@@ -136,7 +118,7 @@ void namelist_free(namelist_t *lp)
     lp->size = 0;
 }
 
-namelist_entry_t *namelist_find(namelist_t *lp, const char *name)
+static namelist_entry_t *namelist_find(namelist_t *lp, const char *name)
 {
     int i;
     for(i = 0; i < lp->count; i++) {
@@ -366,7 +348,7 @@ static const char main_c_template2[] =
 
 #define PROG_NAME "qjsc"
 
-void help(void)
+static void help(void)
 {
     printf("QuickJS Compiler version " QUICKJS_CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [files]\n"
@@ -404,7 +386,7 @@ void help(void)
 
 #if defined(CONFIG_CC) && !defined(_WIN32)
 
-int exec_cmd(char **argv)
+static int exec_cmd(char **argv)
 {
     int pid, status, ret;
 
@@ -518,10 +500,10 @@ typedef enum {
 } OutputTypeEnum;
 
 #if defined(BUILD_MONOLITHIC)
-int qjsc_main(int argc, const char** argv)
-#else
-int main(int argc, const char **argv)
+#define main(cnt, arr)      qjsc_main(cnt, arr)
 #endif
+
+int main(int argc, const char **argv)
 {
     int c, i, verbose;
     const char *out_filename, *cname;

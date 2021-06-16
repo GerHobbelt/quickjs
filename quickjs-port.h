@@ -24,10 +24,14 @@
 #ifndef QUICKJS_PORT_H
 #define QUICKJS_PORT_H
 
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#endif
+
 /* define to include Atomics.* operations which depend on the OS
    threads */
-#if !defined(EMSCRIPTEN)
-#define CONFIG_ATOMICS
+#if !defined(EMSCRIPTEN) && !defined(CONFIG_ATOMICS)
+#define CONFIG_ATOMICS 1
 #endif
 
 #include <stdlib.h>
@@ -152,7 +156,7 @@ int qjs_thread_create(qjs_thread* thread, qjs_thread_method method, void* data, 
 //! @brief Joins a thread.
 int qjs_thread_join(qjs_thread* thread);
 
-/* Mutex relaed functions */
+/* Mutex related functions */
 int qjs_mutex_init(qjs_mutex* mutex);
 
 //! @brief Locks a mutex.
