@@ -1,0 +1,3 @@
+[submodule "thirdparty/uint128_t"]
+	path = thirdparty/uint128_t
+	url = git@github.com:GerHobbelt/uint128_t.git
