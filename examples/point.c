@@ -39,7 +39,7 @@ static void js_point_finalizer(JSRuntime *rt, JSValue val)
 {
     JSPointData *s = JS_GetOpaque(val, js_point_class_id);
     /* Note: 's' can be NULL in case JS_SetOpaque() was not called */
-    js_free_rt(rt, s);
+    qjs_free_rt(rt, s);
 }
 
 static JSValue js_point_ctor(JSContext *ctx,
@@ -50,7 +50,7 @@ static JSValue js_point_ctor(JSContext *ctx,
     JSValue obj = JS_UNDEFINED;
     JSValue proto;
     
-    s = js_mallocz(ctx, sizeof(*s));
+    s = qjs_mallocz(ctx, sizeof(*s));
     if (!s)
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &s->x, argv[0]))
@@ -69,7 +69,7 @@ static JSValue js_point_ctor(JSContext *ctx,
     JS_SetOpaque(obj, s);
     return obj;
  fail:
-    js_free(ctx, s);
+    qjs_free(ctx, s);
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }

@@ -216,7 +216,7 @@ static void js_free_prop_enum(JSContext *ctx, JSPropertyEnum *tab, uint32_t len)
     if (tab) {
         for(i = 0; i < len; i++)
             JS_FreeAtom(ctx, tab[i].atom);
-        js_free(ctx, tab);
+        qjs_free(ctx, tab);
     }
 }
 
@@ -437,12 +437,12 @@ static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur
         assert(message_length > 0);
         if (message_length > info->message_buffer_length) {
             if (info->message_buffer) {
-                js_free(ctx, info->message_buffer);
+                qjs_free(ctx, info->message_buffer);
                 info->message_buffer = NULL;
             }
 
             // extra for null termination (debugger inspect, etc)
-            info->message_buffer = js_malloc_rt(JS_GetRuntime(ctx), message_length + 1);
+            info->message_buffer = qjs_malloc_rt(JS_GetRuntime(ctx), message_length + 1);
             info->message_buffer_length = message_length;
         }
 
@@ -700,7 +700,7 @@ void js_debugger_free(JSRuntime *rt, JSDebuggerInfo *info) {
     info->transport_close = NULL;
 
     if (info->message_buffer) {
-        js_free_rt(rt, info->message_buffer);
+        qjs_free_rt(rt, info->message_buffer);
         info->message_buffer = NULL;
         info->message_buffer_length = 0;
     }

@@ -453,10 +453,10 @@ typedef struct JSMallocState {
 } JSMallocState;
 
 typedef struct JSMallocFunctions {
-    void *(*js_malloc)(JSMallocState *s, size_t size);
-    void (*js_free)(JSMallocState *s, void *ptr);
-    void *(*js_realloc)(JSMallocState *s, void *ptr, size_t size);
-    size_t (*js_malloc_usable_size)(const void *ptr);
+    void *(*qjs_malloc)(JSMallocState *s, size_t size);
+    void (*qjs_free)(JSMallocState *s, void *ptr);
+    void *(*qjs_realloc)(JSMallocState *s, void *ptr, size_t size);
+    size_t (*qjs_malloc_usable_size)(const void *ptr);
 } JSMallocFunctions;
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
@@ -528,20 +528,20 @@ void JS_EnableBignumExt(JSContext *ctx, JS_BOOL enable);
 JSValue js_string_codePointRange(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv);
 
-void *js_malloc_rt(JSRuntime *rt, size_t size);
-void js_free_rt(JSRuntime *rt, void *ptr);
-void *js_realloc_rt(JSRuntime *rt, void *ptr, size_t size);
-size_t js_malloc_usable_size_rt(JSRuntime *rt, const void *ptr);
-void *js_mallocz_rt(JSRuntime *rt, size_t size);
+void *qjs_malloc_rt(JSRuntime *rt, size_t size);
+void qjs_free_rt(JSRuntime *rt, void *ptr);
+void *qjs_realloc_rt(JSRuntime *rt, void *ptr, size_t size);
+size_t qjs_malloc_usable_size_rt(JSRuntime *rt, const void *ptr);
+void *qjs_mallocz_rt(JSRuntime *rt, size_t size);
 
-void *js_malloc(JSContext *ctx, size_t size);
-void js_free(JSContext *ctx, void *ptr);
-void *js_realloc(JSContext *ctx, void *ptr, size_t size);
-size_t js_malloc_usable_size(JSContext *ctx, const void *ptr);
-void *js_realloc2(JSContext *ctx, void *ptr, size_t size, size_t *pslack);
-void *js_mallocz(JSContext *ctx, size_t size);
-char *js_strdup(JSContext *ctx, const char *str);
-char *js_strndup(JSContext *ctx, const char *s, size_t n);
+void *qjs_malloc(JSContext *ctx, size_t size);
+void qjs_free(JSContext *ctx, void *ptr);
+void *qjs_realloc(JSContext *ctx, void *ptr, size_t size);
+size_t qjs_malloc_usable_size(JSContext *ctx, const void *ptr);
+void *qjs_realloc2(JSContext *ctx, void *ptr, size_t size, size_t *pslack);
+void *qjs_mallocz(JSContext *ctx, size_t size);
+char *qjs_strdup(JSContext *ctx, const char *str);
+char *qjs_strndup(JSContext *ctx, const char *s, size_t n);
 
 typedef struct JSMemoryUsage {
     int64_t malloc_size, malloc_limit, memory_used_size;
@@ -1007,7 +1007,7 @@ void JS_SetIsHTMLDDA(JSContext *ctx, JSValueConst obj);
 
 typedef struct JSModuleDef JSModuleDef;
 
-/* return the module specifier (allocated with js_malloc()) or NULL if
+/* return the module specifier (allocated with qjs_malloc()) or NULL if
    exception */
 typedef char *JSModuleNormalizeFunc(JSContext *ctx,
                                     const char *module_base_name,
