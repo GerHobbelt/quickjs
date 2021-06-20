@@ -46,6 +46,8 @@
 #include "quickjs-libc.h"
 #include "quickjs-port.h"
 
+#include "monolithic_examples.h"
+
 JSModuleLoaderFunc* js_std_get_module_loader_func();
 
 #define malloc(s) malloc_is_forbidden(s)
@@ -109,7 +111,7 @@ static int eval_file(JSContext *ctx, const char *filename, int module)
     else
         eval_flags = JS_EVAL_TYPE_GLOBAL;
     ret = eval_buf(ctx, buf, buf_len, filename, eval_flags);
-    js_free(ctx, buf);
+    qjs_free(ctx, buf);
     return ret;
 }
 

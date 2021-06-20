@@ -37,6 +37,9 @@
 
 #include "cutils.h"
 
+#include "monolithic_examples.h"
+
+
 typedef struct JSToken {
     int tok;
     char buf[20];

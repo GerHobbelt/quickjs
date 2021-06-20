@@ -37,6 +37,8 @@
 #include "quickjs-libc.h"
 #include "quickjs-port.h"
 
+#include "monolithic_examples.h"
+
 /* enable test262 thread support to test SharedArrayBuffer and Atomics */
 #define CONFIG_AGENT
 
@@ -820,7 +822,7 @@ static JSModuleDef *js_module_loader_test(JSContext *ctx,
     /* compile the module */
     func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
                        JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-    js_free(ctx, buf);
+    qjs_free(ctx, buf);
     if (JS_IsException(func_val))
         return NULL;
     /* the module is already referenced, so we must free it */
@@ -1952,10 +1954,10 @@ static const char *get_opt_arg(const char *option, const char *arg)
 }
 
 #if defined(BUILD_MONOLITHIC)
-int qjs_test262_main(int argc, const char** argv)
-#else
-int main(int argc, const char **argv)
+#define main(c, a)			qjs_test262_main(c, a)
 #endif
+
+int main(int argc, const char **argv)
 {
     int optind, start_index, stop_index;
     BOOL is_dir_list;
