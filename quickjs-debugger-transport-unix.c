@@ -2,6 +2,7 @@
 
 #include "quickjs-debugger.h"
 #include "quickjs-debugger-transport.h"
+#include "cutils.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -10,7 +11,6 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <poll.h>
 #include <arpa/inet.h>
 
@@ -92,12 +92,13 @@ static void js_transport_close(JSRuntime* rt, void *udata) {
 void js_debugger_connect(JSContext *ctx, const char *address) {
     struct sockaddr_in addr;
     int parse_addr_result = js_debugger_parse_sockaddr(address, &addr);
-    assert(parse_addr_result == 0);
+    QJS_ASSERT(parse_addr_result == 0);
 
     int client = socket(AF_INET, SOCK_STREAM, 0);
-    assert(client >= 0);
+    QJS_ASSERT(client >= 0);
 
-    assert(!connect(client, (const struct sockaddr *)&addr, sizeof(addr)));
+	int h = connect(client, (const struct sockaddr*)&addr, sizeof(addr));
+    QJS_ASSERT(!h);
 
     struct js_transport_data *data = (struct js_transport_data *)malloc(sizeof(struct js_transport_data));
     memset(data, 0, sizeof(js_transport_data));
@@ -108,15 +109,17 @@ void js_debugger_connect(JSContext *ctx, const char *address) {
 void js_debugger_wait_connection(JSContext *ctx, const char* address) {
     struct sockaddr_in addr;
     int parse_addr_result = js_debugger_parse_sockaddr(address, &addr);
-    assert(parse_addr_result == 0);
+    QJS_ASSERT(parse_addr_result == 0);
 
     int server = socket(AF_INET, SOCK_STREAM, 0);
-    assert(server >= 0);
+    QJS_ASSERT(server >= 0);
 
     int reuseAddress = 1;
-    assert(setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (const char *) &reuseAddress, sizeof(reuseAddress)) >= 0);
+    int rv = setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (const char *) &reuseAddress, sizeof(reuseAddress));
+	QJS_ASSERT(rv >= 0);
 
-    assert(bind(server, (struct sockaddr *) &addr, sizeof(addr)) >= 0);
+    rv = bind(server, (struct sockaddr *) &addr, sizeof(addr));
+	QJS_ASSERT(rv >= 0);
 
     listen(server, 1);
 
@@ -124,7 +127,7 @@ void js_debugger_wait_connection(JSContext *ctx, const char* address) {
     socklen_t client_addr_size = (socklen_t) sizeof(addr);
     int client = accept(server, (struct sockaddr *) &client_addr, &client_addr_size);
     close(server);
-    assert(client >= 0);
+    QJS_ASSERT(client >= 0);
 
     struct js_transport_data *data = (struct js_transport_data *)malloc(sizeof(struct js_transport_data));
     memset(data, 0, sizeof(js_transport_data));

@@ -27,7 +27,6 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
@@ -196,7 +195,7 @@ static void *js_trace_malloc(JSMallocState *s, size_t size)
     void *ptr;
 
     /* Do not allocate zero bytes: behavior is platform dependent */
-    assert(size != 0);
+    QJS_ASSERT(size != 0);
 
     if (unlikely(s->malloc_size + size > s->malloc_limit))
         return NULL;

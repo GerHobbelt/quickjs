@@ -27,7 +27,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
-#include <assert.h>
 
 #include "cutils.h"
 #include "libregexp.h"
@@ -278,11 +277,11 @@ static __maybe_unused void lre_dump_bytecode(const uint8_t *buf,
     int pos, len, opcode, bc_len, re_flags, i;
     uint32_t val;
     
-    assert(buf_len >= RE_HEADER_LEN);
+    QJS_ASSERT(buf_len >= RE_HEADER_LEN);
 
     re_flags=  buf[0];
     bc_len = get_u32(buf + 3);
-    assert(bc_len + RE_HEADER_LEN <= buf_len);
+    QJS_ASSERT(bc_len + RE_HEADER_LEN <= buf_len);
     printf("flags: 0x%x capture_count=%d stack_size=%d\n",
            re_flags, buf[1], buf[2]);
     if (re_flags & LRE_FLAG_NAMED_GROUPS) {
@@ -296,7 +295,7 @@ static __maybe_unused void lre_dump_bytecode(const uint8_t *buf,
             p += strlen(p) + 1;
         }
         printf("\n");
-        assert(p == (char *)(buf + buf_len));
+        QJS_ASSERT(p == (char *)(buf + buf_len));
     }
     printf("bytecode_len=%d\n", bc_len);
 
@@ -1784,8 +1783,8 @@ static int compute_stack_size(const uint8_t *bc_buf, int bc_buf_len)
     while (pos < bc_buf_len) {
         opcode = bc_buf[pos];
         len = reopcode_info[opcode].size;
-        assert(opcode < REOP_COUNT);
-        assert((pos + len) <= bc_buf_len);
+        QJS_ASSERT(opcode < REOP_COUNT);
+        QJS_ASSERT((pos + len) <= bc_buf_len);
         switch(opcode) {
         case REOP_push_i32:
         case REOP_push_char_pos:
@@ -1798,7 +1797,7 @@ static int compute_stack_size(const uint8_t *bc_buf, int bc_buf_len)
             break;
         case REOP_drop:
         case REOP_bne_char_pos:
-            assert(stack_size > 0);
+            QJS_ASSERT(stack_size > 0);
             stack_size--;
             break;
         case REOP_range:
@@ -2258,7 +2257,7 @@ static intptr_t lre_exec_backtrack(REExecContext *s, uint8_t **capture,
         case REOP_save_start:
         case REOP_save_end:
             val = *pc++;
-            assert(val < s->capture_count);
+            QJS_ASSERT(val < s->capture_count);
             capture[2 * val + opcode - REOP_save_start] = (uint8_t *)cptr;
             break;
         case REOP_save_reset:
@@ -2267,7 +2266,7 @@ static intptr_t lre_exec_backtrack(REExecContext *s, uint8_t **capture,
                 val = pc[0];
                 val2 = pc[1];
                 pc += 2;
-                assert(val2 < s->capture_count);
+                QJS_ASSERT(val2 < s->capture_count);
                 while (val <= val2) {
                     capture[2 * val] = NULL;
                     capture[2 * val + 1] = NULL;
@@ -2489,7 +2488,7 @@ static intptr_t lre_exec_backtrack(REExecContext *s, uint8_t **capture,
             }
             break;
         default:
-            abort();
+            QJS_ABORT();
         }
     }
 }

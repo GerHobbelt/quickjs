@@ -27,7 +27,6 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>

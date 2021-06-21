@@ -22,7 +22,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <assert.h>
 #include <intrin.h>
 
 #pragma intrinsic(_ReadWriteBarrier)
@@ -389,7 +388,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? (atomic_store_llong((atomic_llong*)(obj) \
         , (__int64)(desired), (order)), 0) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_load_explicit(obj, order) \
     __pragma(warning(suppress: 4047)) \
@@ -401,7 +400,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     ? atomic_load_long((atomic_long*)(obj), (order)) \
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_load_llong((atomic_llong*)(obj), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_exchange_explicit(obj, desired, order) \
     __pragma(warning(suppress: 4047 4310)) \
@@ -417,7 +416,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_exchange_llong((atomic_llong*)(obj) \
         , (__int64)(desired), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_compare_exchange_strong_explicit(obj, expected \
     , desired, success, failure) \
@@ -438,7 +437,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     ? atomic_compare_exchange_llong( \
         (atomic_llong*)(obj), (__int64*)(expected) \
         , (__int64)(desired), (success), (failure)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_compare_exchange_weak_explicit \
     atomic_compare_exchange_strong_explicit
@@ -457,7 +456,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_fetch_add_llong((atomic_llong*)(obj) \
         , (__int64)(intptr_t)(op), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_fetch_sub_explicit(obj, op, order) \
     __pragma(warning(suppress: 4310)) \
@@ -473,7 +472,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_fetch_sub_llong((atomic_llong*)(obj) \
         , (__int64)(intptr_t)(op), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_fetch_or_explicit(obj, op, order) \
     __pragma(warning(suppress: 4310)) \
@@ -489,7 +488,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_fetch_or_llong((atomic_llong*)(obj) \
         , (__int64)(intptr_t)(op), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_fetch_xor_explicit(obj, op, order) \
     __pragma(warning(suppress: 4310)) \
@@ -505,7 +504,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_fetch_xor_llong((atomic_llong*)(obj) \
         , (__int64)(intptr_t)(op), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #define atomic_fetch_and_explicit(obj, op, order) \
     __pragma(warning(suppress: 4310)) \
@@ -521,7 +520,7 @@ typedef _Atomic(uintmax_t)          atomic_uintmax_t;
     : ((sizeof(*(obj)) == 8U) \
     ? atomic_fetch_and_llong((atomic_llong*)(obj) \
         , (__int64)(intptr_t)(op), (order)) \
-    : (assert(!"Invalid type"), 0)))))
+    : (QJS_ASSERT(!"Invalid type"), 0)))))
 
 #endif /* (_MSC_VER >= 1928) */
 

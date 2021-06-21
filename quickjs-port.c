@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <assert.h>
 #include <stdio.h>
 #include <fenv.h>
 
@@ -28,7 +27,7 @@
 #include "quickjs-port.h"
 
 void qjs_abort() {
-    abort();
+    QJS_ABORT();
 }
 
 int qjs_fesetround(int round)

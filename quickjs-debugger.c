@@ -1,9 +1,9 @@
 #include "quickjs-debugger.h"
+#include "cutils.h"
 #include <time.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <limits.h>
 
 typedef struct DebuggerSuspendedState {
@@ -312,7 +312,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             int frame = reference >> 2;
             int scope = reference % 4;
 
-            assert(frame < js_debugger_stack_depth(ctx));
+            QJS_ASSERT(frame < js_debugger_stack_depth(ctx));
 
             if (scope == 0)
                 variable = JS_GetGlobalObject(ctx);
@@ -321,7 +321,7 @@ static void js_process_request(JSDebuggerInfo *info, struct DebuggerSuspendedSta
             else if (scope == 2)
                 variable = js_debugger_closure_variables(ctx, frame);
             else
-                assert(0);
+                QJS_ABORT();
 
             // need to dupe the variable, as it's used below as well.
             JS_SetPropertyUint32(ctx, state->variable_references, reference, JS_DupValue(ctx, variable));
@@ -434,7 +434,7 @@ static int js_process_debugger_messages(JSDebuggerInfo *info, const uint8_t *cur
 
         message_length_buf[8] = '\0';
         int message_length = strtol(message_length_buf, NULL, 16);
-        assert(message_length > 0);
+        QJS_ASSERT(message_length > 0);
         if (message_length > info->message_buffer_length) {
             if (info->message_buffer) {
                 qjs_free(ctx, info->message_buffer);

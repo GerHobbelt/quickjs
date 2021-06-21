@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 #include "cutils.h"
 #include "libunicode.h"
@@ -393,7 +392,7 @@ int cr_op(CharRange *cr, const uint32_t *a_pt, int a_len,
             is_in = (a_idx & 1) ^ (b_idx & 1);
             break;
         default:
-            abort();
+            QJS_ABORT();
         }
         if (is_in != (cr->len & 1)) {
             if (cr_add_point(cr, v))
@@ -1263,21 +1262,21 @@ static int unicode_prop_ops(CharRange *cr, ...)
         op = va_arg(ap, int);
         switch(op) {
         case POP_GC:
-            assert(stack_len < POP_STACK_LEN_MAX);
+            QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
             a = va_arg(ap, int);
             cr_init(&stack[stack_len++], cr->mem_opaque, cr->realloc_func);
             if (unicode_general_category1(&stack[stack_len - 1], a))
                 goto fail;
             break;
         case POP_PROP:
-            assert(stack_len < POP_STACK_LEN_MAX);
+            QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
             a = va_arg(ap, int);
             cr_init(&stack[stack_len++], cr->mem_opaque, cr->realloc_func);
             if (unicode_prop1(&stack[stack_len - 1], a))
                 goto fail;
             break;
         case POP_CASE:
-            assert(stack_len < POP_STACK_LEN_MAX);
+            QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
             a = va_arg(ap, int);
             cr_init(&stack[stack_len++], cr->mem_opaque, cr->realloc_func);
             if (unicode_case1(&stack[stack_len - 1], a))
@@ -1288,8 +1287,8 @@ static int unicode_prop_ops(CharRange *cr, ...)
         case POP_XOR:
             {
                 CharRange *cr1, *cr2, *cr3;
-                assert(stack_len >= 2);
-                assert(stack_len < POP_STACK_LEN_MAX);
+                QJS_ASSERT(stack_len >= 2);
+                QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
                 cr1 = &stack[stack_len - 2];
                 cr2 = &stack[stack_len - 1];
                 cr3 = &stack[stack_len++];
@@ -1304,18 +1303,18 @@ static int unicode_prop_ops(CharRange *cr, ...)
             }
             break;
         case POP_INVERT:
-            assert(stack_len >= 1);
+            QJS_ASSERT(stack_len >= 1);
             if (cr_invert(&stack[stack_len - 1]))
                 goto fail;
             break;
         case POP_END:
             goto done;
         default:
-            abort();
+            QJS_ABORT();
         }
     }
  done:
-    assert(stack_len == 1);
+    QJS_ASSERT(stack_len == 1);
     ret = cr_copy(cr, &stack[0]);
     cr_free(&stack[0]);
     return ret;

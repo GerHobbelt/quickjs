@@ -88,6 +88,24 @@ enum {
 };
 #endif
 
+#ifdef QJS_NO_ASSERT
+
+#define QJS_ASSERT(expression)	((void)0)
+#define QJS_ABORT()				qjs_assert("Aborting: Should never get here!", __FILE__, __LINE__)
+
+#else
+
+#define QJS_ASSERT(expression) (void)(                                      \
+            (!!(expression)) ||                                             \
+            (qjs_assert(#expression, __FILE__, (unsigned)(__LINE__)), 0)	\
+        )
+
+#define QJS_ABORT()		QJS_ASSERT(!"Should never get here!")
+
+#endif
+
+void qjs_assert(const char* msg, const char* file, int line);
+
 void pstrcpy(char *buf, int buf_size, const char *str);
 char *pstrcat(char *buf, int buf_size, const char *s);
 int strstart(const char *str, const char *val, const char **ptr);
@@ -345,6 +363,7 @@ int dbuf_put(DynBuf *s, const uint8_t *data, size_t len);
 int dbuf_put_self(DynBuf *s, size_t offset, size_t len);
 int dbuf_putc(DynBuf *s, uint8_t c);
 int dbuf_putstr(DynBuf *s, const char *str);
+
 static inline int dbuf_put_u16(DynBuf *s, uint16_t val)
 {
     return dbuf_put(s, (uint8_t *)&val, 2);

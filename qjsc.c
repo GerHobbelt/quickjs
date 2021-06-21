@@ -26,7 +26,6 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #if !defined(_WIN32)
 #include <sys/wait.h>
@@ -209,7 +208,7 @@ static void output_object_code(JSContext *ctx,
 static int js_module_dummy_init(JSContext *ctx, JSModuleDef *m)
 {
     /* should never be called when compiling JS code */
-    abort();
+    QJS_ABORT();
 }
 
 static void find_unique_cname(char *cname, size_t cname_size)
@@ -217,7 +216,7 @@ static void find_unique_cname(char *cname, size_t cname_size)
     char cname1[1024];
     int suffix_num;
     size_t len, max_len;
-    assert(cname_size >= 32);
+    QJS_ASSERT(cname_size >= 32);
     /* find a C name not matching an existing module C name by
        adding a numeric suffix */
     len = strlen(cname);

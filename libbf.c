@@ -27,7 +27,6 @@
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
-#include <assert.h>
 
 #include "quickjs.h"
 
@@ -442,7 +441,7 @@ static int bf_get_rnd_add(int *pret, const bf_t *r, limb_t l,
         add_one = bit1;
         break;
     default:
-        abort();
+        QJS_ABORT();
     }
     
     if (inexact)
@@ -507,7 +506,7 @@ static int __bf_round(bf_t *r, limb_t prec1, bf_flags_t flags, limb_t l,
     } else if (unlikely(r->expn < e_min) && (flags & BF_FLAG_SUBNORMAL)) {
         /* restrict the precision in case of potentially subnormal
            result */
-        assert(prec1 != BF_PREC_INF);
+        QJS_ASSERT(prec1 != BF_PREC_INF);
         prec = prec1 - (e_min - r->expn);
     } else {
         prec = prec1;
@@ -1121,7 +1120,7 @@ static limb_t mp_shr(limb_t *tab_r, const limb_t *tab, mp_size_t n,
     mp_size_t i;
     limb_t l, a;
 
-    assert(shift >= 1 && shift < LIMB_BITS);
+    QJS_ASSERT(shift >= 1 && shift < LIMB_BITS);
     l = high;
     for(i = n - 1; i >= 0; i--) {
         a = tab[i];
@@ -1446,7 +1445,7 @@ static int mp_divnorm_large(bf_context_t *s,
     mp_print_str("a", taba, na);
     mp_print_str("b", tabb, nb);
 #endif
-    assert(nq >= 1);
+    QJS_ASSERT(nq >= 1);
     n = nq;
     if (nq < nb)
         n++; 
@@ -1742,9 +1741,9 @@ int bf_divrem(bf_t *q, bf_t *r, const bf_t *a, const bf_t *b,
     int q_sign, ret;
     BOOL is_ceil, is_rndn;
     
-    assert(q != a && q != b);
-    assert(r != a && r != b);
-    assert(q != r);
+    QJS_ASSERT(q != a && q != b);
+    QJS_ASSERT(r != a && r != b);
+    QJS_ASSERT(q != r);
     
     if (a->len == 0 || b->len == 0) {
         bf_set_zero(q, 0);
@@ -2133,7 +2132,7 @@ int bf_sqrt(bf_t *r, const bf_t *a, limb_t prec, bf_flags_t flags)
     bf_context_t *s = a->ctx;
     int ret;
 
-    assert(r != a);
+    QJS_ASSERT(r != a);
 
     if (a->len == 0) {
         if (a->expn == BF_EXP_NAN) {
@@ -2268,7 +2267,7 @@ static int bf_pow_ui(bf_t *r, const bf_t *a, limb_t b, limb_t prec,
 {
     int ret, n_bits, i;
     
-    assert(r != a);
+    QJS_ASSERT(r != a);
     if (b == 0)
         return bf_set_ui(r, 1);
     ret = bf_set(r, a);
@@ -2332,7 +2331,7 @@ static int bf_logic_op(bf_t *r, const bf_t *a1, const bf_t *b1, int op)
     limb_t v1, v2, v1_mask, v2_mask, r_mask;
     int ret;
     
-    assert(r != a1 && r != b1);
+    QJS_ASSERT(r != a1 && r != b1);
 
     if (a1->expn <= 0)
         a_sign = 0; /* minus zero is considered as positive */
@@ -2950,7 +2949,7 @@ static int bf_atof_internal(bf_t *r, slimb_t *pexponent,
     if (radix == 0)
         radix = 10;
     if (is_dec) {
-        assert(radix == 10);
+        QJS_ASSERT(radix == 10);
         radix_bits = 0;
         a = r;
     } else if ((radix & (radix - 1)) != 0) {
@@ -3386,7 +3385,7 @@ static int bf_integer_to_radix_rec(bf_t *pow_tab,
     limb_t n1, n2, q_prec;
     int ret;
     
-    assert(n >= 1);
+    QJS_ASSERT(n >= 1);
     if (n == 1) {
         out[0] = get_bits(a->tab, a->len, a->len * LIMB_BITS - a->expn);
     } else if (n == 2) {
@@ -3881,7 +3880,7 @@ static char *bf_ftoa_internal(size_t *plen, const bf_t *a2, int radix,
                     } else {
                         slimb_t n_digits_max, n_digits_min;
                         
-                        assert(prec != BF_PREC_INF);
+                        QJS_ASSERT(prec != BF_PREC_INF);
                         n_digits = 1 + bf_mul_log2_radix(prec, radix, TRUE, TRUE);
                         /* max number of digits for non exponential
                            notation. The rational is to have the same rule
@@ -4291,7 +4290,7 @@ static int bf_exp_internal(bf_t *r, const bf_t *a, limb_t prec, void *opaque)
     bf_t T_s, *T = &T_s;
     slimb_t n, K, l, i, prec1;
     
-    assert(r != a);
+    QJS_ASSERT(r != a);
 
     /* argument reduction:
        T = a - n*log(2) with 0 <= T < log(2) and n integer.
@@ -4409,7 +4408,7 @@ int bf_exp(bf_t *r, const bf_t *a, limb_t prec, bf_flags_t flags)
 {
     bf_context_t *s = r->ctx;
     int ret;
-    assert(r != a);
+    QJS_ASSERT(r != a);
     if (a->len == 0) {
         if (a->expn == BF_EXP_NAN) {
             bf_set_nan(r);
@@ -4444,7 +4443,7 @@ static int bf_log_internal(bf_t *r, const bf_t *a, limb_t prec, void *opaque)
     bf_t V_s, *V = &V_s;
     slimb_t n, prec1, l, i, K;
     
-    assert(r != a);
+    QJS_ASSERT(r != a);
 
     bf_init(s, T);
     /* argument reduction 1 */
@@ -4540,7 +4539,7 @@ int bf_log(bf_t *r, const bf_t *a, limb_t prec, bf_flags_t flags)
     bf_context_t *s = r->ctx;
     bf_t T_s, *T = &T_s;
     
-    assert(r != a);
+    QJS_ASSERT(r != a);
     if (a->len == 0) {
         if (a->expn == BF_EXP_NAN) {
             bf_set_nan(r);
@@ -4774,7 +4773,7 @@ int bf_pow(bf_t *r, const bf_t *x, const bf_t *y, limb_t prec, bf_flags_t flags)
                 slimb_t y1;
                 /* specific case for infinite precision (integer case) */
                 bf_get_limb(&y1, y, 0);
-                assert(!y->sign);
+                QJS_ASSERT(!y->sign);
                 /* x must be an integer, so abs(x) >= 2 */
                 if (y1 >= ((slimb_t)1 << BF_EXP_BITS_MAX)) {
                     bf_delete(T);
@@ -4855,7 +4854,7 @@ static int bf_sincos(bf_t *s, bf_t *c, const bf_t *a, limb_t prec)
     slimb_t K, prec1, i, l, mod, prec2;
     int is_neg;
     
-    assert(c != a && s != a);
+    QJS_ASSERT(c != a && s != a);
 
     bf_init(s1, T);
     bf_init(s1, U);
@@ -5028,7 +5027,7 @@ static int bf_tan_internal(bf_t *r, const bf_t *a, limb_t prec, void *opaque)
 
 int bf_tan(bf_t *r, const bf_t *a, limb_t prec, bf_flags_t flags)
 {
-    assert(r != a);
+    QJS_ASSERT(r != a);
     if (a->len == 0) {
         if (a->expn == BF_EXP_NAN) {
             bf_set_nan(r);
@@ -5852,7 +5851,7 @@ static int mp_div_dec(bf_context_t *s, limb_t *tabq,
 
     /* normalize tabb */
     r = tabb1[nb - 1];
-    assert(r != 0);
+    QJS_ASSERT(r != 0);
     i = na - nb;
     if (r >= BF_DEC_BASE / 2) {
         mult = 1;
@@ -5948,7 +5947,7 @@ static limb_t mp_shr_dec(limb_t *tab_r, const limb_t *tab, mp_size_t n,
     mp_size_t i;
     limb_t l, a, q, r;
 
-    assert(shift >= 1 && shift < LIMB_DIGITS);
+    QJS_ASSERT(shift >= 1 && shift < LIMB_DIGITS);
     l = high;
     for(i = n - 1; i >= 0; i--) {
         a = tab[i];
@@ -5966,7 +5965,7 @@ static limb_t mp_shl_dec(limb_t *tab_r, const limb_t *tab, mp_size_t n,
     mp_size_t i;
     limb_t l, a, q, r;
 
-    assert(shift >= 1 && shift < LIMB_DIGITS);
+    QJS_ASSERT(shift >= 1 && shift < LIMB_DIGITS);
     l = low;
     for(i = 0; i < n; i++) {
         a = tab[i];
@@ -6411,7 +6410,7 @@ static int bfdec_get_rnd_add(int *pret, const bfdec_t *r, limb_t l,
         add_one = inexact;
         break;
     default:
-        abort();
+        QJS_ABORT();
     }
     
     if (inexact)
@@ -6443,7 +6442,7 @@ static int __bfdec_round(bfdec_t *r, limb_t prec1, bf_flags_t flags, limb_t l)
     } else if (unlikely(r->expn < e_min) && (flags & BF_FLAG_SUBNORMAL)) {
         /* restrict the precision in case of potentially subnormal
            result */
-        assert(prec1 != BF_PREC_INF);
+        QJS_ASSERT(prec1 != BF_PREC_INF);
         prec = prec1 - (e_min - r->expn);
     } else {
         prec = prec1;
@@ -6690,7 +6689,7 @@ static int bfdec_add_internal(bfdec_t *r, const bfdec_t *a, const bfdec_t *b, li
             if (carry != 0) {
                 carry = mp_sub_ui_dec(r->tab + b_offset + b1_len, carry,
                                       r_len - (b_offset + b1_len));
-                assert(carry == 0);
+                QJS_ASSERT(carry == 0);
             }
         } else {
             carry = mp_add_dec(r->tab + b_offset, r->tab + b_offset,
@@ -6964,9 +6963,9 @@ int bfdec_divrem(bfdec_t *q, bfdec_t *r, const bfdec_t *a, const bfdec_t *b,
     int q_sign, res;
     BOOL is_ceil, is_rndn;
     
-    assert(q != a && q != b);
-    assert(r != a && r != b);
-    assert(q != r);
+    QJS_ASSERT(q != a && q != b);
+    QJS_ASSERT(r != a && r != b);
+    QJS_ASSERT(q != r);
     
     if (a->len == 0 || b->len == 0) {
         bfdec_set_zero(q, 0);
@@ -7085,7 +7084,7 @@ int bfdec_sqrt(bfdec_t *r, const bfdec_t *a, limb_t prec, bf_flags_t flags)
     slimb_t n, n1, prec1;
     limb_t res;
 
-    assert(r != a);
+    QJS_ASSERT(r != a);
 
     if (a->len == 0) {
         if (a->expn == BF_EXP_NAN) {
@@ -7213,7 +7212,7 @@ int bfdec_pow_ui(bfdec_t *r, const bfdec_t *a, limb_t b)
 {
     int ret, n_bits, i;
     
-    assert(r != a);
+    QJS_ASSERT(r != a);
     if (b == 0)
         return bfdec_set_ui(r, 1);
     ret = bfdec_set(r, a);
@@ -7426,8 +7425,8 @@ static inline limb_t mul_mod_fast(limb_t a, limb_t b,
 static inline limb_t init_mul_mod_fast(limb_t m)
 {
     dlimb_t t;
-    assert(m < (limb_t)1 << NTT_MOD_LOG2_MAX);
-    assert(m >= (limb_t)1 << NTT_MOD_LOG2_MIN);
+    QJS_ASSERT(m < (limb_t)1 << NTT_MOD_LOG2_MAX);
+    QJS_ASSERT(m >= (limb_t)1 << NTT_MOD_LOG2_MIN);
     t = (dlimb_t)1 << (LIMB_BITS + NTT_MOD_LOG2_MIN);
     return t / m;
 }
@@ -7563,7 +7562,7 @@ static no_inline int ntt_fft(BFNTTState *s,
     m2f = _mm256_set1_pd(m * 2);
 
     n = (limb_t)1 << fft_len_log2;
-    assert(n >= 8);
+    QJS_ASSERT(n >= 8);
     stride_in = n / 2;
 
     tab_in = in_buf;
@@ -7683,7 +7682,7 @@ static no_inline void mul_trig(NTTLimb *buf,
 {
     limb_t i, c2, c3, c4;
     __m256d c, c_mul, a0, mf, m_inv;
-    assert(n >= 2);
+    QJS_ASSERT(n >= 2);
     
     mf = _mm256_set1_pd(m);
     m_inv = _mm256_set1_pd(1.0 / (double)m);
@@ -7910,7 +7909,7 @@ static int ntt_fft_partial(BFNTTState *s, NTTLimb *buf1,
         m_inv = s->ntt_mods_div[m_idx];
         c0 = s->ntt_proot_pow[m_idx][inverse][k1 + k2];
         c_mul = 1;
-        assert((n2 % strip_len) == 0);
+        QJS_ASSERT((n2 % strip_len) == 0);
         for(j = 0; j < n2; j += strip_len) {
             for(i = 0; i < n1; i++) {
                 for(l = 0; l < strip_len; l++) {
@@ -8350,7 +8349,7 @@ int bf_get_fft_size(int *pdpl, int *pnb_mods, limb_t len)
     next: ;
     }
     if (!dpl_found)
-        abort();
+        QJS_ABORT();
     /* limit dpl if possible to reduce fixed cost of limb/NTT conversion */
     if (dpl_found > (LIMB_BITS + NTT_MOD_LOG2_MIN) &&
         ((limb_t)(LIMB_BITS + NTT_MOD_LOG2_MIN) << fft_len_log2_found) >=

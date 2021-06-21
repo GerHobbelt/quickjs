@@ -30,6 +30,22 @@
 #include "quickjs.h"
 #include "cutils.h"
 
+void qjs_assert(const char* msg, const char* file, int line)
+{
+	DebugBreak();
+	fprintf(stderr, "\nAssertion failed (%s, %d): %s\n", file, line, msg);
+	fflush(stderr);
+
+	fprintf(stderr, "Triggering SEH exception\n");
+	fflush(stderr);
+	volatile int* pInt = 0x00000000;
+	*pInt = 20;
+#if 0
+	abort();
+#endif
+}
+
+
 void pstrcpy(char *buf, int buf_size, const char *str)
 {
     int c;

@@ -27,7 +27,6 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
@@ -531,7 +530,7 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
     JSAtom module_name_atom;
     const char *module_name;
     
-    assert(JS_VALUE_GET_TAG(func_val) == JS_TAG_MODULE);
+    QJS_ASSERT(JS_VALUE_GET_TAG(func_val) == JS_TAG_MODULE);
     m = JS_VALUE_GET_PTR(func_val);
 
     module_name_atom = JS_GetModuleName(ctx, m);
@@ -3116,7 +3115,7 @@ static void js_sab_free(void *opaque, void *ptr)
     int ref_count;
     sab = (JSSABHeader *)((uint8_t *)ptr - sizeof(JSSABHeader));
     ref_count = atomic_add_int(&sab->ref_count, -1);
-    assert(ref_count >= 0);
+    QJS_ASSERT(ref_count >= 0);
     if (ref_count == 0) {
         free(sab);
     }
@@ -3183,7 +3182,7 @@ static void js_free_message_pipe(JSWorkerMessagePipe *ps)
         return;
     
     ref_count = atomic_add_int(&ps->ref_count, -1);
-    assert(ref_count >= 0);
+    QJS_ASSERT(ref_count >= 0);
     if (ref_count == 0) {
         list_for_each_safe(el, el1, &ps->msg_queue) {
             msg = list_entry(el, JSWorkerMessage, link);
