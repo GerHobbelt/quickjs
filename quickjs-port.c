@@ -204,13 +204,13 @@ int qjs_listdir(void* context, const char* path, int recurse, qjs_listdir_callba
 {
 #if defined(_WIN32)
     HANDLE hFind;
-    WIN32_FIND_DATAA wfd;
+    WIN32_FIND_DATA wfd;
     BOOL cont = TRUE;
-    char search_path[MAX_PATH];
+    TCHAR search_path[MAX_PATH];
 
     sprintf(search_path, "%s\\*", path);
 
-    if ((hFind = FindFirstFileA(search_path, &wfd)) == INVALID_HANDLE_VALUE)
+    if ((hFind = FindFirstFile(search_path, &wfd)) == INVALID_HANDLE_VALUE)
     {
         return -1;
     }
@@ -219,7 +219,11 @@ int qjs_listdir(void* context, const char* path, int recurse, qjs_listdir_callba
     {
         if ((strncmp(".", wfd.cFileName, 1) != 0) && (strncmp("..", wfd.cFileName, 2) != 0))
         {
-            sprintf(search_path, "%s\\%s", path, wfd.cFileName);
+#ifdef UNICODE
+			sprintf(search_path, "%s\\%ls", path, wfd.cFileName);
+#else
+			sprintf(search_path, "%s\\%s", path, wfd.cFileName);
+#endif
             if (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
                 if (callback(context, search_path, 1) != 0)
@@ -242,7 +246,7 @@ int qjs_listdir(void* context, const char* path, int recurse, qjs_listdir_callba
                 }
             }
         }
-        cont = FindNextFileA(hFind, &wfd);
+        cont = FindNextFile(hFind, &wfd);
     }
 done:
     if (GetLastError() != ERROR_NO_MORE_FILES)
