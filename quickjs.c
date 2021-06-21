@@ -40582,7 +40582,7 @@ exception:
 }
 
 /* only used in test262 */
-JSValue js_string_codePointRange(JSContext *ctx, JSValueConst this_val,
+JSValue qjs_string_codePointRange(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
     uint32_t start, end, i, n;

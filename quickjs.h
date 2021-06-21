@@ -525,7 +525,7 @@ void JS_AddIntrinsicOperators(JSContext *ctx);
 /* enable "use math" */
 void JS_EnableBignumExt(JSContext *ctx, JS_BOOL enable);
 
-JSValue js_string_codePointRange(JSContext *ctx, JSValueConst this_val,
+JSValue qjs_string_codePointRange(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv);
 
 void *qjs_malloc_rt(JSRuntime *rt, size_t size);
