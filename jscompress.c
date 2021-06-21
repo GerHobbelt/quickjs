@@ -40,7 +40,7 @@
 #include "monolithic_examples.h"
 
 
-typedef struct JSToken {
+typedef struct JSZToken {
     int tok;
     char buf[20];
     char *str;
@@ -48,7 +48,7 @@ typedef struct JSToken {
     int size;
     int line_num;  /* line number for start of token */
     int lines;     /* number of embedded linefeeds in token */
-} JSToken;
+} JSZToken;
 
 enum {
     TOK_EOF = 256,
@@ -61,7 +61,7 @@ enum {
     TOK_LCOM,
 };
 
-static void tok_reset(JSToken *tt)
+static void tok_reset(JSZToken *tt)
 {
     if (tt->str != tt->buf) {
         free(tt->str);
@@ -71,7 +71,7 @@ static void tok_reset(JSToken *tt)
     tt->len = 0;
 }
 
-static void tok_add_ch(JSToken *tt, int c)
+static void tok_add_ch(JSZToken *tt, int c)
 {
     if (tt->len + 1 > tt->size) {
         tt->size *= 2;
@@ -90,7 +90,7 @@ static const char *filename;
 static int output_line_num;
 static int line_num;
 static int ch;
-static JSToken tokc;
+static JSZToken tokc;
 
 static int skip_mask;
 #define DEFINE_MAX 20
@@ -461,7 +461,7 @@ again:
         goto again;
 }
 
-static void print_tok(FILE *f, JSToken *tt)
+static void print_tok(FILE *f, JSZToken *tt)
 {
     /* keep output lines in sync with input lines */
     while (output_line_num < tt->line_num) {
@@ -844,7 +844,7 @@ static void help(void)
 #define main(cnt, arr)      qjscompress_main(cnt, arr)
 #endif
 
-int main(int argc, char **argv)
+int main(int argc, const char **argv)
 {
     int c, do_strip, keep_header, compress;
     const char *out_filename, *c_var, *fname;

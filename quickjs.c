@@ -41,6 +41,7 @@
 #include "libbf.h"
 #endif
 
+
 #define OPTIMIZE         1
 #define SHORT_OPCODES    1
 #if defined(EMSCRIPTEN) || defined(_MSC_VER)
@@ -77,7 +78,7 @@
   32: dump line number table
  */
 //#define DUMP_BYTECODE  (1)
-/* dump the occurence of the automatic GC */
+/* dump the occurrence of the automatic GC */
 //#define DUMP_GC
 /* dump objects freed by the garbage collector */
 //#define DUMP_GC_FREE
@@ -1690,12 +1691,12 @@ static void *js_def_malloc(JSMallocState *s, size_t size)
     if (unlikely(s->malloc_size + size > s->malloc_limit))
         return NULL;
 
-    ptr = qjs_malloc(size);
+    ptr = qjs_port_malloc(size);
     if (!ptr)
         return NULL;
 
     s->malloc_count++;
-    s->malloc_size += qjs_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+    s->malloc_size += qjs_port_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
     return ptr;
 }
 
@@ -1705,8 +1706,8 @@ static void js_def_free(JSMallocState *s, void *ptr)
         return;
 
     s->malloc_count--;
-    s->malloc_size -= qjs_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
-    qjs_free(ptr);
+    s->malloc_size -= qjs_port_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+    qjs_port_free(ptr);
 }
 
 static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
@@ -1718,21 +1719,21 @@ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
             return NULL;
         return js_def_malloc(s, size);
     }
-    old_size = qjs_malloc_usable_size(ptr);
+    old_size = qjs_port_malloc_usable_size(ptr);
     if (size == 0) {
         s->malloc_count--;
         s->malloc_size -= old_size + MALLOC_OVERHEAD;
-        qjs_free(ptr);
+        qjs_port_free(ptr);
         return NULL;
     }
     if (s->malloc_size + size - old_size > s->malloc_limit)
         return NULL;
 
-    ptr = qjs_realloc(ptr, size);
+    ptr = qjs_port_realloc(ptr, size);
     if (!ptr)
         return NULL;
 
-    s->malloc_size += qjs_malloc_usable_size(ptr) - old_size;
+    s->malloc_size += qjs_port_malloc_usable_size(ptr) - old_size;
     return ptr;
 }
 
@@ -1758,7 +1759,7 @@ static const JSMallocFunctions def_malloc_funcs = {
     js_def_malloc,
     js_def_free,
     js_def_realloc,
-    qjs_malloc_usable_size,
+    qjs_port_malloc_usable_size,
 };
 
 JSRuntime *JS_NewRuntime(void)
@@ -42229,6 +42230,42 @@ static double js_atanh(double a)
     return atanh(a);
 }
 
+// MSVC: warning C4232 : nonstandard extension used : 'f_f' : address of dllimport 'trunc' is not static, identity not guaranteed
+static double js_trunc(double a)
+{
+	return trunc(a);
+}
+
+static double js_acos(double a)
+{
+	return acos(a);
+}
+
+static double js_acosh(double a)
+{
+	return acosh(a);
+}
+
+static double js_expm1(double a)
+{
+	return expm1(a);
+}
+
+static double js_log1p(double a)
+{
+	return log1p(a);
+}
+
+static double js_log2(double a)
+{
+	return log2(a);
+}
+
+static double js_cbrt(double a)
+{
+	return cbrt(a);
+}
+
 static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
     JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max, 1 ),
@@ -42238,7 +42275,7 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("round", 1, f_f, js_math_round ),
     JS_CFUNC_SPECIAL_DEF("sqrt", 1, f_f, sqrt ),
 
-    JS_CFUNC_SPECIAL_DEF("acos", 1, f_f, acos ),
+    JS_CFUNC_SPECIAL_DEF("acos", 1, f_f, js_acos ),
     JS_CFUNC_SPECIAL_DEF("asin", 1, f_f, asin ),
     JS_CFUNC_SPECIAL_DEF("atan", 1, f_f, atan ),
     JS_CFUNC_SPECIAL_DEF("atan2", 2, f_f_f, atan2 ),
@@ -42249,19 +42286,19 @@ static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_SPECIAL_DEF("sin", 1, f_f, sin ),
     JS_CFUNC_SPECIAL_DEF("tan", 1, f_f, tan ),
     /* ES6 */
-    JS_CFUNC_SPECIAL_DEF("trunc", 1, f_f, trunc ),
+    JS_CFUNC_SPECIAL_DEF("trunc", 1, f_f, js_trunc ),
     JS_CFUNC_SPECIAL_DEF("sign", 1, f_f, js_math_sign ),
     JS_CFUNC_SPECIAL_DEF("cosh", 1, f_f, cosh ),
     JS_CFUNC_SPECIAL_DEF("sinh", 1, f_f, sinh ),
     JS_CFUNC_SPECIAL_DEF("tanh", 1, f_f, tanh ),
-    JS_CFUNC_SPECIAL_DEF("acosh", 1, f_f, acosh ),
+    JS_CFUNC_SPECIAL_DEF("acosh", 1, f_f, js_acosh ),
     JS_CFUNC_SPECIAL_DEF("asinh", 1, f_f, js_asinh ),
     JS_CFUNC_SPECIAL_DEF("atanh", 1, f_f, js_atanh ),
-    JS_CFUNC_SPECIAL_DEF("expm1", 1, f_f, expm1 ),
-    JS_CFUNC_SPECIAL_DEF("log1p", 1, f_f, log1p ),
-    JS_CFUNC_SPECIAL_DEF("log2", 1, f_f, log2 ),
+    JS_CFUNC_SPECIAL_DEF("expm1", 1, f_f, js_expm1 ),
+    JS_CFUNC_SPECIAL_DEF("log1p", 1, f_f, js_log1p ),
+    JS_CFUNC_SPECIAL_DEF("log2", 1, f_f, js_log2 ),
     JS_CFUNC_SPECIAL_DEF("log10", 1, f_f, log10 ),
-    JS_CFUNC_SPECIAL_DEF("cbrt", 1, f_f, cbrt ),
+    JS_CFUNC_SPECIAL_DEF("cbrt", 1, f_f, js_cbrt ),
     JS_CFUNC_DEF("hypot", 2, js_math_hypot ),
     JS_CFUNC_DEF("random", 0, js_math_random ),
     JS_CFUNC_SPECIAL_DEF("fround", 1, f_f, js_math_fround ),

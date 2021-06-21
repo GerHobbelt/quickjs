@@ -111,7 +111,7 @@ static int eval_file(JSContext *ctx, const char *filename, int module)
     else
         eval_flags = JS_EVAL_TYPE_GLOBAL;
     ret = eval_buf(ctx, buf, buf_len, filename, eval_flags);
-    qjs_free(ctx, buf);
+    qjs_port_free(ctx, buf);
     return ret;
 }
 
@@ -169,7 +169,7 @@ static void __js_printf_like(2, 3)
                 } else {
                     printf("H%+06lld.%zd",
                            js_trace_malloc_ptr_offset(ptr, s->opaque),
-                           qjs_malloc_usable_size(ptr));
+                           qjs_port_malloc_usable_size(ptr));
                 }
                 fmt++;
                 continue;
@@ -188,7 +188,7 @@ static void __js_printf_like(2, 3)
 
 static void js_trace_malloc_init(struct trace_malloc_data *s)
 {
-    qjs_free(s->base = qjs_malloc(8));
+    qjs_port_free(s->base = qjs_port_malloc(8));
 }
 
 static void *js_trace_malloc(JSMallocState *s, size_t size)
@@ -200,11 +200,11 @@ static void *js_trace_malloc(JSMallocState *s, size_t size)
 
     if (unlikely(s->malloc_size + size > s->malloc_limit))
         return NULL;
-    ptr = qjs_malloc(size);
+    ptr = qjs_port_malloc(size);
     js_trace_malloc_printf(s, "A %zd -> %p\n", size, ptr);
     if (ptr) {
         s->malloc_count++;
-        s->malloc_size += qjs_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+        s->malloc_size += qjs_port_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
     }
     return ptr;
 }
@@ -216,8 +216,8 @@ static void js_trace_free(JSMallocState *s, void *ptr)
 
     js_trace_malloc_printf(s, "F %p\n", ptr);
     s->malloc_count--;
-    s->malloc_size -= qjs_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
-    qjs_free(ptr);
+    s->malloc_size -= qjs_port_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+    qjs_port_free(ptr);
 }
 
 static void *js_trace_realloc(JSMallocState *s, void *ptr, size_t size)
@@ -229,12 +229,12 @@ static void *js_trace_realloc(JSMallocState *s, void *ptr, size_t size)
             return NULL;
         return js_trace_malloc(s, size);
     }
-    old_size = qjs_malloc_usable_size(ptr);
+    old_size = qjs_port_malloc_usable_size(ptr);
     if (size == 0) {
         js_trace_malloc_printf(s, "R %zd %p\n", size, ptr);
         s->malloc_count--;
         s->malloc_size -= old_size + MALLOC_OVERHEAD;
-        qjs_free(ptr);
+        qjs_port_free(ptr);
         return NULL;
     }
     if (s->malloc_size + size - old_size > s->malloc_limit)
@@ -242,10 +242,10 @@ static void *js_trace_realloc(JSMallocState *s, void *ptr, size_t size)
 
     js_trace_malloc_printf(s, "R %zd %p", size, ptr);
 
-    ptr = qjs_realloc(ptr, size);
+    ptr = qjs_port_realloc(ptr, size);
     js_trace_malloc_printf(s, " -> %p\n", ptr);
     if (ptr) {
-        s->malloc_size += qjs_malloc_usable_size(ptr) - old_size;
+        s->malloc_size += qjs_port_malloc_usable_size(ptr) - old_size;
     }
     return ptr;
 }
@@ -254,7 +254,7 @@ static const JSMallocFunctions trace_mf = {
     js_trace_malloc,
     js_trace_free,
     js_trace_realloc,
-    qjs_malloc_usable_size,
+    qjs_port_malloc_usable_size,
 };
 
 #define PROG_NAME "qjs"

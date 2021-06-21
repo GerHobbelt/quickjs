@@ -320,22 +320,22 @@ int qjs_realpath(const char* from_path, char* buf)
 #endif
 }
 
-extern force_inline void *qjs_malloc(size_t __size)
+extern force_inline void *qjs_port_malloc(size_t __size)
 {
     return malloc(__size);
 }
 
-extern force_inline void *qjs_realloc(void *__ptr, size_t __size)
+extern force_inline void *qjs_port_realloc(void *__ptr, size_t __size)
 {
     return realloc(__ptr, __size);
 }
 
-extern force_inline void qjs_free(void *__ptr)
+extern force_inline void qjs_port_free(void *__ptr)
 {
     free(__ptr);
 }
 
-extern force_inline size_t qjs_malloc_usable_size(const void *ptr)
+extern force_inline size_t qjs_port_malloc_usable_size(const void *ptr)
 {
 #if defined(__APPLE__)
     return malloc_size(ptr);

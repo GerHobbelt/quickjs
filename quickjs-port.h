@@ -122,10 +122,10 @@ int qjs_listdir(void* context, const char* path, int recurse, qjs_listdir_callba
 int qjs_realpath(const char* from_path, char* buf);
 
 /* Memory relate functions */
-void *qjs_malloc(size_t __size);
-void *qjs_realloc(void *__ptr, size_t __size);
-void qjs_free(void *__ptr);
-size_t qjs_malloc_usable_size(const void *ptr);
+void *qjs_port_malloc(size_t __size);
+void *qjs_port_realloc(void *__ptr, size_t __size);
+void qjs_port_free(void *__ptr);
+size_t qjs_port_malloc_usable_size(const void *ptr);
 
 #if defined(EMSCRIPTEN)
 

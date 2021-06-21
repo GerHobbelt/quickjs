@@ -203,7 +203,7 @@ static void output_object_code(JSContext *ctx,
     dump_hex(fo, out_buf, out_buf_len);
     fprintf(fo, "};\n\n");
 
-    qjs_free(ctx, out_buf);
+    qjs_port_free(ctx, out_buf);
 }
 
 static int js_module_dummy_init(JSContext *ctx, JSModuleDef *m)
@@ -273,7 +273,7 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         /* compile the module */
         func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
                            JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-        qjs_free(ctx, buf);
+        qjs_port_free(ctx, buf);
         if (JS_IsException(func_val))
             return NULL;
         get_c_name(cname, sizeof(cname), filename ? filename : module_name);
@@ -287,7 +287,7 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         JS_FreeValue(ctx, func_val);
     }
     if(filename)
-        qjs_free(ctx, filename);
+        qjs_port_free(ctx, filename);
     return m;
 }
 
@@ -321,7 +321,7 @@ static void compile_file(JSContext *ctx, FILE *fo,
         js_std_dump_error(ctx);
         exit(1);
     }
-    qjs_free(ctx, buf);
+    qjs_port_free(ctx, buf);
     if (c_name1) {
         pstrcpy(c_name, sizeof(c_name), c_name1);
     } else {
