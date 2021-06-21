@@ -822,7 +822,7 @@ static JSModuleDef *js_module_loader_test(JSContext *ctx,
     /* compile the module */
     func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
                        JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-    qjs_port_free(ctx, buf);
+    qjs_free(ctx, buf);
     if (JS_IsException(func_val))
         return NULL;
     /* the module is already referenced, so we must free it */

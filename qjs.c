@@ -111,7 +111,7 @@ static int eval_file(JSContext *ctx, const char *filename, int module)
     else
         eval_flags = JS_EVAL_TYPE_GLOBAL;
     ret = eval_buf(ctx, buf, buf_len, filename, eval_flags);
-    qjs_port_free(ctx, buf);
+    qjs_free(ctx, buf);
     return ret;
 }
 
