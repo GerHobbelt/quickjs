@@ -17,7 +17,7 @@ Memory:
 - test border cases for max number of atoms, object properties, string length
 - add emergency malloc mode for out of memory exceptions.
 - test all DynBuf memory errors
-- test all qjs_realloc memory errors
+- test all js_realloc memory errors
 - improve JS_ComputeMemoryUsage() with more info
 
 Built-in standard library:

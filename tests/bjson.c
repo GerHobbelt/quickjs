@@ -64,7 +64,7 @@ static JSValue js_bjson_write(JSContext *ctx, JSValueConst this_val,
     if (!buf)
         return JS_EXCEPTION;
     array = JS_NewArrayBufferCopy(ctx, buf, len);
-    qjs_free(ctx, buf);
+    js_free(ctx, buf);
     return array;
 }
 

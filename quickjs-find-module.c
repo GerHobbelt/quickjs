@@ -27,7 +27,7 @@ js_find_module_ext(JSContext* ctx, const char* module_name, const char* ext) {
 
     n = q - p;
 
-    filename = qjs_malloc(ctx, n + 1 + strlen(module_name) + 3 + 1);
+    filename = js_malloc(ctx, n + 1 + strlen(module_name) + 3 + 1);
 
     strncpy(filename, p, n);
     filename[n] = '/';
@@ -41,7 +41,7 @@ js_find_module_ext(JSContext* ctx, const char* module_name, const char* ext) {
     if(!stat(filename, &st))
       return filename;
 
-    qjs_free(ctx, filename);
+    js_free(ctx, filename);
 
     if(*q == ':')
       ++q;
@@ -69,10 +69,10 @@ static JSModuleDef*
 js_find_module_path(JSContext* ctx, const char* module_name, void* opaque) {
   char* filename;
   JSModuleDef* ret = NULL;
-  filename = module_name[0] == '/' ? qjs_strdup(ctx, module_name) : js_find_module(ctx, module_name);
+  filename = module_name[0] == '/' ? js_strdup(ctx, module_name) : js_find_module(ctx, module_name);
   if(filename) {
     ret = js_module_loader(ctx, filename, opaque);
-    qjs_free(ctx, filename);
+    js_free(ctx, filename);
   }
   return ret;
 }
