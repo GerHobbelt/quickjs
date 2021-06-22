@@ -128,13 +128,16 @@ extern QJS_DUMP_OUTPUT qjs_get_current_dump_output_channel(void);
   The PARSE call does not modify any currently active flags; use the SET calls
   to change the active settings (flags and output channel) to the values returned
   by the PARSE call.
+
+  The NEGATE parameter indicates if the keyword was preceded by '!' or '~' to negate
+  the flag.
 */
-typedef int qjs_dump_flags_parse_callback_f(const char* keyword, size_t keyword_length, enum qjs_dump_flags* current_flags, QJS_DUMP_OUTPUT* output_channel_ref);
+typedef int qjs_dump_flags_parse_callback_f(const char* keyword, size_t keyword_length, int negate, enum qjs_dump_flags* current_flags, QJS_DUMP_OUTPUT* output_channel_ref);
 
 extern enum qjs_dump_flags qjs_parse_dump_flags(const char* delimited_keywords, qjs_dump_flags_parse_callback_f* unrecognized_keyword_handler, QJS_DUMP_OUTPUT* output_channel_ref);
 
 // default/sample provided qjs_parse_dump_flags_default_cli_callback CALLBACK:
-extern int qjs_parse_dump_flags_default_cli_callback(const char* keyword, size_t keyword_length, enum qjs_dump_flags* current_flags, QJS_DUMP_OUTPUT* output_channel_ref);
+extern int qjs_parse_dump_flags_default_cli_callback(const char* keyword, size_t keyword_length, int negate, enum qjs_dump_flags* current_flags, QJS_DUMP_OUTPUT* output_channel_ref);
 
 
 #ifdef __cplusplus

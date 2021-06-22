@@ -388,11 +388,12 @@ static int help(void)
 		"-y flags    dump info to output channel. (default: stderr)\n"
 		"\n"
 		"Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
+		"The flags can be negated by prefixing with '~' or '!',\n"
+		"e.g. 'all,!atoms,!bytecode':\n"
 		"These flags are supported:\n"
 		"    stderr / to-stderr      (dump to stderr)\n"
 		"    stdout / to-stdout      (dump to stdout instead of stderr)\n"
-		"These next flags can be negated by prefixing with '~' or '!',\n"
-		"e.g. 'all,!atoms,!bytecode':\n");
+		"    none                    (disable/reset ALL dump flags)\n");
 
 	const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
 	while (kwd->keyword)

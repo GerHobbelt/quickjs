@@ -9,6 +9,8 @@ static QJS_DUMP_OUTPUT current_dump_output_channel = NULL;
 
 const struct qjs_dump_flags_keyword qjs_dump_flags_keyword_list[] =
 {
+	{        QJS_DUMP_FLAG_ALL,        "all" },
+
 	{        QJS_DUMP_FLAG_BYTECODE_MASK,        "bytecode" },
 	{        QJS_DUMP_FLAG_BYTECODE_PASS3,        "bytecode_pass3" },
 	{        QJS_DUMP_FLAG_BYTECODE_PASS2,        "bytecode_pass2" },
@@ -28,7 +30,6 @@ const struct qjs_dump_flags_keyword qjs_dump_flags_keyword_list[] =
 	{        QJS_DUMP_FLAG_MODULE_RESOLVE,        "module_resolve" },
 	{        QJS_DUMP_FLAG_PROMISE,        "promise" },
 	{        QJS_DUMP_FLAG_READ_OBJECT,        "read_object" },
-	{        QJS_DUMP_FLAG_ALL,        "all" },
 
 	// sentinel
 	{        0,        NULL }
@@ -164,7 +165,7 @@ enum qjs_dump_flags qjs_parse_dump_flags(const char* delimited_keywords, qjs_dum
 			// process all NIL-bits and unmatched words in the callback:
 			if (rv && unrecognized_keyword_handler)
 			{
-				rv = (*unrecognized_keyword_handler)(delimited_keywords, l, &flags, output_channel_ref);
+				rv = (*unrecognized_keyword_handler)(delimited_keywords, l, negate, &flags, output_channel_ref);
 			}
 			if (rv)
 			{
@@ -182,19 +183,24 @@ enum qjs_dump_flags qjs_parse_dump_flags(const char* delimited_keywords, qjs_dum
 }
 
 // default/sample provided qjs_parse_dump_flags_default_cli_callback CALLBACK:
-int qjs_parse_dump_flags_default_cli_callback(const char* keyword, size_t keyword_length, enum qjs_dump_flags *current_flags, QJS_DUMP_OUTPUT* output_channel_ref)
+int qjs_parse_dump_flags_default_cli_callback(const char* keyword, size_t keyword_length, int negate, enum qjs_dump_flags *current_flags, QJS_DUMP_OUTPUT* output_channel_ref)
 {
 #if defined(HAS_DEFAULT_QJS_DUMP_OUTPUT)
 	if (matches_keyword(keyword, keyword_length, "stdout") || matches_keyword(keyword, keyword_length, "to-stdout"))
 	{
-		*output_channel_ref = stdout;
+		*output_channel_ref = !negate ? stdout : stderr;
 		return 0;
 	}
 	else if (matches_keyword(keyword, keyword_length, "stderr") || matches_keyword(keyword, keyword_length, "to-stderr"))
 	{
-		*output_channel_ref = stderr;
+		*output_channel_ref = !negate ? stderr : stdout;
 		return 0;
 	}
 #endif
+	if (matches_keyword(keyword, keyword_length, "none"))
+	{
+		*current_flags = !negate ? 0 : QJS_DUMP_FLAG_ALL;
+		return 0;
+	}
 	return 1;
 }
