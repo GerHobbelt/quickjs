@@ -1294,8 +1294,10 @@ static void js_trigger_gc(JSRuntime *rt, size_t size)
 #endif
     if (force_gc) {
 #ifdef DUMP_GC
-		qjs_dump_printf("GC: size=%" PRIu64 "\n",
-               (uint64_t)rt->malloc_state.malloc_size);
+		if (qjs_test_dump_flag(QJS_DUMP_FLAG_GC)) {
+			qjs_dump_printf("GC: size=%" PRIu64 "\n",
+				(uint64_t)rt->malloc_state.malloc_size);
+		}
 #endif
         JS_RunGC(rt);
         rt->malloc_gc_threshold = rt->malloc_state.malloc_size +
@@ -1980,7 +1982,8 @@ void JS_FreeRuntime(JSRuntime *rt)
 
 #ifdef DUMP_LEAKS
     /* leaking objects */
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS)) 
+	{
         BOOL header_done;
         JSGCObjectHeader *p;
         int count;
@@ -2034,7 +2037,8 @@ void JS_FreeRuntime(JSRuntime *rt)
 
 #ifdef DUMP_LEAKS
     /* only the atoms defined in JS_InitAtoms() should be left */
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS)) 
+	{
         BOOL header_done = FALSE;
 
         for(i = 0; i < rt->atom_size; i++) {
@@ -2104,43 +2108,48 @@ void JS_FreeRuntime(JSRuntime *rt)
     qjs_free_rt(rt, rt->atom_hash);
     qjs_free_rt(rt, rt->shape_hash);
 #ifdef DUMP_LEAKS
-    if (!list_empty(&rt->string_list)) {
-        if (rt->rt_info) {
-			qjs_dump_printf("%s:1: string leakage:", rt->rt_info);
-        } else {
-			qjs_dump_printf("String leaks:\n"
-                   "    %6s %s\n",
-                   "REFCNT", "VALUE");
-        }
-        list_for_each_safe(el, el1, &rt->string_list) {
-            JSString *str = list_entry(el, JSString, link);
-            if (rt->rt_info) {
-				qjs_dump_printf(" ");
-            } else {
-				qjs_dump_printf("    %6u ", str->header.ref_count);
-            }
-            JS_DumpString(rt, str);
-            if (rt->rt_info) {
-				qjs_dump_printf(":%u", str->header.ref_count);
-            } else {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS)) {
+		if (!list_empty(&rt->string_list)) {
+			if (rt->rt_info) {
+				qjs_dump_printf("%s:1: string leakage:", rt->rt_info);
+			}
+			else {
+				qjs_dump_printf("String leaks:\n"
+					"    %6s %s\n",
+					"REFCNT", "VALUE");
+			}
+			list_for_each_safe(el, el1, &rt->string_list) {
+				JSString* str = list_entry(el, JSString, link);
+				if (rt->rt_info) {
+					qjs_dump_printf(" ");
+				}
+				else {
+					qjs_dump_printf("    %6u ", str->header.ref_count);
+				}
+				JS_DumpString(rt, str);
+				if (rt->rt_info) {
+					qjs_dump_printf(":%u", str->header.ref_count);
+				}
+				else {
+					qjs_dump_printf("\n");
+				}
+				list_del(&str->link);
+				qjs_free_rt(rt, str);
+			}
+			if (rt->rt_info)
 				qjs_dump_printf("\n");
-            }
-            list_del(&str->link);
-            qjs_free_rt(rt, str);
-        }
-        if (rt->rt_info)
-			qjs_dump_printf("\n");
-    }
-    {
-        JSMallocState *s = &rt->malloc_state;
-        if (s->malloc_count > 1) {
-            if (rt->rt_info)
-				qjs_dump_printf("%s:1: ", rt->rt_info);
-			qjs_dump_printf("Memory leak: %"PRIu64" bytes lost in %"PRIu64" block%s\n",
-                   (uint64_t)(s->malloc_size - sizeof(JSRuntime)),
-                   (uint64_t)(s->malloc_count - 1), &"s"[s->malloc_count == 2]);
-        }
-    }
+		}
+		{
+			JSMallocState* s = &rt->malloc_state;
+			if (s->malloc_count > 1) {
+				if (rt->rt_info)
+					qjs_dump_printf("%s:1: ", rt->rt_info);
+				qjs_dump_printf("Memory leak: %"PRIu64" bytes lost in %"PRIu64" block%s\n",
+					(uint64_t)(s->malloc_size - sizeof(JSRuntime)),
+					(uint64_t)(s->malloc_count - 1), &"s"[s->malloc_count == 2]);
+			}
+		}
+	}
 #endif
 
     {
@@ -2320,13 +2329,18 @@ void JS_FreeContext(JSContext *ctx)
     QJS_ASSERT(ctx->header.ref_count == 0);
 
 #ifdef DUMP_ATOMS
-    JS_DumpAtoms(ctx->rt);
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_ATOMS)) {
+		JS_DumpAtoms(ctx->rt);
+	}
 #endif
 #ifdef DUMP_SHAPES
-    JS_DumpShapes(ctx->rt);
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_SHAPES)) {
+		JS_DumpShapes(ctx->rt);
+	}
 #endif
 #ifdef DUMP_OBJECTS
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_OBJECTS))
+	{
         struct list_head *el;
         JSGCObjectHeader *p;
 		qjs_dump_printf("JSObjects: {\n");
@@ -2339,7 +2353,8 @@ void JS_FreeContext(JSContext *ctx)
     }
 #endif
 #ifdef DUMP_MEM
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_MEM))
+	{
         JSMemoryUsage stats;
         JS_ComputeMemoryUsage(rt, &stats);
         JS_DumpMemoryUsage(&stats, rt);
@@ -5606,7 +5621,8 @@ void __JS_FreeValueRT(JSRuntime *rt, JSValue v)
     uint32_t tag = JS_VALUE_GET_TAG(v);
 
 #ifdef DUMP_FREE
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_FREE))
+	{
 		qjs_dump_printf("Freeing ");
         if (tag == JS_TAG_OBJECT) {
             JS_DumpObject(rt, JS_VALUE_GET_OBJ(v));
@@ -5896,12 +5912,14 @@ static void gc_free_cycles(JSRuntime *rt)
         case JS_GC_OBJ_TYPE_JS_OBJECT:
         case JS_GC_OBJ_TYPE_FUNCTION_BYTECODE:
 #ifdef DUMP_GC_FREE
-            if (!header_done) {
-				qjs_dump_printf("Freeing cycles:\n");
-                JS_DumpObjectHeader(rt);
-                header_done = TRUE;
-            }
-            JS_DumpGCObject(rt, p);
+			if (qjs_test_dump_flag(QJS_DUMP_FLAG_GC_FREE)) {
+				if (!header_done) {
+					qjs_dump_printf("Freeing cycles:\n");
+					JS_DumpObjectHeader(rt);
+					header_done = TRUE;
+				}
+				JS_DumpGCObject(rt, p);
+			}
 #endif
             free_gc_object(rt, p);
             break;
@@ -28123,7 +28141,8 @@ static int js_resolve_module(JSContext *ctx, JSModuleDef *m)
     if (m->resolved)
         return 0;
 #ifdef DUMP_MODULE_RESOLVE
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE))
+	{
         char buf1[ATOM_GET_STR_BUF_SIZE];
 		qjs_dump_printf("resolving module '%s':\n", JS_AtomGetStr(ctx, buf1, sizeof(buf1), m->module_name));
     }
@@ -28200,7 +28219,9 @@ static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
                 if (!var_ref)
                     goto fail;
 #ifdef DUMP_MODULE_RESOLVE
-				qjs_dump_printf("local %d: %p\n", i, var_ref);
+				if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE)) {
+					qjs_dump_printf("local %d: %p\n", i, var_ref);
+				}
 #endif
                 var_refs[i] = var_ref;
             }
@@ -28272,7 +28293,8 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     m->instantiated = TRUE;
 
 #ifdef DUMP_MODULE_RESOLVE
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE))
+	{
         char buf1[ATOM_GET_STR_BUF_SIZE];
 		qjs_dump_printf("start instantiating module '%s':\n", JS_AtomGetStr(ctx, buf1, sizeof(buf1), m->module_name));
     }
@@ -28285,7 +28307,8 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     }
 
 #ifdef DUMP_MODULE_RESOLVE
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE))
+	{
         char buf1[ATOM_GET_STR_BUF_SIZE];
 		qjs_dump_printf("instantiating module '%s':\n", JS_AtomGetStr(ctx, buf1, sizeof(buf1), m->module_name));
     }
@@ -28308,7 +28331,8 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     }
 
 #ifdef DUMP_MODULE_RESOLVE
-    {
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE))
+	{
 		qjs_dump_printf("exported bindings:\n");
         for(i = 0; i < m->export_entries_count; i++) {
             JSExportEntry *me = &m->export_entries[i];
@@ -28328,9 +28352,11 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
         for(i = 0; i < m->import_entries_count; i++) {
             mi = &m->import_entries[i];
 #ifdef DUMP_MODULE_RESOLVE
-			qjs_dump_printf("import var_idx=%d name=", mi->var_idx);
-            print_atom(ctx, mi->import_name);
-			qjs_dump_printf(": ");
+			if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE)) {
+				qjs_dump_printf("import var_idx=%d name=", mi->var_idx);
+				print_atom(ctx, mi->import_name);
+				qjs_dump_printf(": ");
+			}
 #endif
             m1 = m->req_module_entries[mi->req_module_idx].module;
             if (mi->import_name == JS_ATOM__star_) {
@@ -28341,7 +28367,9 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
                     goto fail;
                 set_value(ctx, &var_refs[mi->var_idx]->value, val);
 #ifdef DUMP_MODULE_RESOLVE
-				qjs_dump_printf("namespace\n");
+				if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE)) {
+					qjs_dump_printf("namespace\n");
+				}
 #endif
             } else {
                 JSResolveResultEnum ret;
@@ -28371,7 +28399,9 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
                     set_value(ctx, &var_ref->value, val);
                     var_refs[mi->var_idx] = var_ref;
 #ifdef DUMP_MODULE_RESOLVE
-					qjs_dump_printf("namespace from\n");
+					if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE)) {
+						qjs_dump_printf("namespace from\n");
+					}
 #endif
                 } else {
                     var_ref = res_me->u.local.var_ref;
@@ -28382,7 +28412,9 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
                     var_ref->header.ref_count++;
                     var_refs[mi->var_idx] = var_ref;
 #ifdef DUMP_MODULE_RESOLVE
-					qjs_dump_printf("local export (var_ref=%p)\n", var_ref);
+					if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE)) {
+						qjs_dump_printf("local export (var_ref=%p)\n", var_ref);
+					}
 #endif
                 }
             }
@@ -28408,7 +28440,9 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     }
 
 #ifdef DUMP_MODULE_RESOLVE
-	qjs_dump_printf("done instantiate\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_MODULE_RESOLVE)) {
+		qjs_dump_printf("done instantiate\n");
+	}
 #endif
     return 0;
  fail:
@@ -29296,7 +29330,8 @@ static void dump_byte_code(JSContext *ctx, int pass,
             break;
         }
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 16)
-        {
+		if (qjs_test_dump_flag(QJS_DUMP_FLAG_BYTECODE_HEX))
+		{
             int i, x, x0;
             x = x0 = qjs_dump_printf("%5d ", pos);
             for (i = 0; i < size; i++) {
@@ -29581,8 +29616,10 @@ static __maybe_unused void js_dump_function_bytecode(JSContext *ctx, JSFunctionB
                    b->has_debug ? b->debug.source : NULL,
                    b->has_debug ? b->debug.line_num : -1, NULL, b);
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 32)
-    if (b->has_debug)
-        dump_pc2line(ctx, b->debug.pc2line_buf, b->debug.pc2line_len, b->debug.line_num);
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_BYTECODE_LINETABLE)) {
+		if (b->has_debug)
+			dump_pc2line(ctx, b->debug.pc2line_buf, b->debug.pc2line_len, b->debug.line_num);
+	}
 #endif
     qjs_dump_printf("\n");
 }
@@ -32824,14 +32861,16 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     }
 
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 4)
-    if (!(fd->js_mode & JS_MODE_STRIP)) {
-        qjs_dump_printf("pass 1\n");
-        dump_byte_code(ctx, 1, fd->byte_code.buf, fd->byte_code.size,
-                       fd->args, fd->arg_count, fd->vars, fd->var_count,
-                       fd->closure_var, fd->closure_var_count,
-                       fd->cpool, fd->cpool_count, fd->source, fd->line_num,
-                       fd->label_slots, NULL);
-        qjs_dump_printf("\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_BYTECODE_PASS1)) {
+		if (!(fd->js_mode & JS_MODE_STRIP)) {
+			qjs_dump_printf("pass 1\n");
+			dump_byte_code(ctx, 1, fd->byte_code.buf, fd->byte_code.size,
+				fd->args, fd->arg_count, fd->vars, fd->var_count,
+				fd->closure_var, fd->closure_var_count,
+				fd->cpool, fd->cpool_count, fd->source, fd->line_num,
+				fd->label_slots, NULL);
+			qjs_dump_printf("\n");
+		}
     }
 #endif
 
@@ -32839,15 +32878,17 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
         goto fail;
 
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 2)
-    if (!(fd->js_mode & JS_MODE_STRIP)) {
-        qjs_dump_printf("pass 2\n");
-        dump_byte_code(ctx, 2, fd->byte_code.buf, fd->byte_code.size,
-                       fd->args, fd->arg_count, fd->vars, fd->var_count,
-                       fd->closure_var, fd->closure_var_count,
-                       fd->cpool, fd->cpool_count, fd->source, fd->line_num,
-                       fd->label_slots, NULL);
-        qjs_dump_printf("\n");
-    }
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_BYTECODE_PASS2)) {
+		if (!(fd->js_mode & JS_MODE_STRIP)) {
+			qjs_dump_printf("pass 2\n");
+			dump_byte_code(ctx, 2, fd->byte_code.buf, fd->byte_code.size,
+				fd->args, fd->arg_count, fd->vars, fd->var_count,
+				fd->closure_var, fd->closure_var_count,
+				fd->cpool, fd->cpool_count, fd->source, fd->line_num,
+				fd->label_slots, NULL);
+			qjs_dump_printf("\n");
+		}
+	}
 #endif
 
     if (resolve_labels(ctx, fd))
@@ -32968,9 +33009,11 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
     add_gc_object(ctx->rt, &b->header, JS_GC_OBJ_TYPE_FUNCTION_BYTECODE);
 
 #if defined(DUMP_BYTECODE) && (DUMP_BYTECODE & 1)
-    if (!(fd->js_mode & JS_MODE_STRIP)) {
-        js_dump_function_bytecode(ctx, b);
-    }
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_BYTECODE_PASS3)) {
+		if (!(fd->js_mode & JS_MODE_STRIP)) {
+			js_dump_function_bytecode(ctx, b);
+		}
+	}
 #endif
 
     if (fd->parent) {
@@ -35114,6 +35157,9 @@ static void __js_printf_like(2, 3) bc_read_trace(BCReaderState *s, const char *f
     va_list ap;
     int i, n, n0;
 
+	if (!qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT))
+		return;
+
     if (!s->ptr_last)
         s->ptr_last = s->buf_start;
 
@@ -35306,7 +35352,10 @@ static JSString *JS_ReadString(BCReaderState *s)
         p->u.str8[size] = '\0'; /* add the trailing zero for 8 bit strings */
     }
 #ifdef DUMP_READ_OBJECT
-    JS_DumpString(s->ctx->rt, p); qjs_dump_printf("\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+		JS_DumpString(s->ctx->rt, p);
+		qjs_dump_printf("\n");
+	}
 #endif
     return p;
 }
@@ -35363,9 +35412,11 @@ static int JS_ReadFunctionBytecode(BCReaderState *s, JSFunctionBytecode *b,
                 }
                 put_u32(bc_buf + pos + 1, atom);
 #ifdef DUMP_READ_OBJECT
-                bc_read_trace(s, "at %d, fixup atom: ", pos + 1);
-				print_atom(s->ctx, atom);
-				qjs_dump_printf("\n");
+				if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+					bc_read_trace(s, "at %d, fixup atom: ", pos + 1);
+					print_atom(s->ctx, atom);
+					qjs_dump_printf("\n");
+				}
 #endif
             }
             break;
@@ -35619,9 +35670,11 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
     obj = JS_MKPTR(JS_TAG_FUNCTION_BYTECODE, b);
 
 #ifdef DUMP_READ_OBJECT
-    bc_read_trace(s, "name: ");
-	print_atom(s->ctx, b->func_name);
-	qjs_dump_printf("\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+		bc_read_trace(s, "name: ");
+		print_atom(s->ctx, b->func_name);
+		qjs_dump_printf("\n");
+	}
 #endif
     bc_read_trace(s, "args=%d vars=%d defargs=%d closures=%d cpool=%d\n",
                   b->arg_count, b->var_count, b->defined_arg_count,
@@ -35648,9 +35701,11 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
             vd->is_lexical = bc_get_flags(v8, &idx, 1);
             vd->is_captured = bc_get_flags(v8, &idx, 1);
 #ifdef DUMP_READ_OBJECT
-            bc_read_trace(s, "name: ");
-			print_atom(s->ctx, vd->var_name);
-			qjs_dump_printf("\n");
+			if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+				bc_read_trace(s, "name: ");
+				print_atom(s->ctx, vd->var_name);
+				qjs_dump_printf("\n");
+			}
 #endif
         }
         bc_read_trace(s, "}\n");
@@ -35674,9 +35729,11 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
             cv->is_lexical = bc_get_flags(v8, &idx, 1);
             cv->var_kind = bc_get_flags(v8, &idx, 4);
 #ifdef DUMP_READ_OBJECT
-            bc_read_trace(s, "name: ");
-			print_atom(s->ctx, cv->var_name);
-			qjs_dump_printf("\n");
+			if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+				bc_read_trace(s, "name: ");
+				print_atom(s->ctx, cv->var_name);
+				qjs_dump_printf("\n");
+			}
 #endif
         }
         bc_read_trace(s, "}\n");
@@ -35704,9 +35761,11 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
                 goto fail;
         }
 #ifdef DUMP_READ_OBJECT
-        bc_read_trace(s, "filename: ");
-		print_atom(s->ctx, b->debug.filename);
-		qjs_dump_printf("\n");
+		if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+			bc_read_trace(s, "filename: ");
+			print_atom(s->ctx, b->debug.filename);
+			qjs_dump_printf("\n");
+		}
 #endif
         bc_read_trace(s, "}\n");
     }
@@ -35740,9 +35799,11 @@ static JSValue JS_ReadModule(BCReaderState *s)
     if (bc_get_atom(s, &module_name))
         goto fail;
 #ifdef DUMP_READ_OBJECT
-    bc_read_trace(s, "name: ");
-	print_atom(s->ctx, module_name);
-	qjs_dump_printf("\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+		bc_read_trace(s, "name: ");
+		print_atom(s->ctx, module_name);
+		qjs_dump_printf("\n");
+	}
 #endif
     m = js_new_module_def(ctx, module_name);
     if (!m)
@@ -35849,9 +35910,11 @@ static JSValue JS_ReadObjectTag(BCReaderState *s)
         if (bc_get_atom(s, &atom))
             goto fail;
 #ifdef DUMP_READ_OBJECT
-        bc_read_trace(s, "propname: ");
-		print_atom(s->ctx, atom);
-		qjs_dump_printf("\n");
+		if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
+			bc_read_trace(s, "propname: ");
+			print_atom(s->ctx, atom);
+			qjs_dump_printf("\n");
+		}
 #endif
         val = JS_ReadObjectRec(s);
         if (JS_IsException(val)) {
@@ -46592,7 +46655,9 @@ static JSValue promise_reaction_job(JSContext *ctx, int argc,
     is_reject = JS_ToBool(ctx, argv[3]);
     arg = argv[4];
 #ifdef DUMP_PROMISE
-    qjs_dump_printf("promise_reaction_job: is_reject=%d\n", is_reject);
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_PROMISE)) {
+		qjs_dump_printf("promise_reaction_job: is_reject=%d\n", is_reject);
+	}
 #endif
 
     if (JS_IsUndefined(handler)) {
@@ -46643,7 +46708,9 @@ static void fulfill_or_reject_promise(JSContext *ctx, JSValueConst promise,
     set_value(ctx, &s->promise_result, JS_DupValue(ctx, value));
     s->promise_state = JS_PROMISE_FULFILLED + is_reject;
 #ifdef DUMP_PROMISE
-    qjs_dump_printf("fulfill_or_reject_promise: is_reject=%d\n", is_reject);
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_PROMISE)) {
+		qjs_dump_printf("fulfill_or_reject_promise: is_reject=%d\n", is_reject);
+	}
 #endif
     if (s->promise_state == JS_PROMISE_REJECTED && !s->is_handled) {
         JSRuntime *rt = ctx->rt;
@@ -46685,7 +46752,9 @@ static JSValue js_promise_resolve_thenable_job(JSContext *ctx,
     JSValue args[2], res;
 
 #ifdef DUMP_PROMISE
-    qjs_dump_printf("js_promise_resolve_thenable_job\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_PROMISE)) {
+		qjs_dump_printf("js_promise_resolve_thenable_job\n");
+	}
 #endif
     QJS_ASSERT(argc == 3);
     promise = argv[0];
@@ -46795,9 +46864,11 @@ static JSValue js_promise_resolve_function_call(JSContext *ctx,
     else
         resolution = JS_UNDEFINED;
 #ifdef DUMP_PROMISE
-    qjs_dump_printf("js_promise_resolving_function_call: is_reject=%d resolution=", is_reject);
-    JS_DumpValue(ctx, resolution);
-    qjs_dump_printf("\n");
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_PROMISE)) {
+		qjs_dump_printf("js_promise_resolving_function_call: is_reject=%d resolution=", is_reject);
+		JS_DumpValue(ctx, resolution);
+		qjs_dump_printf("\n");
+	}
 #endif
     if (is_reject || !JS_IsObject(resolution)) {
         goto done;

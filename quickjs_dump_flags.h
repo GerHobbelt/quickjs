@@ -104,7 +104,7 @@ extern void qjs_unset_dump_flags(enum qjs_dump_flags disable_flags_combo);
 extern enum qjs_dump_flags qjs_get_current_dump_flags(void);
 
 // simple helper for quickjs et al:
-inline int qjs_test_dump_flag(enum qjs_dump_flags flag_to_test_for);
+extern int qjs_test_dump_flag(enum qjs_dump_flags flag_to_test_for);
 
 // set up the dump output channel; STDERR by default
 extern void qjs_set_dump_output_channel(QJS_DUMP_OUTPUT output_channel);

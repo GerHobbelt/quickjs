@@ -326,6 +326,8 @@ int main(int argc, const char **argv)
     int load_jscalc;
 #endif
     size_t stack_size = 0;
+
+	qjs_clear_dump_flags();
     
 #ifdef CONFIG_BIGNUM
     /* load jscalc runtime if invoked as 'qjscalc' */
@@ -383,17 +385,17 @@ int main(int argc, const char **argv)
                     break;
                 }
                 fprintf(stderr, "qjs: missing expression for -e\n");
-                exit(2);
-            }
+				return 2;
+			}
             if (opt == 'I' || !strcmp(longopt, "include")) {
                 if (optind >= argc) {
                     fprintf(stderr, "expecting filename");
-                    exit(1);
-                }
+					return EXIT_FAILURE;
+				}
                 if (include_count >= countof(include_list)) {
                     fprintf(stderr, "too many included files");
-                    exit(1);
-                }
+					return EXIT_FAILURE;
+				}
                 include_list[include_count++] = argv[optind++];
                 continue;
             }
@@ -456,16 +458,16 @@ int main(int argc, const char **argv)
             if (!strcmp(longopt, "memory-limit")) {
                 if (optind >= argc) {
                     fprintf(stderr, "expecting memory limit");
-                    exit(1);
-                }
+					return EXIT_FAILURE;
+				}
                 memory_limit = (size_t)strtod(argv[optind++], NULL);
                 continue;
             }
             if (!strcmp(longopt, "stack-size")) {
                 if (optind >= argc) {
                     fprintf(stderr, "expecting stack size");
-                    exit(1);
-                }
+					return EXIT_FAILURE;
+				}
                 stack_size = (size_t)strtod(argv[optind++], NULL);
                 continue;
             }
@@ -492,8 +494,8 @@ int main(int argc, const char **argv)
     }
     if (!rt) {
         fprintf(stderr, "qjs: cannot allocate JS runtime\n");
-        exit(2);
-    }
+		return 2;
+	}
     if (memory_limit != 0)
         JS_SetMemoryLimit(rt, memory_limit);
     if (stack_size != 0)
@@ -504,8 +506,8 @@ int main(int argc, const char **argv)
     ctx = JS_NewCustomContext(rt);
     if (!ctx) {
         fprintf(stderr, "qjs: cannot allocate JS context\n");
-        exit(2);
-    }
+		return 2;
+	}
 
     /* loader for ES6 modules */
     JS_SetModuleLoaderFunc(rt, NULL, js_std_get_module_loader_func(), NULL);

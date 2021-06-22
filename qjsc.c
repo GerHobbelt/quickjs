@@ -551,7 +551,9 @@ int main(int argc, const char **argv)
     use_lto = FALSE;
     stack_size = 0;
     memset(&dynamic_module_list, 0, sizeof(dynamic_module_list));
-    
+
+	qjs_clear_dump_flags();
+
     /* add system modules */
     namelist_add(&cmodule_list, "std", "std", 0);
     namelist_add(&cmodule_list, "os", "os", 0);
@@ -603,7 +605,7 @@ int main(int argc, const char **argv)
                 {
                 bad_feature:
                     fprintf(stderr, "unsupported feature: %s\n", optarg);
-                    exit(1);
+                    return EXIT_FAILURE;
                 }
             }
             break;
@@ -681,8 +683,8 @@ int main(int argc, const char **argv)
     fo = fopen(cfilename, "w");
     if (!fo) {
         perror(cfilename);
-        exit(1);
-    }
+		return EXIT_FAILURE;
+	}
     outfile = fo;
     JS_Initialize();
     rt = JS_NewRuntime();
@@ -723,8 +725,8 @@ int main(int argc, const char **argv)
         if (!jsc_module_loader(ctx, dynamic_module_list.array[i].name, NULL)) {
             fprintf(stderr, "Could not load dynamic module '%s'\n",
                     dynamic_module_list.array[i].name);
-            exit(1);
-        }
+			return EXIT_FAILURE;
+		}
     }
     
     if (output_type != OUTPUT_C) {
@@ -815,5 +817,5 @@ int main(int argc, const char **argv)
     namelist_free(&cname_list);
     namelist_free(&cmodule_list);
     namelist_free(&init_module_list);
-    return 0;
+    return EXIT_SUCCESS;
 }
