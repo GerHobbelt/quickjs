@@ -110,7 +110,7 @@ typedef pthread_cond_t qjs_condition;
 #define QJS_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 #endif
 
-void qjs_abort();
+void qjs_abort(void);
 int qjs_fesetround(int round);
 int qjs_gettimeofday(struct qjs_timeval * tp);
 int qjs_gettimezoneoffset(int64_t time);

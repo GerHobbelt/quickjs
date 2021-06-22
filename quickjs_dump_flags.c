@@ -2,6 +2,7 @@
 #include "quickjs.h"
 
 #include <string.h>
+#include <stdarg.h>
 
 
 static enum qjs_dump_flags current_dump_flags = 0;
@@ -35,28 +36,28 @@ const struct qjs_dump_flags_keyword qjs_dump_flags_keyword_list[] =
 	{        0,        NULL }
 };
 
-inline void qjs_clear_dump_flags(void)
+void qjs_clear_dump_flags(void)
 {
 	current_dump_flags = 0;
 }
 
-inline void qjs_set_dump_flags(enum qjs_dump_flags enable_flags_combo)
+void qjs_set_dump_flags(enum qjs_dump_flags enable_flags_combo)
 {
 	current_dump_flags |= enable_flags_combo;
 }
 
-inline void qjs_unset_dump_flags(enum qjs_dump_flags disable_flags_combo)
+void qjs_unset_dump_flags(enum qjs_dump_flags disable_flags_combo)
 {
 	current_dump_flags &= disable_flags_combo;
 }
 
-inline enum qjs_dump_flags qjs_get_current_dump_flags(void)
+enum qjs_dump_flags qjs_get_current_dump_flags(void)
 {
 	return current_dump_flags;
 }
 
 // simple helper:
-inline int qjs_test_dump_flag(enum qjs_dump_flags flag_to_test_for)
+int qjs_test_dump_flag(enum qjs_dump_flags flag_to_test_for)
 {
 	return (current_dump_flags & flag_to_test_for);
 }
@@ -203,4 +204,58 @@ int qjs_parse_dump_flags_default_cli_callback(const char* keyword, size_t keywor
 		return 0;
 	}
 	return 1;
+}
+
+// ------------------------------------------------------------------------
+
+// provide the default implementations for the dump output routines:
+
+#if defined(HAS_DEFAULT_QJS_DUMP_OUTPUT)
+
+size_t qjs_vprintf(QJS_DUMP_OUTPUT channel, const char* fmt, va_list args)
+{
+	return vfprintf(channel, fmt, args);
+}
+
+/**
+	The non va_list equivalent of qjs_vprintf.
+*/
+size_t qjs_printf(QJS_DUMP_OUTPUT channel, const char* fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	int rv = vfprintf(channel, fmt, ap);
+	va_end(ap);
+
+	return rv;
+}
+
+#endif
+
+
+
+void qjs_dump_vprintf(const char* fmt, va_list args)
+{
+	qjs_vprintf(qjs_get_current_dump_output_channel(), fmt, args);
+}
+
+size_t qjs_dump_printf(const char* fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	int rv = qjs_vprintf(qjs_get_current_dump_output_channel(), fmt, ap);
+	va_end(ap);
+	return rv;
+}
+
+void qjs_dump_line(const char* msg)
+{
+	qjs_printf(qjs_get_current_dump_output_channel(), "%s", msg);
+}
+
+void qjs_dump_putchar(const char c)
+{
+	qjs_printf(qjs_get_current_dump_output_channel(), "%c", c);
 }

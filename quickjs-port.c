@@ -28,7 +28,7 @@
 #include "cutils.h"
 #include "quickjs-port.h"
 
-void qjs_abort() {
+void qjs_abort(void) {
     QJS_ABORT();
 }
 

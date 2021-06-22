@@ -140,6 +140,24 @@ extern enum qjs_dump_flags qjs_parse_dump_flags(const char* delimited_keywords, 
 extern int qjs_parse_dump_flags_default_cli_callback(const char* keyword, size_t keyword_length, int negate, enum qjs_dump_flags* current_flags, QJS_DUMP_OUTPUT* output_channel_ref);
 
 
+/**
+	A vprintf work-alike, using our (dump) output channel.
+*/
+extern size_t qjs_vprintf(QJS_DUMP_OUTPUT channel, const char* fmt, va_list args);
+
+/**
+	The non va_list equivalent of qjs_vprintf.
+*/
+extern size_t qjs_printf(QJS_DUMP_OUTPUT channel, const char* fmt, ...);
+
+/*
+  And provide some dump-specific simplified APIs:
+*/
+extern void qjs_dump_vprintf(const char* fmt, va_list args);
+extern size_t qjs_dump_printf(const char* fmt, ...);
+extern void qjs_dump_line(const char* msg);
+extern void qjs_dump_putchar(const char c);
+
 #ifdef __cplusplus
 } /* extern "C" { */
 #endif

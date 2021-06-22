@@ -17,12 +17,10 @@ typedef intptr_t ssize_t;
 
 static void __dump(const char *desc, const char *buffer, ssize_t length)
 {
-
     printf("%s (%d)\n", desc, (int)length);
 
     for (ssize_t i = 0; i < length; i += 8)
     {
-
         size_t j,
             lim = i + 8;
 
