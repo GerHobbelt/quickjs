@@ -19,6 +19,8 @@
 #include <unistd.h>
 #elif defined(_WIN32)
 #include <windows.h>
+#include <wchar.h>
+#include <tchar.h>
 #elif defined(__FreeBSD__)
 #include <malloc_np.h>
 #endif
@@ -199,65 +201,127 @@ static int qjs__fs_scandir_filter(struct dirent *dent) {
 }
 #endif
 
+#if defined(_WIN32)
+#ifdef UNICODE
+// ripped from CURL project.
+static char* qjs_curlx_convert_wchar_to_UTF8(const wchar_t* str_w)
+{
+	char* str_utf8 = NULL;
+
+	if (str_w) {
+		int bytes = WideCharToMultiByte(CP_UTF8, 0, str_w, -1,
+			NULL, 0, NULL, NULL);
+		if (bytes > 0) {
+			str_utf8 = malloc(bytes);
+			if (str_utf8) {
+				if (WideCharToMultiByte(CP_UTF8, 0, str_w, -1, str_utf8, bytes,
+					NULL, NULL) == 0) {
+					free(str_utf8);
+					return NULL;
+				}
+			}
+		}
+	}
+
+	return str_utf8;
+}
+#endif
+
+static int __qjs_listdir_callback(qjs_listdir_callback_t callback, void* context, const TCHAR* path, int is_dir)
+{
+#ifdef UNICODE
+	// ripped from CURL project.
+	char* utf8_path = qjs_curlx_convert_wchar_to_UTF8(path);
+#else
+	const char* utf8_path = path;
+#endif
+	int rv = callback(context, utf8_path, is_dir);
+#ifdef UNICODE
+	free(utf8_path);
+#endif
+	return rv;
+}
+
+static int __qjs_listdir(void* context, const TCHAR* path, int recurse, qjs_listdir_callback_t callback)
+{
+	// https://stackoverflow.com/questions/3298569/difference-between-mbcs-and-utf-8-on-windows
+	// https://stackoverflow.com/questions/234365/is-tchar-still-relevant/3002494#3002494
+	// https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/snprintf-snprintf-snprintf-l-snwprintf-snwprintf-l?view=msvc-160#remarks
+	// https://docs.microsoft.com/en-us/cpp/c-runtime-library/format-specification-syntax-printf-and-wprintf-functions?view=msvc-160#argument-size-specification
+
+#define terminate_search_path()   search_path[countof(search_path) - 1] = 0
+
+	HANDLE hFind;
+	WIN32_FIND_DATA wfd;
+	BOOL cont = TRUE;
+
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
+	TCHAR search_path[MAX(2048, MAX_PATH)];
+
+	_sntprintf(search_path, countof(search_path), _T("%s\\*"), path);
+	terminate_search_path();
+
+	if ((hFind = FindFirstFile(search_path, &wfd)) == INVALID_HANDLE_VALUE)
+	{
+		return -1;
+	}
+
+	while (cont == TRUE)
+	{
+		if ((_tcsncmp(_T("."), wfd.cFileName, 1) != 0) && (_tcsncmp(_T(".."), wfd.cFileName, 2) != 0))
+		{
+			_sntprintf(search_path, countof(search_path), _T("%s\\%s"), path, wfd.cFileName);
+			terminate_search_path();
+			if (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			{
+				if (__qjs_listdir_callback(callback, context, search_path, 1) != 0)
+				{
+					goto done;
+				}
+				if (recurse)
+				{
+					if (__qjs_listdir(context, search_path, recurse, callback) != 0)
+					{
+						goto done;
+					}
+				}
+			}
+			else
+			{
+				if (__qjs_listdir_callback(callback, context, search_path, 0) != 0)
+				{
+					goto done;
+				}
+			}
+		}
+		cont = FindNextFile(hFind, &wfd);
+	}
+done:
+	if (GetLastError() != ERROR_NO_MORE_FILES)
+	{
+		FindClose(hFind);
+		return -1;
+	}
+	if (FindClose(hFind) == FALSE)
+	{
+		return -1;
+	}
+	return 0;
+#endif
+}
+
 int qjs_listdir(void* context, const char* path, int recurse, qjs_listdir_callback_t callback)
 {
 #if defined(_WIN32)
-    HANDLE hFind;
-    WIN32_FIND_DATA wfd;
-    BOOL cont = TRUE;
-    TCHAR search_path[MAX_PATH];
+    TCHAR search_path[MAX(2048,MAX_PATH)];
 
-    sprintf(search_path, "%s\\*", path);
+    _sntprintf(search_path, countof(search_path), _T("%hs"), path);
+	terminate_search_path();
 
-    if ((hFind = FindFirstFile(search_path, &wfd)) == INVALID_HANDLE_VALUE)
-    {
-        return -1;
-    }
-
-    while (cont == TRUE)
-    {
-        if ((strncmp(".", wfd.cFileName, 1) != 0) && (strncmp("..", wfd.cFileName, 2) != 0))
-        {
-#ifdef UNICODE
-			sprintf(search_path, "%s\\%ls", path, wfd.cFileName);
-#else
-			sprintf(search_path, "%s\\%s", path, wfd.cFileName);
-#endif
-            if (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            {
-                if (callback(context, search_path, 1) != 0)
-                {
-                    goto done;
-                }
-                if (recurse)
-                {
-                    if (qjs_listdir(context, search_path, recurse, callback) != 0)
-                    {
-                        goto done;
-                    }
-                }
-            }
-            else
-            {
-                if (callback(context, search_path, 0) != 0)
-                {
-                    goto done;
-                }
-            }
-        }
-        cont = FindNextFile(hFind, &wfd);
-    }
-done:
-    if (GetLastError() != ERROR_NO_MORE_FILES)
-    {
-        FindClose(hFind);
-        return -1;
-    }
-    if (FindClose(hFind) == FALSE)
-    {
-        return -1;
-    }
-    return 0;
+	return __qjs_listdir(context, search_path, recurse, callback);
 #else
     DIR *dir = NULL;
     struct dirent *dent = NULL;
