@@ -33,6 +33,8 @@
 #include "quickjs-config.h"
 #endif
 
+#include "quickjs_dump_flags.h"
+
 #include "quickjs_version.h"
 
 #ifndef JS_EXPORT

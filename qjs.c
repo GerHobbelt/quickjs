@@ -279,6 +279,25 @@ static void help(void)
            "    --stack-size n         limit the stack size to 'n' bytes\n"
            "    --unhandled-rejection  dump unhandled promise rejections\n"
            "-q  --quit         just instantiate the interpreter and quit\n");
+
+	printf(""
+		"-y flags           dump info to output channel. (default: stderr)\n"
+		"\n"
+		"Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
+		"These flags are supported:\n"
+		"    stderr / to-stderr      (dump to stderr)\n"
+		"    stdout / to-stdout      (dump to stdout instead of stderr)\n"
+		"These next flags can be negated by prefixing with '~' or '!',\n"
+		"e.g. 'all,!atoms,!bytecode':\n");
+
+	const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
+	while (kwd->keyword)
+	{
+		printf("    %s\n", kwd->keyword);
+		kwd++;
+	}
+
+	return EXIT_FAILURE;
 }
 
 #if defined(BUILD_MONOLITHIC)
@@ -419,6 +438,20 @@ int main(int argc, const char **argv)
                 empty_run++;
                 continue;
             }
+			if (opt == 'y') {
+				const char* optarg = "";
+				if (*arg) {
+					optarg = arg;
+				}
+				else if (optind < argc) {
+					optarg = argv[optind++];
+				}
+				FILE* dump_out = stderr;
+				enum qjs_dump_flags flags = qjs_parse_dump_flags(optarg, &qjs_parse_dump_flags_default_cli_callback, &dump_out);
+				qjs_set_dump_flags(flags);
+				qjs_set_dump_output_channel(dump_out);
+				continue;
+			}
             if (!strcmp(longopt, "memory-limit")) {
                 if (optind >= argc) {
                     fprintf(stderr, "expecting memory limit");

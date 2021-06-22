@@ -60,11 +60,11 @@ typedef struct {
 static namelist_t cname_list;
 static namelist_t cmodule_list;
 static namelist_t init_module_list;
-static uint64_t feature_bitmap;
-static FILE *outfile;
-static BOOL byte_swap;
-static BOOL dynamic_export;
-static BOOL save_temp;
+static uint64_t feature_bitmap = 0;
+static FILE *outfile = NULL;
+static BOOL byte_swap = FALSE;
+static BOOL dynamic_export = FALSE;
+static BOOL save_temp = FALSE;
 static const char *c_ident_prefix = "qjsc_";
 
 #define FE_ALL (-1)
@@ -349,9 +349,9 @@ static const char main_c_template2[] =
 
 #define PROG_NAME "qjsc"
 
-static void help(void)
+static int help(void)
 {
-    printf("QuickJS Compiler version " QUICKJS_CONFIG_VERSION "\n"
+	printf("QuickJS Compiler version " QUICKJS_CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [files]\n"
            "\n"
            "options are:\n"
@@ -365,8 +365,9 @@ static void help(void)
            "-M module_name[,cname] add initialization code for an external C module\n"
            "-x          byte swapped output\n"
            "-p prefix   set the prefix of the generated C names\n"
-           "-S n        set the maximum stack size to 'n' bytes (default=%d)\n",
-           JS_DEFAULT_STACK_SIZE);
+           "-S n        set the maximum stack size to 'n' bytes (default=%d)\n"
+		   "-s          save intermediate output to temp file\n",
+		JS_DEFAULT_STACK_SIZE);
 #ifdef CONFIG_LTO
     {
         int i;
@@ -382,7 +383,25 @@ static void help(void)
                "            disable selected language features (smaller code size)\n");
     }
 #endif
-    exit(1);
+
+	printf(""
+		"-y flags    dump info to output channel. (default: stderr)\n"
+		"\n"
+		"Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
+		"These flags are supported:\n"
+		"    stderr / to-stderr      (dump to stderr)\n"
+		"    stdout / to-stdout      (dump to stdout instead of stderr)\n"
+		"These next flags can be negated by prefixing with '~' or '!',\n"
+		"e.g. 'all,!atoms,!bytecode':\n");
+
+	const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
+	while (kwd->keyword)
+	{
+		printf("    %s\n", kwd->keyword);
+		kwd++;
+ 	}
+
+	return EXIT_FAILURE;
 }
 
 #if defined(CONFIG_CC) && !defined(_WIN32)
@@ -537,12 +556,12 @@ int main(int argc, const char **argv)
     namelist_add(&cmodule_list, "os", "os", 0);
 
     for(;;) {
-        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:D:s");
+        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:D:sy:");
         if (c == -1)
             break;
         switch(c) {
         case 'h':
-            help();
+            return help();
         case 'o':
             out_filename = optarg;
             break;
@@ -621,13 +640,21 @@ int main(int argc, const char **argv)
         case 'S':
             stack_size = (size_t)strtod(optarg, NULL);
             break;
-        default:
+		case 'y':
+		{
+			FILE* dump_out = stderr;
+			enum qjs_dump_flags flags = qjs_parse_dump_flags(optarg, &qjs_parse_dump_flags_default_cli_callback, &dump_out);
+			qjs_set_dump_flags(flags);
+			qjs_set_dump_output_channel(dump_out);
+			break;
+		}
+		default:
             break;
         }
     }
 
     if (optind >= argc)
-        help();
+        return help();
 
     if (!out_filename) {
         if (output_type == OUTPUT_EXECUTABLE) {
