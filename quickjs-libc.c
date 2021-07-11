@@ -42,9 +42,11 @@
 #include <conio.h>
 #include <utime.h>
 #else
+#if !defined(__SWITCH__) // Don't include the following headers when compiling for switch
 #include <dlfcn.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#endif
 #include <sys/wait.h>
 
 #if defined(__APPLE__)
@@ -453,7 +455,7 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__SWITCH__)
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
@@ -480,7 +482,7 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
     } else {
         filename = (char *)module_name;
     }
-    
+
     /* C module */
     hd = dlopen(filename, RTLD_NOW | RTLD_LOCAL);
     if (filename != module_name)
@@ -1657,6 +1659,7 @@ static JSValue js_os_read_write(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt64(ctx, ret);
 }
 
+#if !defined(__SWITCH__)
 static JSValue js_os_isatty(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -1665,6 +1668,7 @@ static JSValue js_os_isatty(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     return JS_NewBool(ctx, (isatty(fd) != 0));
 }
+#endif
 
 #if defined(_WIN32)
 static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
@@ -1711,6 +1715,7 @@ static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 #else
+#if !defined(__SWITCH__)
 static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
@@ -1769,6 +1774,7 @@ static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+#endif
 #endif /* !_WIN32 */
 
 static JSValue js_os_remove(JSContext *ctx, JSValueConst this_val,
@@ -3594,9 +3600,11 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_DEF("seek", 3, js_os_seek ),
     JS_CFUNC_MAGIC_DEF("read", 4, js_os_read_write, 0 ),
     JS_CFUNC_MAGIC_DEF("write", 4, js_os_read_write, 1 ),
+#if !defined(__SWITCH__)
     JS_CFUNC_DEF("isatty", 1, js_os_isatty ),
     JS_CFUNC_DEF("ttyGetWinSize", 1, js_os_ttyGetWinSize ),
     JS_CFUNC_DEF("ttySetRaw", 1, js_os_ttySetRaw ),
+#endif
     JS_CFUNC_DEF("remove", 1, js_os_remove ),
     JS_CFUNC_DEF("rename", 2, js_os_rename ),
     JS_CFUNC_MAGIC_DEF("setReadHandler", 2, js_os_setReadHandler, 0 ),

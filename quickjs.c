@@ -1684,6 +1684,8 @@ static inline size_t js_def_malloc_usable_size(void *ptr)
     return 0;
 #elif defined(__linux__)
     return malloc_usable_size(ptr);
+#elif defined(__SWITCH__)
+    return 0;
 #else
     /* change this to `return 0;` if compilation fails */
     return malloc_usable_size(ptr);
@@ -1758,6 +1760,8 @@ static const JSMallocFunctions def_malloc_funcs = {
     NULL,
 #elif defined(__linux__)
     (size_t (*)(const void *))malloc_usable_size,
+#elif defined(__SWITCH__)
+    NULL,
 #else
     /* change this to `NULL,` if compilation fails */
     malloc_usable_size,
@@ -42018,7 +42022,11 @@ static int getTimezoneOffset(int64_t time) {
     }
     ti = time;
     localtime_r(&ti, &tm);
+#if defined(__TM_GMTOFF) && defined(__SWITCH__)
+    return -tm.__TM_GMTOFF / 60;
+#else
     return -tm.tm_gmtoff / 60;
+#endif
 #endif
 }
 
