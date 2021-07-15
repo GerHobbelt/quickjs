@@ -40,10 +40,12 @@ jobs:
     - name: Cache Binaries
       uses: actions/upload-artifact@v2
       with:
-        name: binaries
+        name: quickjs
         path: |
+          quickjs.h
+          quickjs-libc.h
+          doc
           *.a
           *.so
           *.exe
-          doc
         retention-days: 1
