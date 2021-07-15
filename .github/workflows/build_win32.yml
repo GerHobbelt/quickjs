@@ -31,7 +31,7 @@ jobs:
         hardlinks: 0 # optional, default is 0
     
     - name: Build QuickJs
-      run: make -e CONFIG_WIN32=y all
+      run: make -e CONFIG_WIN32=y all -j4
       
     - name: Build Document
       run: make -e CONFIG_WIN32=y build_doc
