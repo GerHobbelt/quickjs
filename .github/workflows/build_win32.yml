@@ -40,4 +40,9 @@ jobs:
     - name: Cache Binaries
       uses: actions/upload-artifact@v2
       with:
-        retention-hours: 2
+        name: binaries
+        path: |
+          *.a
+          *.so
+          *.exe
+        retention-days: 1
