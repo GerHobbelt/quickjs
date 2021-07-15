@@ -3,7 +3,7 @@ name: Build For WIN32
 on: 
   workflow_dispatch:
   push: 
-    branches: [ 21-03-27 ]
+    branches: [ dev ]
 
 jobs:
   build:
