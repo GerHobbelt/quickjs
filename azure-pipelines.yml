@@ -6,16 +6,18 @@
 trigger:
 - master
 
-pool: Default
+pool: 
+  vmImage: ubuntu-20.04
 
 steps:
 
-#- script: |
+- script: |
     #sudo apt-get install texlive
     #sudo apt-get install mingw-w64
-#  displayName: Install Compilers
+  displayName: Install Compilers
 
 - script: |
     make -e CONFIG_WIN32=y all -j4
     make -e CONFIG_WIN32=y build_doc
   displayName: Build QuickJs
+  failOnStderr: true
