@@ -45,4 +45,5 @@ jobs:
           *.a
           *.so
           *.exe
+          doc
         retention-days: 1
