@@ -164,9 +164,9 @@ static void __js_printf_like(2, 3)
             if (*fmt == 'p') {
                 uint8_t *ptr = va_arg(ap, void *);
                 if (ptr == NULL) {
-                    printf("NULL");
+					fprintf(stderr, "NULL");
                 } else {
-                    printf("H%+06lld.%zd",
+					fprintf(stderr, "H%+06lld.%zd",
                            js_trace_malloc_ptr_offset(ptr, s->opaque),
                            qjs_port_malloc_usable_size(ptr));
                 }
@@ -175,12 +175,12 @@ static void __js_printf_like(2, 3)
             }
             if (fmt[0] == 'z' && fmt[1] == 'd') {
                 size_t sz = va_arg(ap, size_t);
-                printf("%zd", sz);
+				fprintf(stderr, "%zd", sz);
                 fmt += 2;
                 continue;
             }
         }
-        putc(c, stdout);
+        putc(c, stderr);
     }
     va_end(ap);
 }
@@ -258,9 +258,9 @@ static const JSMallocFunctions trace_mf = {
 
 #define PROG_NAME "qjs"
 
-static void help(void)
+static int help(void)
 {
-    printf("QuickJS version " QUICKJS_CONFIG_VERSION "\n"
+    fprintf(stderr, "QuickJS version " QUICKJS_CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [file [args]]\n"
            "-h  --help         list options\n"
            "-e  --eval EXPR    evaluate EXPR\n"
@@ -280,7 +280,7 @@ static void help(void)
            "    --unhandled-rejection  dump unhandled promise rejections\n"
            "-q  --quit         just instantiate the interpreter and quit\n");
 
-	printf(""
+	fprintf(stderr, ""
 		"-y flags           dump info to output channel. (default: stderr)\n"
 		"\n"
 		"Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
@@ -294,7 +294,7 @@ static void help(void)
 	const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
 	while (kwd->keyword)
 	{
-		printf("    %s\n", kwd->keyword);
+		fprintf(stderr, "    %s\n", kwd->keyword);
 		kwd++;
 	}
 
@@ -371,8 +371,7 @@ int main(int argc, const char **argv)
             if (opt)
                 arg++;
             if (opt == 'h' || opt == '?' || !strcmp(longopt, "help")) {
-                help();
-				return EXIT_FAILURE;
+                return help();
             }
             if (opt == 'e' || !strcmp(longopt, "eval")) {
                 dump_unhandled_promise_rejection = 1;
@@ -476,8 +475,7 @@ int main(int argc, const char **argv)
             } else {
                 fprintf(stderr, "qjs: unknown option '--%s'\n", longopt);
             }
-            help();
-			return EXIT_FAILURE;
+            return help();
         }
     }
 
@@ -593,7 +591,7 @@ int main(int argc, const char **argv)
                     best[j] = ms;
             }
         }
-        printf("\nInstantiation times (ms): %.3f = %.3f+%.3f+%.3f+%.3f\n",
+		fprintf(stderr, "\nInstantiation times (ms): %.3f = %.3f+%.3f+%.3f+%.3f\n",
                best[1] + best[2] + best[3] + best[4],
                best[1], best[2], best[3], best[4]);
     }

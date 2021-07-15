@@ -37,7 +37,7 @@ REPL:
 - use more generic approach to display evaluation results
 - improve directive handling: dispatch, colorize, completion...
 - save history
-- close all predefined methods in repl.js and jscalc.js
+- close all predefined methods in repl.js and qjscalc.js
 
 Optimization ideas:
 - 64-bit atoms in 64-bit mode ?

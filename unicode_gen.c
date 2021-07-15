@@ -1134,10 +1134,10 @@ void find_run_type(TableEntry *te, CCInfo *tab, int code)
     }
 }
 
-TableEntry conv_table[1000];
-int conv_table_len;
-int ext_data[1000];
-int ext_data_len;
+static TableEntry conv_table[1000];
+static int conv_table_len;
+static int ext_data[1000];
+static int ext_data_len;
 
 void dump_case_conv_table1(void)
 {
