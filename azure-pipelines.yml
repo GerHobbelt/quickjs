@@ -6,15 +6,14 @@
 trigger:
 - master
 
-pool:
-  vmImage: ubuntu-latest
+pool: Default
 
 steps:
 
-- script: |
-    sudo apt-get install texlive
-    sudo apt-get install mingw-w64
-  displayName: Install Compilers
+#- script: |
+    #sudo apt-get install texlive
+    #sudo apt-get install mingw-w64
+#  displayName: Install Compilers
 
 - script: |
     make -e CONFIG_WIN32=y all -j4
