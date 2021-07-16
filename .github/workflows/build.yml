@@ -5,6 +5,36 @@ on:
 
 jobs:
 
+  ##################################
+  #       for linux system
+  ##################################
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Deps
+      run: sudo apt-get install texlive
+
+    - name: Build QuickJs
+      run: |
+        make -e all -j4
+        make -e build_doc
+
+    - name: Cache Binaries
+      uses: actions/upload-artifact@v2
+      with:
+        name: quickjs-linux
+        path: |
+          quickjs.h
+          quickjs-libc.h
+          doc
+          *.a
+          *.so
+          qjs*
+          run-*
+        retention-days: 5
+  
   ################################
   #      for win32 system
   ################################
@@ -50,32 +80,3 @@ jobs:
           *.exe
         retention-days: 5
         
-  ##################################
-  #       for linux system
-  ##################################
-  build_linux:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Install Deps
-      run: sudo apt-get install texlive
-
-    - name: Build QuickJs
-      run: |
-        make -e all -j4
-        make -e build_doc
-
-    - name: Cache Binaries
-      uses: actions/upload-artifact@v2
-      with:
-        name: quickjs-linux
-        path: |
-          quickjs.h
-          quickjs-libc.h
-          doc
-          *.a
-          *.so
-          qjs*
-          run-*
-        retention-days: 5
