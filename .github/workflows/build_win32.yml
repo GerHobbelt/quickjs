@@ -3,7 +3,7 @@ name: Build For WIN32
 on: 
   workflow_dispatch:
   push: 
-    branches: [ 21-03-27 ]
+    branches: [ dev ]
 
 jobs:
   build:
@@ -40,4 +40,12 @@ jobs:
     - name: Cache Binaries
       uses: actions/upload-artifact@v2
       with:
-        retention-hours: 2
+        name: quickjs
+        path: |
+          quickjs.h
+          quickjs-libc.h
+          doc
+          *.a
+          *.so
+          *.exe
+        retention-days: 1
