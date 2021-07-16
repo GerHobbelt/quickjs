@@ -1,15 +1,15 @@
-name: Build For WIN32
+name: Build QuickJs
 
 on: 
   workflow_dispatch:
-  push: 
-    branches: [ dev ]
 
 jobs:
-  build:
 
+  ################################
+  #      for win32 system
+  ################################
+  build_win32:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
 
@@ -40,7 +40,7 @@ jobs:
     - name: Cache Binaries
       uses: actions/upload-artifact@v2
       with:
-        name: quickjs
+        name: quickjs-win32
         path: |
           quickjs.h
           quickjs-libc.h
@@ -48,4 +48,34 @@ jobs:
           *.a
           *.so
           *.exe
-        retention-days: 1
+        retention-days: 5
+        
+  ##################################
+  #       for linux system
+  ##################################
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Deps
+      run: sudo apt-get install texlive
+
+    - name: Build QuickJs
+      run: |
+        make -e all -j4
+        make -e build_doc
+
+    - name: Cache Binaries
+      uses: actions/upload-artifact@v2
+      with:
+        name: quickjs-linux
+        path: |
+          quickjs.h
+          quickjs-libc.h
+          doc
+          *.a
+          *.so
+          qjs*
+          run-*
+        retention-days: 5
