@@ -22,17 +22,25 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "quickjs-port.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <stdarg.h>
 #include <string.h>
 #include <inttypes.h>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#endif
 
 #include "cutils.h"
 
-typedef struct JSToken {
+#include "monolithic_examples.h"
+
+
+typedef struct JSZToken {
     int tok;
     char buf[20];
     char *str;
@@ -40,7 +48,7 @@ typedef struct JSToken {
     int size;
     int line_num;  /* line number for start of token */
     int lines;     /* number of embedded linefeeds in token */
-} JSToken;
+} JSZToken;
 
 enum {
     TOK_EOF = 256,
@@ -53,7 +61,7 @@ enum {
     TOK_LCOM,
 };
 
-void tok_reset(JSToken *tt)
+static void tok_reset(JSZToken *tt)
 {
     if (tt->str != tt->buf) {
         free(tt->str);
@@ -63,7 +71,7 @@ void tok_reset(JSToken *tt)
     tt->len = 0;
 }
 
-void tok_add_ch(JSToken *tt, int c)
+static void tok_add_ch(JSZToken *tt, int c)
 {
     if (tt->len + 1 > tt->size) {
         tt->size *= 2;
@@ -77,19 +85,19 @@ void tok_add_ch(JSToken *tt, int c)
     tt->str[tt->len++] = c;
 }
 
-FILE *infile;
-const char *filename;
-int output_line_num;
-int line_num;
-int ch;
-JSToken tokc;
+static FILE *infile;
+static const char *filename;
+static int output_line_num;
+static int line_num;
+static int ch;
+static JSZToken tokc;
 
-int skip_mask;
+static int skip_mask;
 #define DEFINE_MAX 20
-char *define_tab[DEFINE_MAX];
-int define_len;
+static char *define_tab[DEFINE_MAX];
+static int define_len;
 
-void error(const char *fmt, ...)
+static void error(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -104,7 +112,7 @@ void error(const char *fmt, ...)
     exit(1);
 }
 
-void define_symbol(const char *def)
+static void define_symbol(const char *def)
 {
     int i;
     for (i = 0; i < define_len; i++) {
@@ -116,7 +124,7 @@ void define_symbol(const char *def)
     define_tab[define_len++] = strdup(def);
 }
 
-void undefine_symbol(const char *def)
+static void undefine_symbol(const char *def)
 {
     int i, j;
     for (i = j = 0; i < define_len; i++) {
@@ -129,7 +137,7 @@ void undefine_symbol(const char *def)
     define_len = j;
 }
 
-const char *find_symbol(const char *def)
+static const char *find_symbol(const char *def)
 {
     int i;
     for (i = 0; i < define_len; i++) {
@@ -139,16 +147,16 @@ const char *find_symbol(const char *def)
     return NULL;
 }
 
-void next(void);
+static void next(void);
 
-void nextch(void)
+static void nextch(void)
 {
     ch = fgetc(infile);
     if (ch == '\n')
         line_num++;
 }
 
-int skip_blanks(void)
+static int skip_blanks(void)
 {
     for (;;) {
         next();
@@ -158,7 +166,7 @@ int skip_blanks(void)
     }
 }
 
-void parse_directive(void)
+static void parse_directive(void)
 {
     int ifdef, mask = skip_mask;
     /* simplistic preprocessor:
@@ -214,7 +222,7 @@ static int hex_to_num(int ch)
         return -1;
 }
 
-void next(void)
+static void next(void)
 {
 again:    
     tok_reset(&tokc);
@@ -226,8 +234,8 @@ again:
         if (skip_mask)
             error("missing #endif");
         break;
-    case 'a' ... 'z':
-    case 'A' ... 'Z':
+	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h': case 'i': case 'j': case 'k': case 'l': case 'm': case 'n': case 'o': case 'p': case 'q': case 'r': case 's': case 't': case 'u': case 'v': case 'w': case 'x': case 'y': case 'z':
+	case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H': case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P': case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X': case 'Y': case 'Z':
     case '_':
     case '$':
         tok_add_ch(&tokc, ch);
@@ -269,7 +277,7 @@ again:
         }
         goto has_digit;
 
-    case '1' ... '9':
+	case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
         tok_add_ch(&tokc, ch);
         nextch();
     has_digit:
@@ -356,7 +364,7 @@ again:
                         tok_add_ch(&tokc, ch);
                         nextch();
                         break;
-                    case '0' ... '7':
+					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7':
                         n = 0;
                         while (ch >= '0' && ch <= '7') {
                             n = n * 8 + (ch - '0');
@@ -453,7 +461,7 @@ again:
         goto again;
 }
 
-void print_tok(FILE *f, JSToken *tt)
+static void print_tok(FILE *f, JSZToken *tt)
 {
     /* keep output lines in sync with input lines */
     while (output_line_num < tt->line_num) {
@@ -815,7 +823,7 @@ static void save_c_source(const char *filename, const uint8_t *buf, int buf_len,
 
 #define DEFAULT_OUTPUT_FILENAME "out.js"
 
-void help(void)
+static void help(void)
 {
     printf("jscompress version 1.0 Copyright (c) 2008-2018 Fabrice Bellard\n"
            "usage: jscompress [options] filename\n"
@@ -830,10 +838,13 @@ void help(void)
            "-U symbol   undefine preprocessor symbol\n"
            "-o outfile  set the output filename (default=%s)\n",
            DEFAULT_OUTPUT_FILENAME);
-    exit(1);
 }
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      qjscompress_main(cnt, arr)
+#endif
+
+int main(int argc, const char **argv)
 {
     int c, do_strip, keep_header, compress;
     const char *out_filename, *c_var, *fname;
@@ -851,7 +862,7 @@ int main(int argc, char **argv)
         switch(c) {
         case 'h':
             help();
-            break;
+            return EXIT_FAILURE;
         case 'n':
             do_strip = 0;
             break;
@@ -876,17 +887,22 @@ int main(int argc, char **argv)
             break;
         }
     }
-    if (optind >= argc)
-        help();
+	if (optind >= argc) {
+		help();
+		return EXIT_FAILURE;
+	}
 
     filename = argv[optind++];
 
     if (compress) {
-#if defined(__ANDROID__)
+#if defined(_MSC_VER)
+		/* XXX: use another directory ? */
+		snprintf(tmpfilename, sizeof(tmpfilename), "out.qjs%08d.tmp", rand());
+#elif defined(__ANDROID__)
         /* XXX: use another directory ? */
-        snprintf(tmpfilename, sizeof(tmpfilename), "out.%d", getpid());
+        snprintf(tmpfilename, sizeof(tmpfilename), "out.qjs%08d.tmp", getpid());
 #else
-        snprintf(tmpfilename, sizeof(tmpfilename), "/tmp/out.%d", getpid());
+        snprintf(tmpfilename, sizeof(tmpfilename), "/tmp/out.qjs%08d.tmp", getpid());
 #endif
         fname = tmpfilename;
     } else {
@@ -914,5 +930,5 @@ int main(int argc, char **argv)
         free(buf1);
         free(buf2);
     }
-    return 0;
+    return EXIT_SUCCESS;
 }

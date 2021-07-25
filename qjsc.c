@@ -1,7 +1,7 @@
 /*
  * QuickJS command line compiler
  * 
- * Copyright (c) 2018-2020 Fabrice Bellard
+ * Copyright (c) 2018-2021 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,15 +26,19 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <assert.h>
-#include <unistd.h>
 #include <errno.h>
 #if !defined(_WIN32)
 #include <sys/wait.h>
+#include <unistd.h>
+#else
+#include <process.h>
 #endif
 
 #include "cutils.h"
 #include "quickjs-libc.h"
+#include "win/getopt.h"
+
+#include "monolithic_examples.h"
 
 typedef struct {
     char *name;
@@ -56,10 +60,11 @@ typedef struct {
 static namelist_t cname_list;
 static namelist_t cmodule_list;
 static namelist_t init_module_list;
-static uint64_t feature_bitmap;
-static FILE *outfile;
-static BOOL byte_swap;
-static BOOL dynamic_export;
+static uint64_t feature_bitmap = 0;
+static FILE *outfile = NULL;
+static BOOL byte_swap = FALSE;
+static BOOL dynamic_export = FALSE;
+static BOOL save_temp = FALSE;
 static const char *c_ident_prefix = "qjsc_";
 
 #define FE_ALL (-1)
@@ -81,7 +86,7 @@ static const FeatureEntry feature_list[] = {
 #endif
 };
 
-void namelist_add(namelist_t *lp, const char *name, const char *short_name,
+static void namelist_add(namelist_t *lp, const char *name, const char *short_name,
                   int flags)
 {
     namelist_entry_t *e;
@@ -102,7 +107,7 @@ void namelist_add(namelist_t *lp, const char *name, const char *short_name,
     e->flags = flags;
 }
 
-void namelist_free(namelist_t *lp)
+static void namelist_free(namelist_t *lp)
 {
     while (lp->count > 0) {
         namelist_entry_t *e = &lp->array[--lp->count];
@@ -114,7 +119,7 @@ void namelist_free(namelist_t *lp)
     lp->size = 0;
 }
 
-namelist_entry_t *namelist_find(namelist_t *lp, const char *name)
+static namelist_entry_t *namelist_find(namelist_t *lp, const char *name)
 {
     int i;
     for(i = 0; i < lp->count; i++) {
@@ -197,13 +202,13 @@ static void output_object_code(JSContext *ctx,
     dump_hex(fo, out_buf, out_buf_len);
     fprintf(fo, "};\n\n");
 
-    js_free(ctx, out_buf);
+    qjs_free(ctx, out_buf);
 }
 
 static int js_module_dummy_init(JSContext *ctx, JSModuleDef *m)
 {
     /* should never be called when compiling JS code */
-    abort();
+    QJS_ABORT();
 }
 
 static void find_unique_cname(char *cname, size_t cname_size)
@@ -211,7 +216,7 @@ static void find_unique_cname(char *cname, size_t cname_size)
     char cname1[1024];
     int suffix_num;
     size_t len, max_len;
-    assert(cname_size >= 32);
+    QJS_ASSERT(cname_size >= 32);
     /* find a C name not matching an existing module C name by
        adding a numeric suffix */
     len = strlen(cname);
@@ -228,11 +233,14 @@ static void find_unique_cname(char *cname, size_t cname_size)
     pstrcpy(cname, cname_size, cname1);
 }
 
+char* js_find_module(JSContext* ctx, const char* module_name);
+
 JSModuleDef *jsc_module_loader(JSContext *ctx,
                               const char *module_name, void *opaque)
 {
     JSModuleDef *m;
     namelist_entry_t *e;
+    char *filename = js_find_module(ctx, module_name);
 
     /* check if it is a declared C or system module */
     e = namelist_find(&cmodule_list, module_name);
@@ -241,10 +249,10 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         namelist_add(&init_module_list, e->name, e->short_name, 0);
         /* create a dummy module */
         m = JS_NewCModule(ctx, module_name, js_module_dummy_init);
-    } else if (has_suffix(module_name, ".so")) {
-        fprintf(stderr, "Warning: binary module '%s' will be dynamically loaded\n", module_name);
+    } else if (has_suffix(filename ? filename : module_name, ".so")) {
+        fprintf(stderr, "Warning: binary module '%s' will be dynamically loaded\n", filename ? filename : module_name);
         /* create a dummy module */
-        m = JS_NewCModule(ctx, module_name, js_module_dummy_init);
+        m = JS_NewCModule(ctx, filename ? filename : module_name, js_module_dummy_init);
         /* the resulting executable will export its symbols for the
            dynamic library */
         dynamic_export = TRUE;
@@ -254,20 +262,20 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         JSValue func_val;
         char cname[1024];
         
-        buf = js_load_file(ctx, &buf_len, module_name);
+        buf = js_load_file(ctx, &buf_len, filename ? filename : module_name);
         if (!buf) {
             JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
-                                   module_name);
+                                   filename ? filename : module_name);
             return NULL;
         }
         
         /* compile the module */
         func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
                            JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-        js_free(ctx, buf);
+        qjs_free(ctx, buf);
         if (JS_IsException(func_val))
             return NULL;
-        get_c_name(cname, sizeof(cname), module_name);
+        get_c_name(cname, sizeof(cname), filename ? filename : module_name);
         if (namelist_find(&cname_list, cname)) {
             find_unique_cname(cname, sizeof(cname));
         }
@@ -277,6 +285,8 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         m = JS_VALUE_GET_PTR(func_val);
         JS_FreeValue(ctx, func_val);
     }
+    if(filename)
+        qjs_free(ctx, filename);
     return m;
 }
 
@@ -310,7 +320,7 @@ static void compile_file(JSContext *ctx, FILE *fo,
         js_std_dump_error(ctx);
         exit(1);
     }
-    js_free(ctx, buf);
+    qjs_free(ctx, buf);
     if (c_name1) {
         pstrcpy(c_name, sizeof(c_name), c_name1);
     } else {
@@ -326,6 +336,8 @@ static const char main_c_template1[] =
     "  JSRuntime *rt;\n"
     "  JSContext *ctx;\n"
     "  rt = JS_NewRuntime();\n"
+    "  js_std_set_worker_new_context_func(JS_NewCustomContext);\n"
+    "  js_std_init_handlers(rt);\n"
     ;
 
 static const char main_c_template2[] =
@@ -337,21 +349,25 @@ static const char main_c_template2[] =
 
 #define PROG_NAME "qjsc"
 
-void help(void)
+static int help(void)
 {
-    printf("QuickJS Compiler version " CONFIG_VERSION "\n"
+	printf("QuickJS Compiler version " QUICKJS_CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [files]\n"
            "\n"
            "options are:\n"
+           "-v          add verbosity\n"
            "-c          only output bytecode in a C file\n"
            "-e          output main() and bytecode in a C file (default = executable output)\n"
            "-o output   set the output filename\n"
            "-N cname    set the C name of the generated data\n"
            "-m          compile as Javascript module (default=autodetect)\n"
+           "-D module_name         compile a dynamically loaded module or worker\n"
            "-M module_name[,cname] add initialization code for an external C module\n"
            "-x          byte swapped output\n"
            "-p prefix   set the prefix of the generated C names\n"
-           );
+           "-S n        set the maximum stack size to 'n' bytes (default=%d)\n"
+		   "-s          save intermediate output to temp file\n",
+		JS_DEFAULT_STACK_SIZE);
 #ifdef CONFIG_LTO
     {
         int i;
@@ -367,12 +383,31 @@ void help(void)
                "            disable selected language features (smaller code size)\n");
     }
 #endif
-    exit(1);
+
+	printf(""
+		"-y flags    dump info to output channel. (default: stderr)\n"
+		"\n"
+		"Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
+		"The flags can be negated by prefixing with '~' or '!',\n"
+		"e.g. 'all,!atoms,!bytecode':\n"
+		"These flags are supported:\n"
+		"    stderr / to-stderr      (dump to stderr)\n"
+		"    stdout / to-stdout      (dump to stdout instead of stderr)\n"
+		"    none                    (disable/reset ALL dump flags)\n");
+
+	const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
+	while (kwd->keyword)
+	{
+		printf("    %s\n", kwd->keyword);
+		kwd++;
+ 	}
+
+	return EXIT_FAILURE;
 }
 
 #if defined(CONFIG_CC) && !defined(_WIN32)
 
-int exec_cmd(char **argv)
+static int exec_cmd(char **argv)
 {
     int pid, status, ret;
 
@@ -442,11 +477,19 @@ static int output_executable(const char *out_filename, const char *cfilename,
     if (dynamic_export)
         *arg++ = "-rdynamic";
     *arg++ = cfilename;
+
+#if 0
+    snprintf(libjsname, sizeof(libjsname), "-L%s", lib_dir);
+    *arg++ = libjsname;
+    *arg++ = "-lquickjs";
+#else
     snprintf(libjsname, sizeof(libjsname), "%s/libquickjs%s%s.a",
              lib_dir, bn_suffix, lto_suffix);
     *arg++ = libjsname;
+#endif
     *arg++ = "-lm";
     *arg++ = "-ldl";
+    *arg++ = "-lpthread";
     *arg = NULL;
     
     if (verbose) {
@@ -456,7 +499,8 @@ static int output_executable(const char *out_filename, const char *cfilename,
     }
     
     ret = exec_cmd((char **)argv);
-    unlink(cfilename);
+    if(!save_temp)
+        unlink(cfilename);
     return ret;
 }
 #else
@@ -476,7 +520,11 @@ typedef enum {
     OUTPUT_EXECUTABLE,
 } OutputTypeEnum;
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      qjsc_main(cnt, arr)
+#endif
+
+int main(int argc, const char **argv)
 {
     int c, i, verbose;
     const char *out_filename, *cname;
@@ -487,9 +535,11 @@ int main(int argc, char **argv)
     BOOL use_lto;
     int module;
     OutputTypeEnum output_type;
+    size_t stack_size;
 #ifdef CONFIG_BIGNUM
     BOOL bignum_ext = FALSE;
 #endif
+    namelist_t dynamic_module_list;
     
     out_filename = NULL;
     output_type = OUTPUT_EXECUTABLE;
@@ -499,18 +549,22 @@ int main(int argc, char **argv)
     byte_swap = FALSE;
     verbose = 0;
     use_lto = FALSE;
-    
+    stack_size = 0;
+    memset(&dynamic_module_list, 0, sizeof(dynamic_module_list));
+
+	qjs_clear_dump_flags();
+
     /* add system modules */
     namelist_add(&cmodule_list, "std", "std", 0);
     namelist_add(&cmodule_list, "os", "os", 0);
 
     for(;;) {
-        c = getopt(argc, argv, "ho:cN:f:mxevM:p:");
+        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:D:sy:");
         if (c == -1)
             break;
         switch(c) {
         case 'h':
-            help();
+            return help();
         case 'o':
             out_filename = optarg;
             break;
@@ -519,6 +573,9 @@ int main(int argc, char **argv)
             break;
         case 'e':
             output_type = OUTPUT_C_MAIN;
+            break;
+        case 's':
+            save_temp = TRUE;
             break;
         case 'N':
             cname = optarg;
@@ -548,7 +605,7 @@ int main(int argc, char **argv)
                 {
                 bad_feature:
                     fprintf(stderr, "unsupported feature: %s\n", optarg);
-                    exit(1);
+                    return EXIT_FAILURE;
                 }
             }
             break;
@@ -571,6 +628,9 @@ int main(int argc, char **argv)
                 namelist_add(&cmodule_list, path, cname, 0);
             }
             break;
+        case 'D':
+            namelist_add(&dynamic_module_list, optarg, NULL, 0);
+            break;
         case 'x':
             byte_swap = TRUE;
             break;
@@ -580,13 +640,24 @@ int main(int argc, char **argv)
         case 'p':
             c_ident_prefix = optarg;
             break;
-        default:
+        case 'S':
+            stack_size = (size_t)strtod(optarg, NULL);
+            break;
+		case 'y':
+		{
+			FILE* dump_out = stderr;
+			enum qjs_dump_flags flags = qjs_parse_dump_flags(optarg, &qjs_parse_dump_flags_default_cli_callback, &dump_out);
+			qjs_set_dump_flags(flags);
+			qjs_set_dump_output_channel(dump_out);
+			break;
+		}
+		default:
             break;
         }
     }
 
     if (optind >= argc)
-        help();
+        return help();
 
     if (!out_filename) {
         if (output_type == OUTPUT_EXECUTABLE) {
@@ -596,7 +667,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (output_type == OUTPUT_EXECUTABLE) {
+    if (output_type == OUTPUT_EXECUTABLE && !save_temp) {
 #if defined(_WIN32) || defined(__ANDROID__)
         /* XXX: find a /tmp directory ? */
         snprintf(cfilename, sizeof(cfilename), "out%d.c", getpid());
@@ -605,15 +676,17 @@ int main(int argc, char **argv)
 #endif
     } else {
         pstrcpy(cfilename, sizeof(cfilename), out_filename);
+        if(output_type == OUTPUT_EXECUTABLE)
+            pstrcat(cfilename, sizeof(cfilename), ".c");
     }
     
     fo = fopen(cfilename, "w");
     if (!fo) {
         perror(cfilename);
-        exit(1);
-    }
+		return EXIT_FAILURE;
+	}
     outfile = fo;
-    
+    JS_Initialize();
     rt = JS_NewRuntime();
     ctx = JS_NewContext(rt);
 #ifdef CONFIG_BIGNUM
@@ -648,17 +721,22 @@ int main(int argc, char **argv)
         cname = NULL;
     }
 
+    for(i = 0; i < dynamic_module_list.count; i++) {
+        if (!jsc_module_loader(ctx, dynamic_module_list.array[i].name, NULL)) {
+            fprintf(stderr, "Could not load dynamic module '%s'\n",
+                    dynamic_module_list.array[i].name);
+			return EXIT_FAILURE;
+		}
+    }
+    
     if (output_type != OUTPUT_C) {
-        fputs(main_c_template1, fo);
-        fprintf(fo, "  ctx = JS_NewContextRaw(rt);\n");
-
-        /* add the module loader if necessary */
-        if (feature_bitmap & (1 << FE_MODULE_LOADER)) {
-            fprintf(fo, "  JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);\n");
-        }
-        
+        fprintf(fo,
+                "static JSContext *JS_NewCustomContext(JSRuntime *rt)\n"
+                "{\n"
+                "  JSContext *ctx = JS_NewContextRaw(rt);\n"
+                "  if (!ctx)\n"
+                "    return NULL;\n");
         /* add the basic objects */
-        
         fprintf(fo, "  JS_AddIntrinsicBaseObjects(ctx);\n");
         for(i = 0; i < countof(feature_list); i++) {
             if ((feature_bitmap & ((uint64_t)1 << i)) &&
@@ -676,8 +754,8 @@ int main(int argc, char **argv)
                     "  JS_EnableBignumExt(ctx, 1);\n");
         }
 #endif
-        fprintf(fo, "  js_std_add_helpers(ctx, argc, argv);\n");
-
+        /* add the precompiled modules (XXX: could modify the module
+           loader instead) */
         for(i = 0; i < init_module_list.count; i++) {
             namelist_entry_t *e = &init_module_list.array[i];
             /* initialize the static C modules */
@@ -689,18 +767,46 @@ int main(int argc, char **argv)
                     "  }\n",
                     e->short_name, e->short_name, e->name);
         }
+        for(i = 0; i < cname_list.count; i++) {
+            namelist_entry_t *e = &cname_list.array[i];
+            if (e->flags) {
+                fprintf(fo, "  js_std_eval_binary(ctx, %s, %s_size, 1);\n",
+                        e->name, e->name);
+            }
+        }
+        fprintf(fo,
+                "  return ctx;\n"
+                "}\n\n");
+        
+        fputs(main_c_template1, fo);
+
+        if (stack_size != 0) {
+            fprintf(fo, "  JS_SetMaxStackSize(rt, %u);\n",
+                    (unsigned int)stack_size);
+        }
+        
+        /* add the module loader if necessary */
+        if (feature_bitmap & (1 << FE_MODULE_LOADER)) {
+            fprintf(fo, "  JS_SetModuleLoaderFunc(rt, NULL, js_module_loader_path, NULL);\n");
+        }
+        
+        fprintf(fo,
+                "  ctx = JS_NewCustomContext(rt);\n"
+                "  js_std_add_helpers(ctx, argc, argv);\n");
 
         for(i = 0; i < cname_list.count; i++) {
             namelist_entry_t *e = &cname_list.array[i];
-            fprintf(fo, "  js_std_eval_binary(ctx, %s, %s_size, %s);\n",
-                    e->name, e->name,
-                    e->flags ? "1" : "0");
+            if (!e->flags) {
+                fprintf(fo, "  js_std_eval_binary(ctx, %s, %s_size, 0);\n",
+                        e->name, e->name);
+            }
         }
         fputs(main_c_template2, fo);
     }
     
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    JS_Finalize();
 
     fclose(fo);
 
@@ -711,5 +817,5 @@ int main(int argc, char **argv)
     namelist_free(&cname_list);
     namelist_free(&cmodule_list);
     namelist_free(&init_module_list);
-    return 0;
+    return EXIT_SUCCESS;
 }

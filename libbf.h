@@ -1,7 +1,7 @@
 /*
  * Tiny arbitrary precision floating point library
  * 
- * Copyright (c) 2017-2020 Fabrice Bellard
+ * Copyright (c) 2017-2021 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(__x86_64__)
+#if (INTPTR_MAX >= INT64_MAX) && !defined(_MSC_VER) /* MSVC has no __int128 in stdC mode */
 #define LIMB_LOG2_BITS 6
 #else
 #define LIMB_LOG2_BITS 5
@@ -35,7 +35,7 @@
 
 #define LIMB_BITS (1 << LIMB_LOG2_BITS)
 
-#if LIMB_BITS == 64
+#if (LIMB_BITS == 64)
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
 typedef int64_t slimb_t;
@@ -48,6 +48,7 @@ typedef uint128_t dlimb_t;
 #define BF_DEC_BASE UINT64_C(10000000000000000000)
 
 #else
+
 
 typedef int32_t slimb_t;
 typedef uint32_t limb_t;

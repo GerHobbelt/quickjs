@@ -28,14 +28,44 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+#include "quickjs.h"
+
+#ifdef _MSC_VER
+#include <windows.h>
+#include <intrin.h>
+#include <malloc.h>
+#else
+#include <alloca.h>
+#endif
+
+
 /* set if CPU is big endian */
 #undef WORDS_BIGENDIAN
 
+#if !defined(__GNUC__) && !defined(__clang__)
+#undef __attribute__
+#define __attribute__(x)
+
+#undef __builtin_expect
+#define __builtin_expect(cond, m)	(cond)
+#endif
+
+#if defined(_MSC_VER)
+#define likely(x)    (x)
+#define unlikely(x)  (x)
+#define force_inline __forceinline
+#define no_inline __declspec(noinline)
+#define __maybe_unused
+#define __attribute__(x)
+#define __attribute(x)
+typedef intptr_t ssize_t;
+#else
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 #define force_inline inline __attribute__((always_inline))
 #define no_inline __attribute__((noinline))
 #define __maybe_unused __attribute__((unused))
+#endif
 
 #define xglue(x, y) x ## y
 #define glue(x, y) xglue(x, y)
@@ -57,6 +87,24 @@ enum {
     TRUE = 1,
 };
 #endif
+
+#ifdef QJS_NO_ASSERT
+
+#define QJS_ASSERT(expression)	((void)0)
+#define QJS_ABORT()				qjs_assert("Aborting: Should never get here!", __FILE__, __LINE__)
+
+#else
+
+#define QJS_ASSERT(expression) (void)(                                      \
+            (!!(expression)) ||                                             \
+            (qjs_assert(#expression, __FILE__, (unsigned)(__LINE__)), 0)	\
+        )
+
+#define QJS_ABORT()		QJS_ASSERT(!"Should never get here!")
+
+#endif
+
+void qjs_assert(const char* msg, const char* file, int line);
 
 void pstrcpy(char *buf, int buf_size, const char *str);
 char *pstrcat(char *buf, int buf_size, const char *s);
@@ -114,27 +162,91 @@ static inline int64_t min_int64(int64_t a, int64_t b)
 /* WARNING: undefined if a = 0 */
 static inline int clz32(unsigned int a)
 {
+#ifdef _MSC_VER
+    unsigned long idx;
+    _BitScanReverse(&idx, a);
+    return 31 ^ idx;
+#else
     return __builtin_clz(a);
+#endif
 }
 
 /* WARNING: undefined if a = 0 */
 static inline int clz64(uint64_t a)
 {
-    return __builtin_clzll(a);
+#ifdef _MSC_VER
+  unsigned long where;
+  // BitScanReverse scans from MSB to LSB for first set bit.
+  // Returns 0 if no set bit is found.
+#if INTPTR_MAX >= INT64_MAX // 64-bit
+  if (_BitScanReverse64(&where, a))
+    return (int)(63 - where);
+#else
+  // Scan the high 32 bits.
+  if (_BitScanReverse(&where, (uint32_t)(a >> 32)))
+    return (int)(63 - (where + 32)); // Create a bit offset from the MSB.
+  // Scan the low 32 bits.
+  if (_BitScanReverse(&where, (uint32_t)(a)))
+    return (int)(63 - where);
+#endif
+  return 64; // Undefined Behavior.
+#else
+  return __builtin_clzll(a);
+#endif
 }
 
 /* WARNING: undefined if a = 0 */
 static inline int ctz32(unsigned int a)
 {
+#ifdef _MSC_VER
+    unsigned long idx;
+    _BitScanForward(&idx, a);
+    return idx;
+#else
     return __builtin_ctz(a);
+#endif
 }
 
 /* WARNING: undefined if a = 0 */
 static inline int ctz64(uint64_t a)
 {
-    return __builtin_ctzll(a);
+#ifdef _MSC_VER
+  unsigned long where;
+  // Search from LSB to MSB for first set bit.
+  // Returns zero if no set bit is found.
+#if INTPTR_MAX >= INT64_MAX // 64-bit
+  if (_BitScanForward64(&where, a))
+    return (int)(where);
+#else
+  // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls.
+  // Scan the Low Word.
+  if (_BitScanForward(&where, (uint32_t)(a)))
+    return (int)(where);
+  // Scan the High Word.
+  if (_BitScanForward(&where, (uint32_t)(a >> 32)))
+    return (int)(where + 32); // Create a bit offset from the LSB.
+#endif
+  return 64;
+#else
+  return __builtin_ctzll(a);
+#endif
 }
 
+#ifdef _MSC_VER
+#pragma pack(push, 1)
+struct packed_u64 {
+    uint64_t v;
+};
+
+struct packed_u32 {
+    uint32_t v;
+};
+
+struct packed_u16 {
+    uint16_t v;
+};
+#pragma pack(pop)
+#else
 struct __attribute__((packed)) packed_u64 {
     uint64_t v;
 };
@@ -146,6 +258,7 @@ struct __attribute__((packed)) packed_u32 {
 struct __attribute__((packed)) packed_u16 {
     uint16_t v;
 };
+#endif
 
 static inline uint64_t get_u64(const uint8_t *tab)
 {
@@ -250,6 +363,7 @@ int dbuf_put(DynBuf *s, const uint8_t *data, size_t len);
 int dbuf_put_self(DynBuf *s, size_t offset, size_t len);
 int dbuf_putc(DynBuf *s, uint8_t c);
 int dbuf_putstr(DynBuf *s, const char *str);
+
 static inline int dbuf_put_u16(DynBuf *s, uint16_t val)
 {
     return dbuf_put(s, (uint8_t *)&val, 2);
@@ -267,6 +381,10 @@ int __attribute__((format(printf, 2, 3))) dbuf_printf(DynBuf *s,
 void dbuf_free(DynBuf *s);
 static inline BOOL dbuf_error(DynBuf *s) {
     return s->error;
+}
+static inline void dbuf_set_error(DynBuf *s)
+{
+    s->error = TRUE;
 }
 
 #define UTF8_CHAR_LEN_MAX 6

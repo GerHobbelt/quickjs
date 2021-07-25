@@ -39,7 +39,7 @@ static void js_point_finalizer(JSRuntime *rt, JSValue val)
 {
     JSPointData *s = JS_GetOpaque(val, js_point_class_id);
     /* Note: 's' can be NULL in case JS_SetOpaque() was not called */
-    js_free_rt(rt, s);
+    qjs_free_rt(rt, s);
 }
 
 static JSValue js_point_ctor(JSContext *ctx,
@@ -50,7 +50,7 @@ static JSValue js_point_ctor(JSContext *ctx,
     JSValue obj = JS_UNDEFINED;
     JSValue proto;
     
-    s = js_mallocz(ctx, sizeof(*s));
+    s = qjs_mallocz(ctx, sizeof(*s));
     if (!s)
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &s->x, argv[0]))
@@ -69,7 +69,7 @@ static JSValue js_point_ctor(JSContext *ctx,
     JS_SetOpaque(obj, s);
     return obj;
  fail:
-    js_free(ctx, s);
+    qjs_free(ctx, s);
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
@@ -130,17 +130,17 @@ static int js_point_init(JSContext *ctx, JSModuleDef *m)
 
     point_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, point_proto, js_point_proto_funcs, countof(js_point_proto_funcs));
-    JS_SetClassProto(ctx, js_point_class_id, point_proto);
     
     point_class = JS_NewCFunction2(ctx, js_point_ctor, "Point", 2, JS_CFUNC_constructor, 0);
     /* set proto.constructor and ctor.prototype */
     JS_SetConstructor(ctx, point_class, point_proto);
+    JS_SetClassProto(ctx, js_point_class_id, point_proto);
                       
     JS_SetModuleExport(ctx, m, "Point", point_class);
     return 0;
 }
 
-JSModuleDef *js_init_module(JSContext *ctx, const char *module_name)
+JS_EXPORT JSModuleDef *js_init_module(JSContext *ctx, const char *module_name)
 {
     JSModuleDef *m;
     m = JS_NewCModule(ctx, module_name, js_point_init);

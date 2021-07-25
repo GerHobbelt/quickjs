@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 #include "cutils.h"
 #include "libunicode.h"
@@ -393,7 +392,7 @@ int cr_op(CharRange *cr, const uint32_t *a_pt, int a_len,
             is_in = (a_idx & 1) ^ (b_idx & 1);
             break;
         default:
-            abort();
+            QJS_ABORT();
         }
         if (is_in != (cr->len & 1)) {
             if (cr_add_point(cr, v))
@@ -527,7 +526,13 @@ static int unicode_decomp_entry(uint32_t *res, uint32_t c,
     } else {
         d = unicode_decomp_data + unicode_decomp_table2[idx];
         switch(type) {
-        case DECOMP_TYPE_L1 ... DECOMP_TYPE_L7:
+        case DECOMP_TYPE_L1:
+        case DECOMP_TYPE_L2:
+        case DECOMP_TYPE_L3:
+        case DECOMP_TYPE_L4:
+        case DECOMP_TYPE_L5:
+        case DECOMP_TYPE_L6:
+        case DECOMP_TYPE_L7:
             l = type - DECOMP_TYPE_L1 + 1;
             d += (c - code) * l * 2;
             for(i = 0; i < l; i++) {
@@ -535,7 +540,8 @@ static int unicode_decomp_entry(uint32_t *res, uint32_t c,
                     return 0;
             }
             return l;
-        case DECOMP_TYPE_LL1 ... DECOMP_TYPE_LL2:
+        case DECOMP_TYPE_LL1:
+        case DECOMP_TYPE_LL2:
             {
                 uint32_t k, p;
                 l = type - DECOMP_TYPE_LL1 + 1;
@@ -551,7 +557,11 @@ static int unicode_decomp_entry(uint32_t *res, uint32_t c,
                 }
             }
             return l;
-        case DECOMP_TYPE_S1 ... DECOMP_TYPE_S5:
+        case DECOMP_TYPE_S1:
+        case DECOMP_TYPE_S2:
+        case DECOMP_TYPE_S3:
+        case DECOMP_TYPE_S4:
+        case DECOMP_TYPE_S5:
             l = type - DECOMP_TYPE_S1 + 1;
             d += (c - code) * l;
             for(i = 0; i < l; i++) {
@@ -582,7 +592,14 @@ static int unicode_decomp_entry(uint32_t *res, uint32_t c,
         case DECOMP_TYPE_B18:
             l = 18;
             goto decomp_type_b;
-        case DECOMP_TYPE_B1 ... DECOMP_TYPE_B8:
+        case DECOMP_TYPE_B1:
+        case DECOMP_TYPE_B2:
+        case DECOMP_TYPE_B3:
+        case DECOMP_TYPE_B4:
+        case DECOMP_TYPE_B5:
+        case DECOMP_TYPE_B6:
+        case DECOMP_TYPE_B7:
+        case DECOMP_TYPE_B8:
             l = type - DECOMP_TYPE_B1 + 1;
         decomp_type_b:
             {
@@ -1245,21 +1262,21 @@ static int unicode_prop_ops(CharRange *cr, ...)
         op = va_arg(ap, int);
         switch(op) {
         case POP_GC:
-            assert(stack_len < POP_STACK_LEN_MAX);
+            QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
             a = va_arg(ap, int);
             cr_init(&stack[stack_len++], cr->mem_opaque, cr->realloc_func);
             if (unicode_general_category1(&stack[stack_len - 1], a))
                 goto fail;
             break;
         case POP_PROP:
-            assert(stack_len < POP_STACK_LEN_MAX);
+            QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
             a = va_arg(ap, int);
             cr_init(&stack[stack_len++], cr->mem_opaque, cr->realloc_func);
             if (unicode_prop1(&stack[stack_len - 1], a))
                 goto fail;
             break;
         case POP_CASE:
-            assert(stack_len < POP_STACK_LEN_MAX);
+            QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
             a = va_arg(ap, int);
             cr_init(&stack[stack_len++], cr->mem_opaque, cr->realloc_func);
             if (unicode_case1(&stack[stack_len - 1], a))
@@ -1270,8 +1287,8 @@ static int unicode_prop_ops(CharRange *cr, ...)
         case POP_XOR:
             {
                 CharRange *cr1, *cr2, *cr3;
-                assert(stack_len >= 2);
-                assert(stack_len < POP_STACK_LEN_MAX);
+                QJS_ASSERT(stack_len >= 2);
+                QJS_ASSERT(stack_len < POP_STACK_LEN_MAX);
                 cr1 = &stack[stack_len - 2];
                 cr2 = &stack[stack_len - 1];
                 cr3 = &stack[stack_len++];
@@ -1286,18 +1303,18 @@ static int unicode_prop_ops(CharRange *cr, ...)
             }
             break;
         case POP_INVERT:
-            assert(stack_len >= 1);
+            QJS_ASSERT(stack_len >= 1);
             if (cr_invert(&stack[stack_len - 1]))
                 goto fail;
             break;
         case POP_END:
             goto done;
         default:
-            abort();
+            QJS_ABORT();
         }
     }
  done:
-    assert(stack_len == 1);
+    QJS_ASSERT(stack_len == 1);
     ret = cr_copy(cr, &stack[0]);
     cr_free(&stack[0]);
     return ret;

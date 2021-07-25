@@ -1,8 +1,8 @@
 /*
  * QuickJS Javascript Engine
  *
- * Copyright (c) 2017-2020 Fabrice Bellard
- * Copyright (c) 2017-2020 Charlie Gordon
+ * Copyright (c) 2017-2021 Fabrice Bellard
+ * Copyright (c) 2017-2021 Charlie Gordon
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +25,25 @@
 #ifndef QUICKJS_H
 #define QUICKJS_H
 
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
+
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#endif
+
+#include "quickjs_dump_flags.h"
+
+#include "quickjs_version.h"
+
+#ifndef JS_EXPORT
+#ifdef _WIN32
+  #define JS_EXPORT __declspec(dllexport)
+#else
+  #define JS_EXPORT /* nothing */
+#endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,7 +57,7 @@ extern "C" {
 #else
 #define js_likely(x)     (x)
 #define js_unlikely(x)   (x)
-#define js_force_inline  inline
+#define js_force_inline  __forceinline
 #define __js_printf_like(a, b)
 #endif
 
@@ -64,6 +81,116 @@ typedef uint32_t JSAtom;
 #define JS_NAN_BOXING
 #endif
 
+#ifdef _MSC_VER
+#define JS_STRICT_NAN_BOXING
+#endif
+
+typedef struct JSRefCountHeader {
+    int ref_count;
+} JSRefCountHeader;
+
+#define JS_FLOAT64_NAN NAN
+
+#if defined(JS_STRICT_NAN_BOXING)
+
+/*
+ * This schema defines strict NAN boxing for both 32 and 64 versions.
+ *
+ * This is a method of storing values in the IEEE 754 double-precision
+ * floating-point number. double type is 64-bit, comprised of 1 sign bit, 11
+ * exponent bits and 52 mantissa bits:
+ *    7         6        5        4        3        2        1        0
+ * seeeeeee|eeeemmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm
+ */
+
+/*
+ * s0000000|0000tttt|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv
+ * NaN marker   |tag|  48-bit placeholder for values: pointers, strings
+ * all bits 0   | 4 |
+ * for non float|bit|
+ *
+ * Doubles contain non-zero in NaN marker field and are stored with bits
+ * inversed.
+ *
+ * JS_UNINITIALIZED is strictly uint64_t(0)
+ */
+
+enum {
+    JS_TAG_UNINITIALIZED = 0,
+    JS_TAG_INT = 1,
+    JS_TAG_BOOL = 2,
+    JS_TAG_NULL = 3,
+    JS_TAG_UNDEFINED = 4,
+    JS_TAG_CATCH_OFFSET = 5,
+    JS_TAG_EXCEPTION = 6,
+    JS_TAG_FLOAT64 = 7,
+
+    /* all tags with a reference count have 0b1000 bit */
+    JS_TAG_OBJECT = 8,
+    JS_TAG_FUNCTION_BYTECODE = 9, /* used internally */
+    JS_TAG_MODULE = 10, /* used internally */
+    JS_TAG_STRING = 11,
+    JS_TAG_SYMBOL = 12,
+    JS_TAG_BIG_FLOAT = 13,
+    JS_TAG_BIG_INT = 14,
+    JS_TAG_BIG_DECIMAL = 15,
+};
+
+typedef uint64_t JSValue;
+
+#define JSValueConst JSValue
+
+#define JS_VALUE_GET_TAG(v) (((v) > 0xFFFFFFFFFFFFFULL) ? (unsigned)JS_TAG_FLOAT64 : (unsigned)((v) >> 48))
+
+#define JS_VALUE_GET_INT(v) (int)(v)
+#define JS_VALUE_GET_BOOL(v) (int)(v)
+#ifdef JS_PTR64
+#define JS_VALUE_GET_PTR(v) ((void *)((intptr_t)(v) & 0x0000FFFFFFFFFFFFULL))
+#else
+#define JS_VALUE_GET_PTR(v) ((void *)(intptr_t)(v))
+#endif
+
+#define JS_MKVAL(tag, val) (((uint64_t)(0xF & tag) << 48) | (uint32_t)(val))
+#define JS_MKPTR(tag, ptr) (((uint64_t)(0xF & tag) << 48) | ((uint64_t)(ptr) & 0x0000FFFFFFFFFFFFULL))
+
+#define JS_NAN JS_MKVAL(JS_TAG_FLOAT64,1)
+
+static inline double JS_VALUE_GET_FLOAT64(JSValue v)
+{
+    union { JSValue v; double d; } u;
+    if (v == JS_NAN)
+        return JS_FLOAT64_NAN;
+    u.v = ~v;
+    return u.d;
+}
+
+static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
+{
+    union { double d; uint64_t u64; } u;
+    JSValue v;
+    u.d = d;
+    /* normalize NaN */
+    if (js_unlikely((u.u64 & 0x7ff0000000000000) == 0x7ff0000000000000))
+        v = JS_NAN;
+    else
+        v = ~u.u64;
+    return v;
+}
+
+#define JS_TAG_IS_FLOAT64(tag) (tag == JS_TAG_FLOAT64)
+
+/* Same as JS_VALUE_GET_TAG, but return JS_TAG_FLOAT64 with NaN boxing. */
+/* Note: JS_VALUE_GET_TAG already normalized in this packaging schema. */
+#define JS_VALUE_GET_NORM_TAG(v) JS_VALUE_GET_TAG(v)
+
+#define JS_VALUE_IS_NAN(v) (v == JS_NAN)
+
+#define JS_VALUE_HAS_REF_COUNT(v) ((JS_VALUE_GET_TAG(v) & 0xFFF8) == 0x8)
+
+#define JSValueCast(x) (x)
+
+#else // !JS_STRICT_NAN_BOXING
+
 enum {
     /* all tags with a reference count are negative */
     JS_TAG_FIRST       = -11, /* first negative tag */
@@ -86,12 +213,6 @@ enum {
     JS_TAG_FLOAT64     = 7,
     /* any larger tag is FLOAT64 if JS_NAN_BOXING */
 };
-
-typedef struct JSRefCountHeader {
-    int ref_count;
-} JSRefCountHeader;
-
-#define JS_FLOAT64_NAN NAN
 
 #ifdef CONFIG_CHECK_JSVALUE
 /* JSValue consistency : it is not possible to run the code in this
@@ -126,7 +247,9 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 {
     return 0;
 }
-    
+
+#define JSValueCast(x) (JSValue)(x)
+
 #elif defined(JS_NAN_BOXING)
 
 typedef uint64_t JSValue;
@@ -191,7 +314,9 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     tag = JS_VALUE_GET_TAG(v);
     return tag == (JS_NAN >> 32);
 }
-    
+
+#define JSValueCast(x) (x)
+
 #else /* !JS_NAN_BOXING */
 
 typedef union JSValueUnion {
@@ -242,14 +367,19 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     return (u.u64 & 0x7fffffffffffffff) > 0x7ff0000000000000;
 }
 
+#define JSValueCast(x) (x)
+
 #endif /* !JS_NAN_BOXING */
+
+#define JS_VALUE_HAS_REF_COUNT(v) ((unsigned)JS_VALUE_GET_TAG(v) >= (unsigned)JS_TAG_FIRST)
+
+#endif /* !JS_STRICT_NAN_BOXING */
 
 #define JS_VALUE_IS_BOTH_INT(v1, v2) ((JS_VALUE_GET_TAG(v1) | JS_VALUE_GET_TAG(v2)) == 0)
 #define JS_VALUE_IS_BOTH_FLOAT(v1, v2) (JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(v1)) && JS_TAG_IS_FLOAT64(JS_VALUE_GET_TAG(v2)))
 
 #define JS_VALUE_GET_OBJ(v) ((JSObject *)JS_VALUE_GET_PTR(v))
 #define JS_VALUE_GET_STRING(v) ((JSString *)JS_VALUE_GET_PTR(v))
-#define JS_VALUE_HAS_REF_COUNT(v) ((unsigned)JS_VALUE_GET_TAG(v) >= (unsigned)JS_TAG_FIRST)
 
 /* special values */
 #define JS_NULL      JS_MKVAL(JS_TAG_NULL, 0)
@@ -290,7 +420,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 #define JS_PROP_NO_ADD           (1 << 16) /* internal use */
 #define JS_PROP_NO_EXOTIC        (1 << 17) /* internal use */
 
-#define JS_DEFAULT_STACK_SIZE (256 * 1024)
+#define JS_DEFAULT_STACK_SIZE (2048 * 1024)
 
 /* JS_Eval() flags */
 #define JS_EVAL_TYPE_GLOBAL   (0 << 0) /* global code (default) */
@@ -311,6 +441,11 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 typedef JSValue JSCFunction(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 typedef JSValue JSCFunctionData(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data);
+typedef JSValue JSCClosure(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, void *opaque);
+
+typedef struct JSRuntimeThreadState {
+    char data[64];
+} JSRuntimeThreadState;
 
 typedef struct JSMallocState {
     size_t malloc_count;
@@ -320,20 +455,32 @@ typedef struct JSMallocState {
 } JSMallocState;
 
 typedef struct JSMallocFunctions {
-    void *(*js_malloc)(JSMallocState *s, size_t size);
-    void (*js_free)(JSMallocState *s, void *ptr);
-    void *(*js_realloc)(JSMallocState *s, void *ptr, size_t size);
-    size_t (*js_malloc_usable_size)(const void *ptr);
+    void *(*qjs_malloc)(JSMallocState *s, size_t size);
+    void (*qjs_free)(JSMallocState *s, void *ptr);
+    void *(*qjs_realloc)(JSMallocState *s, void *ptr, size_t size);
+    size_t (*qjs_malloc_usable_size)(const void *ptr);
 } JSMallocFunctions;
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
 
+/* These pair of function should be called at the very beginning and the very end */
+void JS_Initialize(void);
+void JS_Finalize(void);
+
 JSRuntime *JS_NewRuntime(void);
+void JS_Enter(JSRuntime *rt);
+void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state);
+void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state);
+void JS_Leave(JSRuntime *rt);
 /* info lifetime must exceed that of rt */
 void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit);
 void JS_SetGCThreshold(JSRuntime *rt, size_t gc_threshold);
+/* use 0 to disable maximum stack size check */
 void JS_SetMaxStackSize(JSRuntime *rt, size_t stack_size);
+/* should be called when changing thread to update the stack top value
+   used to check stack overflow. */
+void JS_UpdateStackTop(JSRuntime *rt);
 JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque);
 void JS_FreeRuntime(JSRuntime *rt);
 void *JS_GetRuntimeOpaque(JSRuntime *rt);
@@ -349,6 +496,12 @@ JSContext *JS_DupContext(JSContext *ctx);
 void *JS_GetContextOpaque(JSContext *ctx);
 void JS_SetContextOpaque(JSContext *ctx, void *opaque);
 JSRuntime *JS_GetRuntime(JSContext *ctx);
+typedef struct {
+    JSValue (*get)(JSContext *ctx, JSAtom name, void *opaque);
+    void *opaque;
+} JSGlobalAccessFunctions;
+void JS_SetGlobalAccessFunctions(JSContext *ctx,
+                                 const JSGlobalAccessFunctions *af);
 void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
 JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
 
@@ -374,23 +527,23 @@ void JS_AddIntrinsicOperators(JSContext *ctx);
 /* enable "use math" */
 void JS_EnableBignumExt(JSContext *ctx, JS_BOOL enable);
 
-JSValue js_string_codePointRange(JSContext *ctx, JSValueConst this_val,
+JSValue qjs_string_codePointRange(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv);
 
-void *js_malloc_rt(JSRuntime *rt, size_t size);
-void js_free_rt(JSRuntime *rt, void *ptr);
-void *js_realloc_rt(JSRuntime *rt, void *ptr, size_t size);
-size_t js_malloc_usable_size_rt(JSRuntime *rt, const void *ptr);
-void *js_mallocz_rt(JSRuntime *rt, size_t size);
+void *qjs_malloc_rt(JSRuntime *rt, size_t size);
+void qjs_free_rt(JSRuntime *rt, void *ptr);
+void *qjs_realloc_rt(JSRuntime *rt, void *ptr, size_t size);
+size_t qjs_malloc_usable_size_rt(JSRuntime *rt, const void *ptr);
+void *qjs_mallocz_rt(JSRuntime *rt, size_t size);
 
-void *js_malloc(JSContext *ctx, size_t size);
-void js_free(JSContext *ctx, void *ptr);
-void *js_realloc(JSContext *ctx, void *ptr, size_t size);
-size_t js_malloc_usable_size(JSContext *ctx, const void *ptr);
-void *js_realloc2(JSContext *ctx, void *ptr, size_t size, size_t *pslack);
-void *js_mallocz(JSContext *ctx, size_t size);
-char *js_strdup(JSContext *ctx, const char *str);
-char *js_strndup(JSContext *ctx, const char *s, size_t n);
+void *qjs_malloc(JSContext *ctx, size_t size);
+void qjs_free(JSContext *ctx, void *ptr);
+void *qjs_realloc(JSContext *ctx, void *ptr, size_t size);
+size_t qjs_malloc_usable_size(JSContext *ctx, const void *ptr);
+void *qjs_realloc2(JSContext *ctx, void *ptr, size_t size, size_t *pslack);
+void *qjs_mallocz(JSContext *ctx, size_t size);
+char *qjs_strdup(JSContext *ctx, const char *str);
+char *qjs_strndup(JSContext *ctx, const char *s, size_t n);
 
 typedef struct JSMemoryUsage {
     int64_t malloc_size, malloc_limit, memory_used_size;
@@ -409,9 +562,11 @@ typedef struct JSMemoryUsage {
 } JSMemoryUsage;
 
 void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s);
-void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt);
+void JS_DumpMemoryUsage(const JSMemoryUsage *s, JSRuntime *rt);
 
 /* atom support */
+#define JS_ATOM_NULL 0
+
 JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len);
 JSAtom JS_NewAtom(JSContext *ctx, const char *str);
 JSAtom JS_NewAtomUInt32(JSContext *ctx, uint32_t n);
@@ -491,6 +646,7 @@ typedef struct JSClassDef {
 } JSClassDef;
 
 JSClassID JS_NewClassID(JSClassID *pclass_id);
+JSClassID JS_GetClassID(JSValueConst v);
 int JS_NewClass(JSRuntime *rt, JSClassID class_id, const JSClassDef *class_def);
 int JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
 
@@ -498,7 +654,7 @@ int JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
 
 static js_force_inline JSValue JS_NewBool(JSContext *ctx, JS_BOOL val)
 {
-    return JS_MKVAL(JS_TAG_BOOL, val);
+    return JS_MKVAL(JS_TAG_BOOL, (val != 0));
 }
 
 static js_force_inline JSValue JS_NewInt32(JSContext *ctx, int32_t val)
@@ -515,9 +671,9 @@ static js_force_inline JSValue JS_NewInt64(JSContext *ctx, int64_t val)
 {
     JSValue v;
     if (val == (int32_t)val) {
-        v = JS_NewInt32(ctx, val);
+        v = JS_NewInt32(ctx, (int32_t)val);
     } else {
-        v = __JS_NewFloat64(ctx, val);
+        v = __JS_NewFloat64(ctx, (double)val);
     }
     return v;
 }
@@ -626,8 +782,10 @@ JSValue JS_GetException(JSContext *ctx);
 JS_BOOL JS_IsError(JSContext *ctx, JSValueConst val);
 void JS_ResetUncatchableError(JSContext *ctx);
 JSValue JS_NewError(JSContext *ctx);
+JSValue JS_NewUncatchableError(JSContext *ctx);
 JSValue __js_printf_like(2, 3) JS_ThrowSyntaxError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowTypeError(JSContext *ctx, const char *fmt, ...);
+JSValue JS_ThrowTypeErrorInvalidClass(JSContext *ctx, JSClassID class_id);
 JSValue __js_printf_like(2, 3) JS_ThrowReferenceError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
@@ -660,7 +818,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
-    return (JSValue)v;
+    return JSValueCast(v);
 }
 
 static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
@@ -669,8 +827,13 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
-    return (JSValue)v;
+    return JSValueCast(v);
 }
+
+#define QUICK_JS_HAS_SCRIPTX_PATCH
+JSValue JS_NewWeakRef(JSContext* ctx, JSValueConst v);
+JSValue JS_GetWeakRef(JSContext* ctx, JSValueConst w);
+int JS_StrictEqual(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 
 int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
 int JS_ToInt32(JSContext *ctx, int32_t *pres, JSValueConst val);
@@ -746,7 +909,7 @@ int JS_IsExtensible(JSContext *ctx, JSValueConst obj);
 int JS_PreventExtensions(JSContext *ctx, JSValueConst obj);
 int JS_DeleteProperty(JSContext *ctx, JSValueConst obj, JSAtom prop, int flags);
 int JS_SetPrototype(JSContext *ctx, JSValueConst obj, JSValueConst proto_val);
-JSValueConst JS_GetPrototype(JSContext *ctx, JSValueConst val);
+JSValue JS_GetPrototype(JSContext *ctx, JSValueConst val);
 
 #define JS_GPN_STRING_MASK  (1 << 0)
 #define JS_GPN_SYMBOL_MASK  (1 << 1)
@@ -758,6 +921,8 @@ JSValueConst JS_GetPrototype(JSContext *ctx, JSValueConst val);
 
 int JS_GetOwnPropertyNames(JSContext *ctx, JSPropertyEnum **ptab,
                            uint32_t *plen, JSValueConst obj, int flags);
+int JS_GetOwnPropertyCount(JSContext *ctx, JSValueConst obj);
+int JS_GetOwnPropertyCountUnchecked(JSValueConst obj);
 int JS_GetOwnProperty(JSContext *ctx, JSPropertyDescriptor *desc,
                       JSValueConst obj, JSAtom prop);
 
@@ -774,7 +939,10 @@ JS_BOOL JS_DetectModule(const char *input, size_t input_len);
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
 JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
                 const char *filename, int eval_flags);
-JSValue JS_EvalFunction(JSContext *ctx, JSValue fun_obj);
+/* same as JS_Eval() but with an explicit 'this_obj' parameter */
+JSValue JS_EvalThis(JSContext *ctx, JSValueConst this_obj,
+                    const char *input, size_t input_len,
+                    const char *filename, int eval_flags);
 JSValue JS_GetGlobalObject(JSContext *ctx);
 int JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj);
 int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
@@ -792,10 +960,14 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
 void JS_SetOpaque(JSValue obj, void *opaque);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
+void *JS_GetAnyOpaque(JSValueConst obj, JSClassID *class_id);
 
 /* 'buf' must be zero terminated i.e. buf[buf_len] = '\0'. */
 JSValue JS_ParseJSON(JSContext *ctx, const char *buf, size_t buf_len,
                      const char *filename);
+#define JS_PARSE_JSON_EXT (1 << 0) /* allow extended JSON */
+JSValue JS_ParseJSON2(JSContext *ctx, const char *buf, size_t buf_len,
+                      const char *filename, int flags);
 JSValue JS_JSONStringify(JSContext *ctx, JSValueConst obj,
                          JSValueConst replacer, JSValueConst space0);
 
@@ -810,6 +982,14 @@ JSValue JS_GetTypedArrayBuffer(JSContext *ctx, JSValueConst obj,
                                size_t *pbyte_offset,
                                size_t *pbyte_length,
                                size_t *pbytes_per_element);
+typedef struct {
+    void *(*sab_alloc)(void *opaque, size_t size);
+    void (*sab_free)(void *opaque, void *ptr);
+    void (*sab_dup)(void *opaque, void *ptr);
+    void *sab_opaque;
+} JSSharedArrayBufferFunctions;
+void JS_SetSharedArrayBufferFunctions(JSRuntime *rt,
+                                      const JSSharedArrayBufferFunctions *sf);
 
 JSValue JS_NewPromiseCapability(JSContext *ctx, JSValue *resolving_funcs);
 
@@ -824,10 +1004,12 @@ typedef int JSInterruptHandler(JSRuntime *rt, void *opaque);
 void JS_SetInterruptHandler(JSRuntime *rt, JSInterruptHandler *cb, void *opaque);
 /* if can_block is TRUE, Atomics.wait() can be used */
 void JS_SetCanBlock(JSRuntime *rt, JS_BOOL can_block);
+/* set the [IsHTMLDDA] internal slot */
+void JS_SetIsHTMLDDA(JSContext *ctx, JSValueConst obj);
 
 typedef struct JSModuleDef JSModuleDef;
 
-/* return the module specifier (allocated with js_malloc()) or NULL if
+/* return the module specifier (allocated with qjs_malloc()) or NULL if
    exception */
 typedef char *JSModuleNormalizeFunc(JSContext *ctx,
                                     const char *module_base_name,
@@ -853,17 +1035,35 @@ JS_BOOL JS_IsJobPending(JSRuntime *rt);
 int JS_ExecutePendingJob(JSRuntime *rt, JSContext **pctx);
 
 /* Object Writer/Reader (currently only used to handle precompiled code) */
-#define JS_WRITE_OBJ_BYTECODE (1 << 0) /* allow function/module */
-#define JS_WRITE_OBJ_BSWAP    (1 << 1) /* byte swapped output */
+#define JS_WRITE_OBJ_BYTECODE  (1 << 0) /* allow function/module */
+#define JS_WRITE_OBJ_BSWAP     (1 << 1) /* byte swapped output */
+#define JS_WRITE_OBJ_SAB       (1 << 2) /* allow SharedArrayBuffer */
+#define JS_WRITE_OBJ_REFERENCE (1 << 3) /* allow object references to
+                                           encode arbitrary object
+                                           graph */
 uint8_t *JS_WriteObject(JSContext *ctx, size_t *psize, JSValueConst obj,
                         int flags);
+uint8_t *JS_WriteObject2(JSContext *ctx, size_t *psize, JSValueConst obj,
+                         int flags, uint8_t ***psab_tab, size_t *psab_tab_len);
+
 #define JS_READ_OBJ_BYTECODE  (1 << 0) /* allow function/module */
 #define JS_READ_OBJ_ROM_DATA  (1 << 1) /* avoid duplicating 'buf' data */
+#define JS_READ_OBJ_SAB       (1 << 2) /* allow SharedArrayBuffer */
+#define JS_READ_OBJ_REFERENCE (1 << 3) /* allow object references */
 JSValue JS_ReadObject(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                       int flags);
+/* instantiate and evaluate a bytecode function. Only used when
+   reading a script or module with JS_ReadObject() */
+JSValue JS_EvalFunction(JSContext *ctx, JSValue fun_obj);
 /* load the dependencies of the module 'obj'. Useful when JS_ReadObject()
    returns a module. */
 int JS_ResolveModule(JSContext *ctx, JSValueConst obj);
+
+/* only exported for os.Worker() */
+JSAtom JS_GetScriptOrModuleName(JSContext *ctx, int n_stack_levels);
+/* only exported for os.Worker() */
+JSModuleDef *JS_RunModule(JSContext *ctx, const char *basename,
+                          const char *filename);
 
 /* C function definition */
 typedef enum JSCFunctionEnum {  /* XXX: should rename for namespace isolation */
@@ -904,6 +1104,9 @@ JSValue JS_NewCFunction2(JSContext *ctx, JSCFunction *func,
 JSValue JS_NewCFunctionData(JSContext *ctx, JSCFunctionData *func,
                             int length, int magic, int data_len,
                             JSValueConst *data);
+JSValue JS_NewCClosure(JSContext *ctx, JSCClosure *func,
+                       int length, int magic, void *opaque,
+                       void (*opaque_finalize)(void*));
 
 static inline JSValue JS_NewCFunction(JSContext *ctx, JSCFunction *func, const char *name,
                                       int length)
@@ -964,24 +1167,22 @@ typedef struct JSCFunctionListEntry {
 #define JS_DEF_ALIAS          9
 
 /* Note: c++ does not like nested designators */
-#define JS_CFUNC_DEF(name, length, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, .u = { .func = { length, JS_CFUNC_generic, { .generic = func1 } } } }
-#define JS_CFUNC_MAGIC_DEF(name, length, func1, magic) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, magic, .u = { .func = { length, JS_CFUNC_generic_magic, { .generic_magic = func1 } } } }
-#define JS_CFUNC_SPECIAL_DEF(name, length, cproto, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, .u = { .func = { length, JS_CFUNC_ ## cproto, { .cproto = func1 } } } }
-#define JS_ITERATOR_NEXT_DEF(name, length, func1, magic) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, magic, .u = { .func = { length, JS_CFUNC_iterator_next, { .iterator_next = func1 } } } }
-#define JS_CGETSET_DEF(name, fgetter, fsetter) { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET, 0, .u = { .getset = { .get = { .getter = fgetter }, .set = { .setter = fsetter } } } }
-#define JS_CGETSET_MAGIC_DEF(name, fgetter, fsetter, magic) { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET_MAGIC, magic, .u = { .getset = { .get = { .getter_magic = fgetter }, .set = { .setter_magic = fsetter } } } }
-#define JS_PROP_STRING_DEF(name, cstr, prop_flags) { name, prop_flags, JS_DEF_PROP_STRING, 0, .u = { .str = cstr } }
-#define JS_PROP_INT32_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT32, 0, .u = { .i32 = val } }
-#define JS_PROP_INT64_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT64, 0, .u = { .i64 = val } }
-#define JS_PROP_DOUBLE_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_DOUBLE, 0, .u = { .f64 = val } }
-#define JS_PROP_UNDEFINED_DEF(name, prop_flags) { name, prop_flags, JS_DEF_PROP_UNDEFINED, 0, .u = { .i32 = 0 } }
-#define JS_OBJECT_DEF(name, tab, len, prop_flags) { name, prop_flags, JS_DEF_OBJECT, 0, .u = { .prop_list = { tab, len } } }
-#define JS_ALIAS_DEF(name, from) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_ALIAS, 0, .u = { .alias = { from, -1 } } }
-#define JS_ALIAS_BASE_DEF(name, from, base) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_ALIAS, 0, .u = { .alias = { from, base } } }
+#define JS_CFUNC_DEF(prop_name, length, func1) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = 0, .u = {.func = {length, JS_CFUNC_generic, {.generic = func1}} } }
+#define JS_CFUNC_MAGIC_DEF(prop_name, length, func1, magic_num) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = magic_num, .u = {.func = {length, JS_CFUNC_generic_magic, {.generic_magic = func1}} } }
+#define JS_CFUNC_SPECIAL_DEF(prop_name, length, cproto, func1) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = 0, .u = {.func = {length, JS_CFUNC_##cproto, {.cproto = func1}} } }
+#define JS_ITERATOR_NEXT_DEF(prop_name, length, func1, magic_num) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CFUNC, .magic = magic_num, .u = {.func = {length, JS_CFUNC_iterator_next, {.iterator_next = func1}} } }
+#define JS_CGETSET_DEF(prop_name, fgetter, fsetter) { .name = prop_name, .prop_flags = JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CGETSET, .magic = 0, .u = {.getset = {.get = {.getter = fgetter}, .set = {.setter = fsetter}} } }
+#define JS_CGETSET_MAGIC_DEF(prop_name, fgetter, fsetter, magic_num) { .name = prop_name, .prop_flags = JS_PROP_CONFIGURABLE, .def_type = JS_DEF_CGETSET_MAGIC, .magic = magic_num, .u = { .getset = {.get = {.getter_magic = fgetter}, .set = {.setter_magic = fsetter}} } }
+#define JS_PROP_STRING_DEF(prop_name, cstr, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_STRING, .magic = 0, .u = {.str = cstr } }
+#define JS_PROP_INT32_DEF(prop_name, val, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_INT32, .magic = 0, .u = {.i32 = val } }
+#define JS_PROP_INT64_DEF(prop_name, val, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_INT64, .magic = 0, .u = {.i64 = val } }
+#define JS_PROP_DOUBLE_DEF(prop_name, val, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_DOUBLE, .magic = 0, .u = {.f64 = val } }
+#define JS_PROP_UNDEFINED_DEF(prop_name, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_PROP_UNDEFINED, .magic = 0, .u = {.i32 = 0 } }
+#define JS_OBJECT_DEF(prop_name, tab, len, flags) { .name = prop_name, .prop_flags = flags, .def_type = JS_DEF_OBJECT, .magic = 0, .u = {.prop_list = {tab, len} } }
+#define JS_ALIAS_DEF(prop_name, from) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_ALIAS, .magic = 0, .u = {.alias = {from, -1} } }
+#define JS_ALIAS_BASE_DEF(prop_name, from, base) { .name = prop_name, .prop_flags = JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, .def_type = JS_DEF_ALIAS, .magic = 0, .u = {.alias = {from, base} } }
 
-void JS_SetPropertyFunctionList(JSContext *ctx, JSValueConst obj,
-                                const JSCFunctionListEntry *tab,
-                                int len);
+void JS_SetPropertyFunctionList(JSContext* ctx, JSValueConst obj, const JSCFunctionListEntry* tab, int len);
 
 /* C module definition */
 
@@ -998,6 +1199,11 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
                        JSValue val);
 int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                            const JSCFunctionListEntry *tab, int len);
+/* can only be called after the module is initialized */
+JSValueConst JS_GetModuleExport(JSContext *ctx, const JSModuleDef *m, const char *export_name);
+int JS_CountModuleExport(JSContext *ctx, const JSModuleDef *m);
+JSAtom JS_GetModuleExportName(JSContext *ctx, const JSModuleDef *m, int idx);
+JSValueConst JS_GetModuleExportValue(JSContext *ctx, const JSModuleDef *m, int idx);
 
 #undef js_unlikely
 #undef js_force_inline

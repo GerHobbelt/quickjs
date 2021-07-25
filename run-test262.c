@@ -1,8 +1,8 @@
 /*
  * ECMA Test 262 Runner for QuickJS
  * 
- * Copyright (c) 2017-2020 Fabrice Bellard
- * Copyright (c) 2017-2020 Charlie Gordon
+ * Copyright (c) 2017-2021 Fabrice Bellard
+ * Copyright (c) 2017-2021 Charlie Gordon
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,17 +27,16 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <assert.h>
 #include <ctype.h>
-#include <unistd.h>
 #include <errno.h>
 #include <time.h>
-#include <dirent.h>
-#include <ftw.h>
 
 #include "cutils.h"
 #include "list.h"
 #include "quickjs-libc.h"
+#include "quickjs-port.h"
+
+#include "monolithic_examples.h"
 
 /* enable test262 thread support to test SharedArrayBuffer and Atomics */
 #define CONFIG_AGENT
@@ -51,44 +50,44 @@ typedef struct namelist_t {
     unsigned int sorted : 1;
 } namelist_t;
 
-namelist_t test_list;
-namelist_t exclude_list;
-namelist_t exclude_dir_list;
+static namelist_t test_list;
+static namelist_t exclude_list;
+static namelist_t exclude_dir_list;
 
-FILE *outfile;
-enum test_mode_t {
+static FILE *outfile;
+static enum test_mode_t {
     TEST_DEFAULT_NOSTRICT, /* run tests as nostrict unless test is flagged as strictonly */
     TEST_DEFAULT_STRICT,   /* run tests as strict unless test is flagged as nostrict */
     TEST_NOSTRICT,         /* run tests as nostrict, skip strictonly tests */
     TEST_STRICT,           /* run tests as strict, skip nostrict tests */
     TEST_ALL,              /* run tests in both strict and nostrict, unless restricted by spec */
 } test_mode = TEST_DEFAULT_NOSTRICT;
-int skip_async;
-int skip_module;
-int new_style;
-int dump_memory;
-int stats_count;
-JSMemoryUsage stats_all, stats_avg, stats_min, stats_max;
-char *stats_min_filename;
-char *stats_max_filename;
-int verbose;
-char *harness_dir;
-char *harness_exclude;
-char *harness_features;
-char *harness_skip_features;
-char *error_filename;
-char *error_file;
-FILE *error_out;
-char *report_filename;
-int update_errors;
-int test_count, test_failed, test_index, test_skipped, test_excluded;
-int new_errors, changed_errors, fixed_errors;
-int async_done;
+static int skip_async;
+static int skip_module;
+static int new_style;
+static int dump_memory;
+static int stats_count;
+static JSMemoryUsage stats_all, stats_avg, stats_min, stats_max;
+static char *stats_min_filename;
+static char *stats_max_filename;
+static int verbose;
+static char *harness_dir;
+static char *harness_exclude;
+static char *harness_features;
+static char *harness_skip_features;
+static const char *error_filename;
+static char *error_file;
+static FILE *error_out;
+static const char *report_filename;
+static int update_errors;
+static int test_count, test_failed, test_index, test_skipped, test_excluded;
+static int new_errors, changed_errors, fixed_errors;
+static int async_done;
 
-void warning(const char *, ...) __attribute__((__format__(__printf__, 1, 2)));
-void fatal(int, const char *, ...) __attribute__((__format__(__printf__, 2, 3)));
+static void warning(const char *, ...) __attribute__((__format__(__printf__, 1, 2)));
+static void fatal(int, const char *, ...) __attribute__((__format__(__printf__, 2, 3)));
 
-void warning(const char *fmt, ...)
+static void warning(const char *fmt, ...)
 {
     va_list ap;
 
@@ -100,7 +99,7 @@ void warning(const char *fmt, ...)
     fputc('\n', stderr);
 }
 
-void fatal(int errcode, const char *fmt, ...)
+static void fatal(int errcode, const char *fmt, ...)
 {
     va_list ap;
 
@@ -114,7 +113,7 @@ void fatal(int errcode, const char *fmt, ...)
     exit(errcode);
 }
 
-void perror_exit(int errcode, const char *s)
+static void perror_exit(int errcode, const char *s)
 {
     fflush(stdout);
     fprintf(stderr, "%s: ", CMD_NAME);
@@ -122,7 +121,7 @@ void perror_exit(int errcode, const char *s)
     exit(errcode);
 }
 
-char *strdup_len(const char *str, int len)
+static char *strdup_len(const char *str, int len)
 {
     char *p = malloc(len + 1);
     memcpy(p, str, len);
@@ -134,7 +133,7 @@ static inline int str_equal(const char *a, const char *b) {
     return !strcmp(a, b);
 }
 
-char *str_append(char **pp, const char *sep, const char *str) {
+static char *str_append(char **pp, const char *sep, const char *str) {
     char *res, *p;
     size_t len = 0;
     p = *pp;
@@ -151,7 +150,7 @@ char *str_append(char **pp, const char *sep, const char *str) {
     return *pp = res;
 }
 
-char *str_strip(char *p)
+static char *str_strip(char *p)
 {
     size_t len = strlen(p);
     while (len > 0 && isspace((unsigned char)p[len - 1]))
@@ -161,12 +160,12 @@ char *str_strip(char *p)
     return p;
 }
 
-int has_prefix(const char *str, const char *prefix)
+static int has_prefix(const char *str, const char *prefix)
 {
     return !strncmp(str, prefix, strlen(prefix));
 }
 
-char *skip_prefix(const char *str, const char *prefix)
+static char *skip_prefix(const char *str, const char *prefix)
 {
     int i;
     for (i = 0;; i++) {
@@ -180,7 +179,7 @@ char *skip_prefix(const char *str, const char *prefix)
     return (char *)str;
 }
 
-char *get_basename(const char *filename)
+static char *get_basename(const char *filename)
 {
     char *p;
 
@@ -190,7 +189,7 @@ char *get_basename(const char *filename)
     return strdup_len(filename, p - filename);
 }
 
-char *compose_path(const char *path, const char *name)
+static char *compose_path(const char *path, const char *name)
 {
     int path_len, name_len;
     char *d, *q;
@@ -210,10 +209,17 @@ char *compose_path(const char *path, const char *name)
             memcpy(q, name, name_len + 1);
         }
     }
+#if defined(_WIN32)
+    for (char *x =d; *x; x++) {
+        if (*x == '\\') {
+            *x = '/';
+        }
+    }
+#endif
     return d;
 }
 
-int namelist_cmp(const char *a, const char *b)
+static int namelist_cmp(const char *a, const char *b)
 {
     /* compare strings in modified lexicographical order */
     for (;;) {
@@ -240,12 +246,12 @@ int namelist_cmp(const char *a, const char *b)
     }
 }
 
-int namelist_cmp_indirect(const void *a, const void *b)
+static int namelist_cmp_indirect(const void *a, const void *b)
 {
     return namelist_cmp(*(const char **)a, *(const char **)b);
 }
 
-void namelist_sort(namelist_t *lp)
+static void namelist_sort(namelist_t *lp)
 {
     int i, count;
     if (lp->count > 1) {
@@ -263,7 +269,7 @@ void namelist_sort(namelist_t *lp)
     lp->sorted = 1;
 }
 
-int namelist_find(namelist_t *lp, const char *name)
+static int namelist_find(namelist_t *lp, const char *name)
 {
     int a, b, m, cmp;
 
@@ -283,7 +289,7 @@ int namelist_find(namelist_t *lp, const char *name)
     return -1;
 }
 
-void namelist_add(namelist_t *lp, const char *base, const char *name)
+static void namelist_add(namelist_t *lp, const char *base, const char *name)
 {
     char *s;
 
@@ -305,7 +311,7 @@ fail:
     fatal(1, "allocation failure\n");
 }
 
-void namelist_load(namelist_t *lp, const char *filename)
+static void namelist_load(namelist_t *lp, const char *filename)
 {
     char buf[1024];
     char *base_name;
@@ -328,7 +334,7 @@ void namelist_load(namelist_t *lp, const char *filename)
     fclose(f);
 }
 
-void namelist_add_from_error_file(namelist_t *lp, const char *file)
+static void namelist_add_from_error_file(namelist_t *lp, const char *file)
 {
     const char *p, *p0;
     char *pp;
@@ -342,7 +348,7 @@ void namelist_add_from_error_file(namelist_t *lp, const char *file)
     }
 }
 
-void namelist_free(namelist_t *lp)
+static void namelist_free(namelist_t *lp)
 {
     while (lp->count > 0) {
         free(lp->array[--lp->count]);
@@ -352,10 +358,10 @@ void namelist_free(namelist_t *lp)
     lp->size = 0;
 }
 
-static int add_test_file(const char *filename, const struct stat *ptr, int flag)
+static int add_test_file(void *context, const char *filename, int is_dir)
 {
-    namelist_t *lp = &test_list;
-    if (has_suffix(filename, ".js") && !has_suffix(filename, "_FIXTURE.js"))
+    namelist_t *lp = (namelist_t *)context;
+    if (!is_dir && has_suffix(filename, ".js") && !has_suffix(filename, "_FIXTURE.js"))
         namelist_add(lp, NULL, filename);
     return 0;
 }
@@ -365,7 +371,7 @@ static void enumerate_tests(const char *path)
 {
     namelist_t *lp = &test_list;
     int start = lp->count;
-    ftw(path, add_test_file, 100);
+    qjs_listdir((void*)lp,  path, 1, add_test_file);
     qsort(lp->array + start, lp->count - start, sizeof(*lp->array),
           namelist_cmp_indirect);
 }
@@ -419,11 +425,9 @@ static JSValue js_evalScript(JSContext *ctx, JSValue this_val,
 
 #ifdef CONFIG_AGENT
 
-#include <pthread.h>
-
 typedef struct {
     struct list_head link;
-    pthread_t tid;
+    qjs_thread tid;
     char *script;
     JSValue broadcast_func;
     BOOL broadcast_pending;
@@ -441,16 +445,16 @@ typedef struct {
 static JSValue add_helpers1(JSContext *ctx);
 static void add_helpers(JSContext *ctx);
 
-static pthread_mutex_t agent_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t agent_cond = PTHREAD_COND_INITIALIZER;
+static qjs_mutex agent_mutex = QJS_MUTEX_INITIALIZER;
+static qjs_condition agent_cond;
 /* list of Test262Agent.link */
 static struct list_head agent_list = LIST_HEAD_INIT(agent_list);
 
-static pthread_mutex_t report_mutex = PTHREAD_MUTEX_INITIALIZER;
+static qjs_mutex report_mutex = QJS_MUTEX_INITIALIZER;
 /* list of AgentReport.link */
 static struct list_head report_list = LIST_HEAD_INIT(report_list);
 
-static void *agent_start(void *arg)
+static void agent_start(void *arg)
 {
     Test262Agent *agent = arg;
     JSRuntime *rt;
@@ -492,15 +496,15 @@ static void *agent_start(void *arg)
             } else {
                 JSValue args[2];
                 
-                pthread_mutex_lock(&agent_mutex);
+                qjs_mutex_lock(&agent_mutex);
                 while (!agent->broadcast_pending) {
-                    pthread_cond_wait(&agent_cond, &agent_mutex);
+                    qjs_condition_wait(&agent_cond, &agent_mutex);
                 }
                 
                 agent->broadcast_pending = FALSE;
-                pthread_cond_signal(&agent_cond);
+                qjs_condition_signal(&agent_cond);
 
-                pthread_mutex_unlock(&agent_mutex);
+                qjs_mutex_unlock(&agent_mutex);
 
                 args[0] = JS_NewArrayBuffer(ctx, agent->broadcast_sab_buf,
                                             agent->broadcast_sab_size,
@@ -522,7 +526,6 @@ static void *agent_start(void *arg)
 
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
-    return NULL;
 }
 
 static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
@@ -544,7 +547,7 @@ static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
     agent->script = strdup(script);
     JS_FreeCString(ctx, script);
     list_add_tail(&agent->link, &agent_list);
-    pthread_create(&agent->tid, NULL, agent_start, agent);
+    qjs_thread_create(&agent->tid, agent_start, agent, 0);
     return JS_UNDEFINED;
 }
 
@@ -555,7 +558,7 @@ static void js_agent_free(JSContext *ctx)
     
     list_for_each_safe(el, el1, &agent_list) {
         agent = list_entry(el, Test262Agent, link);
-        pthread_join(agent->tid, NULL);
+        qjs_thread_join(&agent->tid);
         JS_FreeValue(ctx, agent->broadcast_sab);
         list_del(&agent->link);
         free(agent);
@@ -605,7 +608,7 @@ static JSValue js_agent_broadcast(JSContext *ctx, JSValue this_val,
     
     /* broadcast the values and wait until all agents have started
        calling their callbacks */
-    pthread_mutex_lock(&agent_mutex);
+    qjs_mutex_lock(&agent_mutex);
     list_for_each(el, &agent_list) {
         agent = list_entry(el, Test262Agent, link);
         agent->broadcast_pending = TRUE;
@@ -616,12 +619,12 @@ static JSValue js_agent_broadcast(JSContext *ctx, JSValue this_val,
         agent->broadcast_sab_size = buf_size;
         agent->broadcast_val = val;
     }
-    pthread_cond_broadcast(&agent_cond);
+    qjs_condition_broadcast(&agent_cond);
 
     while (is_broadcast_pending()) {
-        pthread_cond_wait(&agent_cond, &agent_mutex);
+        qjs_condition_wait(&agent_cond, &agent_mutex);
     }
-    pthread_mutex_unlock(&agent_mutex);
+    qjs_mutex_unlock(&agent_mutex);
     return JS_UNDEFINED;
 }
 
@@ -644,21 +647,15 @@ static JSValue js_agent_sleep(JSContext *ctx, JSValue this_val,
     uint32_t duration;
     if (JS_ToUint32(ctx, &duration, argv[0]))
         return JS_EXCEPTION;
-    usleep(duration * 1000);
+    qjs_usleep(duration * 1000);
     return JS_UNDEFINED;
 }
 
-static int64_t get_clock_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
-}
 
 static JSValue js_agent_monotonicNow(JSContext *ctx, JSValue this_val,
                                      int argc, JSValue *argv)
 {
-    return JS_NewInt64(ctx, get_clock_ms());
+    return JS_NewInt64(ctx, qjs_get_time_ms());
 }
 
 static JSValue js_agent_getReport(JSContext *ctx, JSValue this_val,
@@ -667,14 +664,14 @@ static JSValue js_agent_getReport(JSContext *ctx, JSValue this_val,
     AgentReport *rep;
     JSValue ret;
 
-    pthread_mutex_lock(&report_mutex);
+    qjs_mutex_lock(&report_mutex);
     if (list_empty(&report_list)) {
         rep = NULL;
     } else {
         rep = list_entry(report_list.next, AgentReport, link);
         list_del(&rep->link);
     }
-    pthread_mutex_unlock(&report_mutex);
+    qjs_mutex_unlock(&report_mutex);
     if (rep) {
         ret = JS_NewString(ctx, rep->str);
         free(rep->str);
@@ -698,9 +695,9 @@ static JSValue js_agent_report(JSContext *ctx, JSValue this_val,
     rep->str = strdup(str);
     JS_FreeCString(ctx, str);
     
-    pthread_mutex_lock(&report_mutex);
+    qjs_mutex_lock(&report_mutex);
     list_add_tail(&rep->link, &report_list);
-    pthread_mutex_unlock(&report_mutex);
+    qjs_mutex_unlock(&report_mutex);
     return JS_UNDEFINED;
 }
 
@@ -743,10 +740,16 @@ static JSValue js_createRealm(JSContext *ctx, JSValue this_val,
     return ret;
 }
 
+static JSValue js_IsHTMLDDA(JSContext *ctx, JSValue this_val,
+                            int argc, JSValue *argv)
+{
+    return JS_NULL;
+}
+
 static JSValue add_helpers1(JSContext *ctx)
 {
     JSValue global_obj;
-    JSValue obj262;
+    JSValue obj262, obj;
     
     global_obj = JS_GetGlobalObject(ctx);
 
@@ -762,7 +765,7 @@ static JSValue add_helpers1(JSContext *ctx)
                       JS_NewCFunction(ctx, js_evalScript,
                                       "evalScript", 1));
     JS_SetPropertyStr(ctx, obj262, "codePointRange",
-                      JS_NewCFunction(ctx, js_string_codePointRange,
+                      JS_NewCFunction(ctx, qjs_string_codePointRange,
                                       "codePointRange", 2));
 #ifdef CONFIG_AGENT
     JS_SetPropertyStr(ctx, obj262, "agent", js_new_agent(ctx));
@@ -773,6 +776,9 @@ static JSValue add_helpers1(JSContext *ctx)
     JS_SetPropertyStr(ctx, obj262, "createRealm",
                       JS_NewCFunction(ctx, js_createRealm,
                                       "createRealm", 0));
+    obj = JS_NewCFunction(ctx, js_IsHTMLDDA, "IsHTMLDDA", 0);
+    JS_SetIsHTMLDDA(ctx, obj);
+    JS_SetPropertyStr(ctx, obj262, "IsHTMLDDA", obj);
 
     JS_SetPropertyStr(ctx, global_obj, "$262", JS_DupValue(ctx, obj262));
     
@@ -815,7 +821,7 @@ static JSModuleDef *js_module_loader_test(JSContext *ctx,
     /* compile the module */
     func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
                        JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-    js_free(ctx, buf);
+    qjs_free(ctx, buf);
     if (JS_IsException(func_val))
         return NULL;
     /* the module is already referenced, so we must free it */
@@ -824,12 +830,12 @@ static JSModuleDef *js_module_loader_test(JSContext *ctx,
     return m;
 }
 
-int is_line_sep(char c)
+static int is_line_sep(char c)
 {
     return (c == '\0' || c == '\n' || c == '\r');
 }
 
-char *find_line(const char *str, const char *line)
+static char *find_line(const char *str, const char *line)
 {
     if (str) {
         const char *p;
@@ -842,12 +848,12 @@ char *find_line(const char *str, const char *line)
     return NULL;
 }
 
-int is_word_sep(char c)
+static int is_word_sep(char c)
 {
     return (c == '\0' || isspace((unsigned char)c) || c == ',');
 }
 
-char *find_word(const char *str, const char *word)
+static char *find_word(const char *str, const char *word)
 {
     const char *p;
     int len = strlen(word);
@@ -861,7 +867,7 @@ char *find_word(const char *str, const char *word)
 }
 
 /* handle exclude directories */
-void update_exclude_dirs(void)
+static void update_exclude_dirs(void)
 {
     namelist_t *lp = &test_list;
     namelist_t *ep = &exclude_list;
@@ -901,7 +907,7 @@ void update_exclude_dirs(void)
     lp->count = count;
 }
 
-void load_config(const char *filename)
+static void load_config(const char *filename)
 {
     char buf[1024];
     FILE *f;
@@ -1054,7 +1060,7 @@ void load_config(const char *filename)
     free(base_name);
 }
 
-char *find_error(const char *filename, int *pline, int is_strict)
+static char *find_error(const char *filename, int *pline, int is_strict)
 {
     if (error_file) {
         size_t len = strlen(filename);
@@ -1091,7 +1097,7 @@ char *find_error(const char *filename, int *pline, int is_strict)
     return NULL;
 }
 
-int skip_comments(const char *str, int line, int *pline)
+static int skip_comments(const char *str, int line, int *pline)
 {
     const char *p;
     int c;
@@ -1129,7 +1135,7 @@ int skip_comments(const char *str, int line, int *pline)
     return p - str;
 }
 
-int longest_match(const char *str, const char *find, int pos, int *ppos, int line, int *pline)
+static int longest_match(const char *str, const char *find, int pos, int *ppos, int line, int *pline)
 {
     int len, maxlen;
 
@@ -1360,7 +1366,7 @@ fail:
     return 1;
 }
 
-char *extract_desc(const char *buf, char style)
+static char *extract_desc(const char *buf, char style)
 {
     const char *p, *desc_start;
     char *desc;
@@ -1489,7 +1495,25 @@ void update_stats(JSRuntime *rt, const char *filename) {
 #undef update
 }
 
-int run_test_buf(const char *filename, char *harness, namelist_t *ip,
+static void run_test262_initialize() {
+    JS_Initialize();
+#ifdef CONFIG_AGENT
+    qjs_mutex_init(&agent_mutex);
+    qjs_mutex_init(&report_mutex);
+    qjs_condition_init(&agent_cond);
+#endif
+}
+
+static void run_test262_finalize() {
+    JS_Finalize();
+#ifdef CONFIG_AGENT
+    qjs_mutex_destroy(&agent_mutex);
+    qjs_mutex_destroy(&report_mutex);
+    qjs_condition_destroy(&agent_cond);
+#endif
+}
+
+static int run_test_buf(const char *filename, char *harness, namelist_t *ip,
                  char *buf, size_t buf_len, const char* error_type,
                  int eval_flags, BOOL is_negative, BOOL is_async,
                  BOOL can_block)
@@ -1497,7 +1521,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     JSRuntime *rt;
     JSContext *ctx;
     int i, ret;
-        
+    run_test262_initialize();
     rt = JS_NewRuntime();
     if (rt == NULL) {
         fatal(1, "JS_NewRuntime failure");
@@ -1519,7 +1543,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     for (i = 0; i < ip->count; i++) {
         if (eval_file(ctx, harness, ip->array[i],
                       JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRIP)) {
-            fatal(1, "error including %s for %s", ip->array[i], filename);
+            fprintf(stderr, "error including %s for %s", ip->array[i], filename);
         }
     }
 
@@ -1535,6 +1559,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
 #endif
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    run_test262_finalize();
 
     test_count++;
     if (ret) {
@@ -1547,7 +1572,7 @@ int run_test_buf(const char *filename, char *harness, namelist_t *ip,
     return ret;
 }
 
-int run_test(const char *filename, int index)
+static int run_test(const char *filename, int index)
 {
     char harnessbuf[1024];
     char *harness;
@@ -1782,7 +1807,7 @@ int run_test(const char *filename, int index)
 }
 
 /* run a test when called by test262-harness+eshost */
-int run_test262_harness_test(const char *filename, BOOL is_module)
+static int run_test262_harness_test(const char *filename, BOOL is_module)
 {
     JSRuntime *rt;
     JSContext *ctx;
@@ -1793,6 +1818,7 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
     BOOL can_block;
     
     outfile = stdout; /* for js_print */
+    run_test262_initialize();
 
     rt = JS_NewRuntime();
     if (rt == NULL) {
@@ -1844,12 +1870,13 @@ int run_test262_harness_test(const char *filename, BOOL is_module)
 #endif
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    run_test262_finalize();
     return ret_code;
 }
 
-clock_t last_clock;
+static clock_t last_clock;
 
-void show_progress(int force) {
+static void show_progress(int force) {
     clock_t t = clock();
     if (force || !last_clock || (t - last_clock) > CLOCKS_PER_SEC / 20) {
         last_clock = t;
@@ -1862,7 +1889,7 @@ void show_progress(int force) {
 
 static int slow_test_threshold;
 
-void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
+static void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
 {
     int i;
 
@@ -1878,13 +1905,13 @@ void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
         } else {
             int ti;
             if (slow_test_threshold != 0) {
-                ti = get_clock_ms();
+                ti = qjs_get_time_ms();
             } else {
                 ti = 0;
             }
             run_test(p, test_index);
             if (slow_test_threshold != 0) {
-                ti = get_clock_ms() - ti;
+                ti = qjs_get_time_ms() - ti;
                 if (ti >= slow_test_threshold)
                     fprintf(stderr, "\n%s (%d ms)\n", p, ti);
             }
@@ -1895,9 +1922,9 @@ void run_test_dir_list(namelist_t *lp, int start_index, int stop_index)
     show_progress(TRUE);
 }
 
-void help(void)
+static void help(void)
 {
-    printf("run-test262 version " CONFIG_VERSION "\n"
+    printf("run-test262 version " QUICKJS_CONFIG_VERSION "\n"
            "usage: run-test262 [options] {-f file ... | [dir_list] [index range]}\n"
            "-h             help\n"
            "-a             run tests in strict and nostrict modes\n"
@@ -1915,10 +1942,9 @@ void help(void)
            "-f file        execute single test from 'file'\n"
            "-r file        set the report file name (default=none)\n"
            "-x file        exclude tests listed in 'file'\n");
-    exit(1);
 }
 
-char *get_opt_arg(const char *option, char *arg)
+static const char *get_opt_arg(const char *option, const char *arg)
 {
     if (!arg) {
         fatal(2, "missing argument for option %s", option);
@@ -1926,7 +1952,11 @@ char *get_opt_arg(const char *option, char *arg)
     return arg;
 }
 
-int main(int argc, char **argv)
+#if defined(BUILD_MONOLITHIC)
+#define main(c, a)			qjs_test262_main(c, a)
+#endif
+
+int main(int argc, const char **argv)
 {
     int optind, start_index, stop_index;
     BOOL is_dir_list;
@@ -1945,12 +1975,13 @@ int main(int argc, char **argv)
     optind = 1;
     is_dir_list = TRUE;
     while (optind < argc) {
-        char *arg = argv[optind];
+        const char *arg = argv[optind];
         if (*arg != '-')
             break;
         optind++;
         if (str_equal(arg, "-h")) {
             help();
+			return EXIT_FAILURE;
         } else if (str_equal(arg, "-m")) {
             dump_memory++;
         } else if (str_equal(arg, "-n")) {
@@ -1989,8 +2020,11 @@ int main(int argc, char **argv)
         }
     }
     
-    if (optind >= argc && !test_list.count)
-        help();
+	if (optind >= argc && !test_list.count)
+	{
+		help();
+		return EXIT_FAILURE;
+	}
 
     if (is_test262_harness) {
         return run_test262_harness_test(argv[optind], is_module);
@@ -2054,12 +2088,12 @@ int main(int argc, char **argv)
     if (dump_memory) {
         if (dump_memory > 1 && stats_count > 1) {
             printf("\nMininum memory statistics for %s:\n\n", stats_min_filename);
-            JS_DumpMemoryUsage(stdout, &stats_min, NULL);
+            JS_DumpMemoryUsage(&stats_min, NULL);
             printf("\nMaximum memory statistics for %s:\n\n", stats_max_filename);
-            JS_DumpMemoryUsage(stdout, &stats_max, NULL);
+            JS_DumpMemoryUsage(&stats_max, NULL);
         }
         printf("\nAverage memory statistics for %d tests:\n\n", stats_count);
-        JS_DumpMemoryUsage(stdout, &stats_avg, NULL);
+        JS_DumpMemoryUsage(&stats_avg, NULL);
         printf("\n");
     }
 
@@ -2094,5 +2128,9 @@ int main(int argc, char **argv)
     free(harness_exclude);
     free(error_file);
 
-    return 0;
+    if (new_errors) {
+        return EXIT_FAILURE;
+    } else {
+        return EXIT_SUCCESS;
+    }
 }

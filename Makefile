@@ -1,8 +1,8 @@
 #
 # QuickJS Javascript Engine
 # 
-# Copyright (c) 2017-2020 Fabrice Bellard
-# Copyright (c) 2017-2020 Charlie Gordon
+# Copyright (c) 2017-2021 Fabrice Bellard
+# Copyright (c) 2017-2021 Charlie Gordon
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,9 @@
 
 ifeq ($(shell uname -s),Darwin)
 CONFIG_DARWIN=y
+endif
+ifeq ($(OS),Windows_NT)
+CONFIG_WIN32=y
 endif
 # Windows cross compilation from Linux
 #CONFIG_WIN32=y
@@ -53,7 +56,11 @@ CONFIG_BIGNUM=y
 OBJDIR=.obj
 
 ifdef CONFIG_WIN32
-  CROSS_PREFIX=i686-w64-mingw32-
+  ifdef CONFIG_M32
+    CROSS_PREFIX=i686-w64-mingw32-
+  else
+    CROSS_PREFIX=x86_64-w64-mingw32-
+  endif
   EXE=.exe
 else
   CROSS_PREFIX=
@@ -95,10 +102,14 @@ STRIP=$(CROSS_PREFIX)strip
 ifdef CONFIG_WERROR
 CFLAGS+=-Werror
 endif
-DEFINES:=-D_GNU_SOURCE -DCONFIG_VERSION=\"$(shell cat VERSION)\"
+DEFINES:=-D_GNU_SOURCE -DCONFIG_VERSION=\"$(shell cat VERSION.txt)\"
 ifdef CONFIG_BIGNUM
 DEFINES+=-DCONFIG_BIGNUM
 endif
+ifdef CONFIG_WIN32
+DEFINES+=-D__USE_MINGW_ANSI_STDIO # for standard snprintf behavior
+endif
+
 CFLAGS+=$(DEFINES)
 CFLAGS_DEBUG=$(CFLAGS) -O0
 CFLAGS_SMALL=$(CFLAGS) -Os
@@ -115,8 +126,8 @@ CFLAGS+=-p
 LDFLAGS+=-p
 endif
 ifdef CONFIG_ASAN
-CFLAGS+=-fsanitize=address
-LDFLAGS+=-fsanitize=address
+CFLAGS+=-fsanitize=address -fno-omit-frame-pointer
+LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer
 endif
 ifdef CONFIG_WIN32
 LDEXPORT=
@@ -158,7 +169,15 @@ endif
 
 all: $(OBJDIR) $(OBJDIR)/quickjs.check.o $(OBJDIR)/qjs.check.o $(PROGS)
 
-QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o
+QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o $(OBJDIR)/quickjs-port.o
+
+# debugger
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
+ifndef CONFIG_WIN32
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-unix.o
+else
+QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger-transport-win.o
+endif
 
 QJS_OBJS=$(OBJDIR)/qjs.o $(OBJDIR)/repl.o $(QJS_LIB_OBJS)
 ifdef CONFIG_BIGNUM
@@ -166,10 +185,12 @@ QJS_LIB_OBJS+=$(OBJDIR)/libbf.o
 QJS_OBJS+=$(OBJDIR)/qjscalc.o
 endif
 
+HOST_LIBS=-lm -ldl -lpthread
 LIBS=-lm
 ifndef CONFIG_WIN32
-LIBS+=-ldl
+LIBS+=-ldl -lpthread
 endif
+LIBS+=$(EXTRA_LIBS)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR) $(OBJDIR)/examples $(OBJDIR)/tests
@@ -187,7 +208,7 @@ ifneq ($(CROSS_PREFIX),)
 
 $(QJSC): $(OBJDIR)/qjsc.host.o \
     $(patsubst %.o, %.host.o, $(QJS_LIB_OBJS))
-	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(HOST_CC) $(LDFLAGS) -o $@ $^ $(HOST_LIBS)
 
 endif #CROSS_PREFIX
 
@@ -239,13 +260,13 @@ libunicode-table.h: unicode_gen
 endif
 
 run-test262: $(OBJDIR)/run-test262.o $(QJS_LIB_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) -lpthread
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 run-test262-debug: $(patsubst %.o, %.debug.o, $(OBJDIR)/run-test262.o $(QJS_LIB_OBJS))
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) -lpthread
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 run-test262-32: $(patsubst %.o, %.m32.o, $(OBJDIR)/run-test262.o $(QJS_LIB_OBJS))
-	$(CC) -m32 $(LDFLAGS) -o $@ $^ $(LIBS) -lpthread
+	$(CC) -m32 $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # object suffix order: nolto, [m32|m32s]
 
@@ -276,16 +297,13 @@ $(OBJDIR)/%.check.o: %.c | $(OBJDIR)
 regexp_test: libregexp.c libunicode.c cutils.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -DTEST -o $@ libregexp.c libunicode.c cutils.c $(LIBS)
 
-jscompress: jscompress.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ jscompress.c
-
 unicode_gen: $(OBJDIR)/unicode_gen.host.o $(OBJDIR)/cutils.host.o libunicode.c unicode_gen_def.h
 	$(HOST_CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJDIR)/unicode_gen.host.o $(OBJDIR)/cutils.host.o
 
 clean:
 	rm -f repl.c qjscalc.c out.c
-	rm -f *.a *.o *.d *~ jscompress unicode_gen regexp_test $(PROGS)
-	rm -f hello.c hello_module.c test_fib.c
+	rm -f *.a *.o *.d *~ unicode_gen regexp_test $(PROGS)
+	rm -f hello.c test_fib.c
 	rm -f examples/*.so tests/*.so
 	rm -rf $(OBJDIR)/ *.dSYM/ qjs-debug
 	rm -rf run-test262-debug run-test262-32
@@ -379,10 +397,11 @@ endif
 
 test: qjs
 	./qjs tests/test_closure.js
-	./qjs tests/test_op.js
+	./qjs tests/test_language.js
 	./qjs tests/test_builtin.js
 	./qjs tests/test_loop.js
 	./qjs tests/test_std.js
+	./qjs tests/test_worker.js
 ifndef CONFIG_DARWIN
 ifdef CONFIG_BIGNUM
 	./qjs --bignum tests/test_bjson.js
@@ -398,10 +417,11 @@ ifdef CONFIG_BIGNUM
 endif
 ifdef CONFIG_M32
 	./qjs32 tests/test_closure.js
-	./qjs32 tests/test_op.js
+	./qjs32 tests/test_language.js
 	./qjs32 tests/test_builtin.js
 	./qjs32 tests/test_loop.js
 	./qjs32 tests/test_std.js
+	./qjs32 tests/test_worker.js
 ifdef CONFIG_BIGNUM
 	./qjs32 --bignum tests/test_op_overloading.js
 	./qjs32 --bignum tests/test_bignum.js

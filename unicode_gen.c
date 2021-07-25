@@ -27,11 +27,12 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <assert.h>
-#include <ctype.h>
 #include <time.h>
 
 #include "cutils.h"
+
+#include "monolithic_examples.h"
+
 
 /* define it to be able to test unicode.c */
 //#define USE_TEST
@@ -324,14 +325,14 @@ void parse_unicode_data(const char *filename)
         }
         ci = &tab[code];
         if (uc > 0 || lc > 0) {
-            assert(code <= CHARCODE_MAX);
+            QJS_ASSERT(code <= CHARCODE_MAX);
             if (uc > 0) {
-                assert(ci->u_len == 0);
+                QJS_ASSERT(ci->u_len == 0);
                 ci->u_len = 1;
                 ci->u_data[0] = uc;
             }
             if (lc > 0) {
-                assert(ci->l_len == 0);
+                QJS_ASSERT(ci->l_len == 0);
                 ci->l_len = 1;
                 ci->l_data[0] = lc;
             }
@@ -354,7 +355,7 @@ void parse_unicode_data(const char *filename)
             int cc;
             cc = strtoul(p, NULL, 0);
             if (cc != 0) {
-                assert(code <= CHARCODE_MAX);
+                QJS_ASSERT(code <= CHARCODE_MAX);
                 ci->combining_class = cc;
                 //                printf("%05x: %d\n", code, ci->combining_class);
             }
@@ -363,7 +364,7 @@ void parse_unicode_data(const char *filename)
         p = get_field(line, 5);
         if (p && *p != ';' && *p != '\0') {
             int size;
-            assert(code <= CHARCODE_MAX);
+            QJS_ASSERT(code <= CHARCODE_MAX);
             ci->is_compat = 0;
             if (*p == '<') {
                 while (*p != '\0' && *p != '>')
@@ -406,8 +407,8 @@ void parse_unicode_data(const char *filename)
         if (strstr(buf1, " Last>")) {
             int i;
             //            printf("range: 0x%x-%0x\n", last_code, code);
-            assert(ci->decomp_len == 0);
-            assert(ci->script_ext_len == 0);
+            QJS_ASSERT(ci->decomp_len == 0);
+            QJS_ASSERT(ci->script_ext_len == 0);
             for(i = last_code + 1; i < code; i++) {
                 unicode_db[i] = *ci;
             }
@@ -445,7 +446,7 @@ void parse_special_casing(CCInfo *tab, const char *filename)
         if (!p)
             continue;
         code = strtoul(p, NULL, 16);
-        assert(code <= CHARCODE_MAX);
+        QJS_ASSERT(code <= CHARCODE_MAX);
         ci = &tab[code];
 
         p = get_field(line, 4);
@@ -466,7 +467,7 @@ void parse_special_casing(CCInfo *tab, const char *filename)
                     p++;
                 if (*p == ';')
                     break;
-                assert(ci->l_len < CC_LEN_MAX);
+                QJS_ASSERT(ci->l_len < CC_LEN_MAX);
                 ci->l_data[ci->l_len++] = strtoul(p, (char **)&p, 16);
             }
 
@@ -482,7 +483,7 @@ void parse_special_casing(CCInfo *tab, const char *filename)
                     p++;
                 if (*p == ';')
                     break;
-                assert(ci->u_len < CC_LEN_MAX);
+                QJS_ASSERT(ci->u_len < CC_LEN_MAX);
                 ci->u_data[ci->u_len++] = strtoul(p, (char **)&p, 16);
             }
 
@@ -521,7 +522,7 @@ void parse_case_folding(CCInfo *tab, const char *filename)
         if (!p)
             continue;
         code = strtoul(p, NULL, 16);
-        assert(code <= CHARCODE_MAX);
+        QJS_ASSERT(code <= CHARCODE_MAX);
         ci = &tab[code];
 
         p = get_field(line, 1);
@@ -534,10 +535,10 @@ void parse_case_folding(CCInfo *tab, const char *filename)
             continue;
         
         p = get_field(line, 2);
-        assert(p != 0);
-        assert(ci->f_code == 0);
+        QJS_ASSERT(p != 0);
+        QJS_ASSERT(ci->f_code == 0);
         ci->f_code = strtoul(p, NULL, 16);
-        assert(ci->f_code != 0 && ci->f_code != code);
+        QJS_ASSERT(ci->f_code != 0 && ci->f_code != code);
     }
         
     fclose(f);
@@ -564,7 +565,7 @@ void parse_composition_exclusions(const char *filename)
         if (*p == '#' || *p == '@' || *p == '\0')
             continue;
         c0 = strtoul(p, (char **)&p, 16);
-        assert(c0 > 0 && c0 <= CHARCODE_MAX);
+        QJS_ASSERT(c0 > 0 && c0 <= CHARCODE_MAX);
         unicode_db[c0].is_excluded = TRUE;
     }
     fclose(f);
@@ -598,7 +599,7 @@ void parse_derived_core_properties(const char *filename)
         } else {
             c1 = c0;
         }
-        assert(c1 <= CHARCODE_MAX);
+        QJS_ASSERT(c1 <= CHARCODE_MAX);
         p += strspn(p, " \t");
         if (*p == ';') {
             p++;
@@ -654,7 +655,7 @@ void parse_derived_norm_properties(const char *filename)
         } else {
             c1 = c0;
         }
-        assert(c1 <= CHARCODE_MAX);
+        QJS_ASSERT(c1 <= CHARCODE_MAX);
         p += strspn(p, " \t");
         if (*p == ';') {
             p++;
@@ -704,7 +705,7 @@ void parse_prop_list(const char *filename)
         } else {
             c1 = c0;
         }
-        assert(c1 <= CHARCODE_MAX);
+        QJS_ASSERT(c1 <= CHARCODE_MAX);
         p += strspn(p, " \t");
         if (*p == ';') {
             p++;
@@ -758,7 +759,7 @@ void parse_scripts(const char *filename)
         } else {
             c1 = c0;
         }
-        assert(c1 <= CHARCODE_MAX);
+        QJS_ASSERT(c1 <= CHARCODE_MAX);
         p += strspn(p, " \t");
         if (*p == ';') {
             p++;
@@ -813,7 +814,7 @@ void parse_script_extensions(const char *filename)
         } else {
             c1 = c0;
         }
-        assert(c1 <= CHARCODE_MAX);
+        QJS_ASSERT(c1 <= CHARCODE_MAX);
         p += strspn(p, " \t");
         script_ext_len = 0;
         if (*p == ';') {
@@ -835,7 +836,7 @@ void parse_script_extensions(const char *filename)
                     fprintf(stderr, "Script not found: %s\n", buf);
                     exit(1);
                 }
-                assert(script_ext_len < sizeof(script_ext));
+                QJS_ASSERT(script_ext_len < sizeof(script_ext));
                 script_ext[script_ext_len++] = i;
             }
             for(c = c0; c <= c1; c++) {
@@ -1133,10 +1134,10 @@ void find_run_type(TableEntry *te, CCInfo *tab, int code)
     }
 }
 
-TableEntry conv_table[1000];
-int conv_table_len;
-int ext_data[1000];
-int ext_data_len;
+static TableEntry conv_table[1000];
+static int conv_table_len;
+static int ext_data[1000];
+static int ext_data_len;
 
 void dump_case_conv_table1(void)
 {
@@ -1174,7 +1175,7 @@ int find_ext_data_index(int data)
         if (ext_data[i] == data)
             return i;
     }
-    assert(ext_data_len < countof(ext_data));
+    QJS_ASSERT(ext_data_len < countof(ext_data));
     ext_data[ext_data_len++] = data;
     return ext_data_len - 1;
 }
@@ -1190,7 +1191,7 @@ void build_conv_table(CCInfo *tab)
         ci = &tab[code];
         if (ci->u_len == 0 && ci->l_len == 0 && ci->f_code == 0)
             continue;
-        assert(te - conv_table < countof(conv_table));
+        QJS_ASSERT(te - conv_table < countof(conv_table));
         find_run_type(te, tab, code);
 #if 0
         if (te->type == RUN_TYPE_TODO) {
@@ -1198,7 +1199,7 @@ void build_conv_table(CCInfo *tab)
             dump_cc_info(ci, code);
         }
 #endif
-        assert(te->len <= 127);
+        QJS_ASSERT(te->len <= 127);
         code += te->len - 1;
         te++;
     }
@@ -1249,7 +1250,7 @@ void build_conv_table(CCInfo *tab)
             v = 0;
             for(j = 0; j < 3; j++) {
                 p = find_ext_data_index(te->ext_data[j]);
-                assert(p < 16);
+                QJS_ASSERT(p < 16);
                 v = (v << 4) | p;
             }
             te->data_index = v;
@@ -1265,7 +1266,7 @@ void build_conv_table(CCInfo *tab)
             v = 0;
             for(j = 0; j < 2; j++) {
                 p = find_ext_data_index(te->ext_data[j]);
-                assert(p < 64);
+                QJS_ASSERT(p < 64);
                 v = (v << 6) | p;
             }
             te->data_index = v;
@@ -1350,7 +1351,7 @@ void compute_internal_props(void)
         CCInfo *ci = &unicode_db[i];
         has_ul = (ci->u_len != 0 || ci->l_len != 0 || ci->f_code != 0);
         if (has_ul) {
-            assert(get_prop(i, PROP_Cased));
+            QJS_ASSERT(get_prop(i, PROP_Cased));
         } else {
             set_prop(i, PROP_Cased1, get_prop(i, PROP_Cased));
         }
@@ -1428,7 +1429,7 @@ void build_prop_table(FILE *f, int prop_index, BOOL add_index)
     buf_len = dbuf1->size / sizeof(buf[0]);
     
     /* the first value is assumed to be 0 */
-    assert(get_prop(0, prop_index) == 0);
+    QJS_ASSERT(get_prop(0, prop_index) == 0);
     
     block_end_pos = PROP_BLOCK_LEN;
     i = 0;
@@ -1440,7 +1441,7 @@ void build_prop_table(FILE *f, int prop_index, BOOL add_index)
             /* XXX: offset could be larger in case of runs of small
                lengths. Could add code to change the encoding to
                prevent it at the expense of one byte loss */
-            assert(offset <= 7);
+            QJS_ASSERT(offset <= 7);
             v = code | (offset << 21);
             dbuf_putc(dbuf2, v);
             dbuf_putc(dbuf2, v >> 8);
@@ -1464,7 +1465,7 @@ void build_prop_table(FILE *f, int prop_index, BOOL add_index)
             dbuf_putc(dbuf, v);
             i++;
         } else {
-            assert(v < (1 << 21));
+            QJS_ASSERT(v < (1 << 21));
             dbuf_putc(dbuf, 0x60 + (v >> 16));
             dbuf_putc(dbuf, v >> 8);
             dbuf_putc(dbuf, v);
@@ -1578,18 +1579,18 @@ void build_general_category_table(FILE *f)
             dbuf_putc(dbuf, (n << 5) | v);
         } else if (n < 7 + 128) {
             n1 = n - 7;
-            assert(n1 < 128);
+            QJS_ASSERT(n1 < 128);
             dbuf_putc(dbuf, (0xf << 5) | v);
             dbuf_putc(dbuf, n1);
         } else if (n < 7 + 128 + (1 << 14)) {
             n1 = n - (7 + 128);
-            assert(n1 < (1 << 14));
+            QJS_ASSERT(n1 < (1 << 14));
             dbuf_putc(dbuf, (0xf << 5) | v);
             dbuf_putc(dbuf, (n1 >> 8) + 128);
             dbuf_putc(dbuf, n1);
         } else {
             n1 = n - (7 + 128 + (1 << 14));
-            assert(n1 < (1 << 22));
+            QJS_ASSERT(n1 < (1 << 22));
             dbuf_putc(dbuf, (0xf << 5) | v);
             dbuf_putc(dbuf, (n1 >> 16) + 128 + 64);
             dbuf_putc(dbuf, n1 >> 8);
@@ -1652,12 +1653,12 @@ void build_script_table(FILE *f)
             dbuf_putc(dbuf, n | (type << 7));
         } else if (n < 96 + (1 << 12)) {
             n1 = n - 96;
-            assert(n1 < (1 << 12));
+            QJS_ASSERT(n1 < (1 << 12));
             dbuf_putc(dbuf, ((n1 >> 8) + 96) | (type << 7));
             dbuf_putc(dbuf, n1);
         } else {
             n1 = n - (96 + (1 << 12));
-            assert(n1 < (1 << 20));
+            QJS_ASSERT(n1 < (1 << 20));
             dbuf_putc(dbuf, ((n1 >> 16) + 112) | (type << 7));
             dbuf_putc(dbuf, n1 >> 8);
             dbuf_putc(dbuf, n1);
@@ -1705,12 +1706,12 @@ void build_script_ext_table(FILE *f)
             dbuf_putc(dbuf, n);
         } else if (n < 128 + (1 << 14)) {
             n1 = n - 128;
-            assert(n1 < (1 << 14));
+            QJS_ASSERT(n1 < (1 << 14));
             dbuf_putc(dbuf, (n1 >> 8) + 128);
             dbuf_putc(dbuf, n1);
         } else {
             n1 = n - (128 + (1 << 14));
-            assert(n1 < (1 << 22));
+            QJS_ASSERT(n1 < (1 << 22));
             dbuf_putc(dbuf, (n1 >> 16) + 128 + 64);
             dbuf_putc(dbuf, n1 >> 8);
             dbuf_putc(dbuf, n1);
@@ -1878,7 +1879,7 @@ void check_flags(void)
         for(c = 0x20; c <= 0xffff; c++) {
             flag_ref = get_prop(c, PROP_ID_Start);
             flag = lre_is_id_start(c);
-            assert(flag == flag_ref);
+            QJS_ASSERT(flag == flag_ref);
             count++;
         }
         ti = get_time_ns() - ti;
@@ -1908,7 +1909,7 @@ void build_cc_table(FILE *f)
     block_end_pos = CC_BLOCK_LEN;
     for(i = 0; i <= CHARCODE_MAX;) {
         cc = unicode_db[i].combining_class;
-        assert(cc <= 255);
+        QJS_ASSERT(cc <= 255);
         /* check increasing values */
         n = 1;
         while ((i + n) <= CHARCODE_MAX &&
@@ -1954,7 +1955,7 @@ void build_cc_table(FILE *f)
             dbuf_putc(dbuf, n1);
         } else {
             n1 -= 48 + (1 << 11);
-            assert(n1 < (1 << 20));
+            QJS_ASSERT(n1 < (1 << 20));
             dbuf_putc(dbuf, ((n1 >> 16) + 56) | (type << 6));
             dbuf_putc(dbuf, n1 >> 8);
             dbuf_putc(dbuf, n1);
@@ -2203,7 +2204,7 @@ void find_decomp_run(DecompEntry *tab_de, int i)
     tab_de[i].cost = 0x7fffffff;
     
     if (!is_16bit(ci->decomp_data, l)) {
-        assert(l <= 2);
+        QJS_ASSERT(l <= 2);
 
         n = 1;
         for(;;) {
@@ -2236,7 +2237,7 @@ void find_decomp_run(DecompEntry *tab_de, int i)
             if (l == 1 && n == 1) {
                 de->type = DECOMP_TYPE_C1;
             } else {
-                assert(l <= 8);
+                QJS_ASSERT(l <= 8);
                 de->type = DECOMP_TYPE_L1 + l - 1;
             }
             de->c_len = l;
@@ -2462,7 +2463,7 @@ void add_decomp_data(uint8_t *data_buf, int *pidx, DecompEntry *de)
     de->data_index = idx;
     if (de->type <= DECOMP_TYPE_C1) {
         ci = &unicode_db[de->code];
-        assert(ci->decomp_len == 1);
+        QJS_ASSERT(ci->decomp_len == 1);
         de->data_index = ci->decomp_data[0];
     } else if (de->type <= DECOMP_TYPE_L7) {
         for(i = 0; i < de->len; i++) {
@@ -2504,13 +2505,13 @@ void add_decomp_data(uint8_t *data_buf, int *pidx, DecompEntry *de)
                 else
                     c = ci->decomp_data[j];
                 c = get_short_code(c);
-                assert(c >= 0);
+                QJS_ASSERT(c >= 0);
                 data_buf[idx++] = c;
             }
         }
     } else if (de->type <= DECOMP_TYPE_I4_2) {
         ci = &unicode_db[de->code];
-        assert(ci->decomp_len == de->c_len);
+        QJS_ASSERT(ci->decomp_len == de->c_len);
         for(j = 0; j < de->c_len; j++)
             put16(data_buf, &idx, ci->decomp_data[j]);
     } else if (de->type <= DECOMP_TYPE_B18) {
@@ -2520,19 +2521,19 @@ void add_decomp_data(uint8_t *data_buf, int *pidx, DecompEntry *de)
         for(i = 0; i < de->len; i++) {
             ci = &unicode_db[de->code + i];
             for(j = 0; j < de->c_len; j++) {
-                assert(ci->decomp_len == de->c_len);
+                QJS_ASSERT(ci->decomp_len == de->c_len);
                 c = ci->decomp_data[j];
                 if (c == 0x20) {
                     c = 0xff;
                 } else {
                     c -= de->c_min;
-                    assert((uint32_t)c <= 254);
+                    QJS_ASSERT((uint32_t)c <= 254);
                 }
                 data_buf[idx++] = c;
             }
         }
     } else if (de->type <= DECOMP_TYPE_LS2) {
-        assert(de->c_len == 2);
+        QJS_ASSERT(de->c_len == 2);
         for(i = 0; i < de->len; i++) {
             ci = &unicode_db[de->code + i];
             if (ci->decomp_len == 0)
@@ -2546,17 +2547,17 @@ void add_decomp_data(uint8_t *data_buf, int *pidx, DecompEntry *de)
             else
                 c = ci->decomp_data[1];
             c = get_short_code(c);
-            assert(c >= 0);
+            QJS_ASSERT(c >= 0);
             data_buf[idx++] = c;
         }
     } else if (de->type <= DECOMP_TYPE_PAT3) {
         ci = &unicode_db[de->code];
-        assert(ci->decomp_len == 3);
+        QJS_ASSERT(ci->decomp_len == 3);
         put16(data_buf, &idx,  ci->decomp_data[0]);
         put16(data_buf, &idx,  ci->decomp_data[2]);
         for(i = 0; i < de->len; i++) {
             ci = &unicode_db[de->code + i];
-            assert(ci->decomp_len == 3);
+            QJS_ASSERT(ci->decomp_len == 3);
             put16(data_buf, &idx,  ci->decomp_data[1]);
         }
     } else if (de->type <= DECOMP_TYPE_S2_UL) {
@@ -2564,11 +2565,11 @@ void add_decomp_data(uint8_t *data_buf, int *pidx, DecompEntry *de)
             ci = &unicode_db[de->code + i];
             c = ci->decomp_data[0];
             c = get_short_code(c);
-            assert(c >= 0);
+            QJS_ASSERT(c >= 0);
             data_buf[idx++] = c;
             c = ci->decomp_data[1];
             c = get_short_code(c);
-            assert(c >= 0);
+            QJS_ASSERT(c >= 0);
             data_buf[idx++] = c;
         }
     } else if (de->type <= DECOMP_TYPE_LS2_UL) {
@@ -2578,7 +2579,7 @@ void add_decomp_data(uint8_t *data_buf, int *pidx, DecompEntry *de)
             put16(data_buf, &idx,  c);
             c = ci->decomp_data[1];
             c = get_short_code(c);
-            assert(c >= 0);
+            QJS_ASSERT(c >= 0);
             data_buf[idx++] = c;
         }
     } else {
@@ -2737,9 +2738,9 @@ static int get_decomp_pos(const DecompEntry *tab_de, int c)
         if (de->len != 0) {
             if (c >= de->code && c < de->code + de->len) {
                 v = c - de->code;
-                assert(v < 64);
+                QJS_ASSERT(v < 64);
                 v |= k << 6;
-                assert(v < 65536);
+                QJS_ASSERT(v < 65536);
                 return v;
             }
             i += de->len - 1;
@@ -2760,7 +2761,7 @@ void build_compose_table(FILE *f, const DecompEntry *tab_de)
         CCInfo *ci = &unicode_db[i];
         if (ci->decomp_len == 2 && !ci->is_compat &&
             !ci->is_excluded) {
-            assert(tab_ce_len < COMPOSE_LEN_MAX); 
+            QJS_ASSERT(tab_ce_len < COMPOSE_LEN_MAX); 
             ce = &tab_ce[tab_ce_len++];
             ce->c[0] = ci->decomp_data[0];
             ce->c[1] = ci->decomp_data[1];
@@ -2955,7 +2956,12 @@ void normalization_test(const char *filename)
 }
 #endif
 
-int main(int argc, char **argv)
+
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      qjs_unicode_gen_main(cnt, arr)
+#endif
+
+int main(int argc, const char **argv)
 {
     const char *unicode_db_path, *outfilename;
     char filename[1024];
