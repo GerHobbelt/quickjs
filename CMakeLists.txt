@@ -23,7 +23,7 @@ ExternalProject_Add(hostquickjs
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DCMAKE_INSTALL_PREFIX=${QUICKJS_HOST_DIR}/install
     -DCONFIG_BIGNUM=${CONFIG_BIGNUM}
-  BUILD_BYPRODUCTS 
+  BUILD_BYPRODUCTS
     ${QJSC_EXECUTABLE}
     ${UNICODE_GEN_EXECUTABLE}
 )
@@ -39,7 +39,7 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/qjscalc.c
   COMMAND ${QJSC_EXECUTABLE} -fbignum -c -o ${CMAKE_CURRENT_BINARY_DIR}/qjscalc.c ${CMAKE_CURRENT_SOURCE_DIR}/qjscalc.js
   DEPENDS ${QJSC_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/qjscalc.js hostquickjs
-  COMMENT "Generate repl.c from repl.js"
+  COMMENT "Generate qjscalc.c from qjscalc.js"
 )
 
 add_executable(qjs
