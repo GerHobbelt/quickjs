@@ -1982,7 +1982,7 @@ void JS_FreeRuntime(JSRuntime *rt)
 
 #ifdef DUMP_LEAKS
     /* leaking objects */
-	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS)) 
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS))
 	{
         BOOL header_done;
         JSGCObjectHeader *p;
@@ -2037,7 +2037,7 @@ void JS_FreeRuntime(JSRuntime *rt)
 
 #ifdef DUMP_LEAKS
     /* only the atoms defined in JS_InitAtoms() should be left */
-	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS)) 
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS))
 	{
         BOOL header_done = FALSE;
 
@@ -10436,7 +10436,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
     int i, j, len;
     BOOL buf_allocated = FALSE;
     JSValue val = JS_NAN;
-    
+
     /* optional separator between digits */
     sep = (flags & ATOD_ACCEPT_UNDERSCORES) ? '_' : 256;
     has_legacy_octal = FALSE;
@@ -53689,7 +53689,7 @@ static JSValue js_dataview_getValue(JSContext *ctx,
         }
     default:
         QJS_ABORT();
-    }
+	}
 }
 
 static JSValue js_dataview_setValue(JSContext *ctx,
