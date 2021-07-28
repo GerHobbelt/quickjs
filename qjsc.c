@@ -209,6 +209,7 @@ static int js_module_dummy_init(JSContext *ctx, JSModuleDef *m)
 {
     /* should never be called when compiling JS code */
     QJS_ABORT();
+	return -1;
 }
 
 static void find_unique_cname(char *cname, size_t cname_size)

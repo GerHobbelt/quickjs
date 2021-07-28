@@ -98,6 +98,8 @@ enum {
 #endif
 #endif
 
+void qjs_assert(const char* msg, const char* file, int line);
+
 #ifdef QJS_NO_ASSERT
 
 #define QJS_ASSERT(expression)	((void)0)
@@ -120,8 +122,6 @@ static no_return inline void QJS_ABORT(void)
 }
 
 #endif
-
-void qjs_assert(const char* msg, const char* file, int line);
 
 void pstrcpy(char *buf, int buf_size, const char *str);
 char *pstrcat(char *buf, int buf_size, const char *s);
