@@ -1,6 +1,6 @@
 /*
  * C utilities
- * 
+ *
  * Copyright (c) 2017 Fabrice Bellard
  * Copyright (c) 2018 Charlie Gordon
  *
@@ -88,10 +88,24 @@ enum {
 };
 #endif
 
+#ifndef no_return
+#if defined(__GNUC__) || defined(__clang__)
+#define no_return __attribute__ ((noreturn))
+#elif defined(_MSC_VER)
+#define no_return __declspec(noreturn)
+#else
+#define no_return
+#endif
+#endif
+
 #ifdef QJS_NO_ASSERT
 
 #define QJS_ASSERT(expression)	((void)0)
-#define QJS_ABORT()				qjs_assert("Aborting: Should never get here!", __FILE__, __LINE__)
+
+static no_return inline void QJS_ABORT(void)
+{
+	qjs_assert("Aborting: Should never get here!", __FILE__, __LINE__);
+}
 
 #else
 
@@ -100,7 +114,10 @@ enum {
             (qjs_assert(#expression, __FILE__, (unsigned)(__LINE__)), 0)	\
         )
 
-#define QJS_ABORT()		QJS_ASSERT(!"Should never get here!")
+static no_return inline void QJS_ABORT(void)
+{
+	QJS_ASSERT(!"Should never get here!");
+}
 
 #endif
 
@@ -333,13 +350,13 @@ static inline uint32_t bswap32(uint32_t v)
 
 static inline uint64_t bswap64(uint64_t v)
 {
-    return ((v & ((uint64_t)0xff << (7 * 8))) >> (7 * 8)) | 
-        ((v & ((uint64_t)0xff << (6 * 8))) >> (5 * 8)) | 
-        ((v & ((uint64_t)0xff << (5 * 8))) >> (3 * 8)) | 
-        ((v & ((uint64_t)0xff << (4 * 8))) >> (1 * 8)) | 
-        ((v & ((uint64_t)0xff << (3 * 8))) << (1 * 8)) | 
-        ((v & ((uint64_t)0xff << (2 * 8))) << (3 * 8)) | 
-        ((v & ((uint64_t)0xff << (1 * 8))) << (5 * 8)) | 
+    return ((v & ((uint64_t)0xff << (7 * 8))) >> (7 * 8)) |
+        ((v & ((uint64_t)0xff << (6 * 8))) >> (5 * 8)) |
+        ((v & ((uint64_t)0xff << (5 * 8))) >> (3 * 8)) |
+        ((v & ((uint64_t)0xff << (4 * 8))) >> (1 * 8)) |
+        ((v & ((uint64_t)0xff << (3 * 8))) << (1 * 8)) |
+        ((v & ((uint64_t)0xff << (2 * 8))) << (3 * 8)) |
+        ((v & ((uint64_t)0xff << (1 * 8))) << (5 * 8)) |
         ((v & ((uint64_t)0xff << (0 * 8))) << (7 * 8));
 }
 
