@@ -16542,7 +16542,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             else
                 goto restart;
         } else {
-            goto not_a_function;
+            return JS_ThrowTypeError(caller_ctx, "not a function: %d,%d", flags, JS_VALUE_GET_TAG(func_obj));
         }
     }
     p = JS_VALUE_GET_OBJ(func_obj);
@@ -16550,8 +16550,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
         JSClassCall *call_func;
         call_func = rt->class_array[p->class_id].call;
         if (!call_func) {
-        not_a_function:
-            return JS_ThrowTypeError(caller_ctx, "not a function");
+            return JS_ThrowTypeError(caller_ctx, "not a function: %d", p->class_id);
         }
         return call_func(caller_ctx, func_obj, this_obj, argc,
                          (JSValueConst *)argv, flags);
@@ -16961,7 +16960,15 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 call_argc = get_u16(pc);
                 pc += 2;
                 call_argv = sp - call_argc;
+                int func_tag = JS_VALUE_GET_TAG(call_argv[-1]);
+                int this_tag = JS_VALUE_GET_TAG(call_argv[-2]);
                 sf->cur_pc = pc;
+                if (func_tag == JS_TAG_UNDEFINED) {
+                    uintptr_t sp = pal_get_stack_pointer();
+                    ret_val = JS_ThrowTypeError(ctx, "Calling to undefined function opcode:%d call_argc:%d this_tag:%d sp:0x%x\n",
+                         opcode, call_argc, this_tag, sp);
+                    goto exception;
+                }
                 ret_val = JS_CallInternal(ctx, call_argv[-1], call_argv[-2],
                                           JS_UNDEFINED, call_argc, call_argv, 0);
                 if (unlikely(JS_IsException(ret_val)))
