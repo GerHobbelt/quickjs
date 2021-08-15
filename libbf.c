@@ -7506,7 +7506,7 @@ static inline __m256d ntt_mul_mod(__m256d a, __m256d b, __m256d mf,
 {
     __m256d r, q, ab1, ab0, qm0, qm1;
     ab1 = _mm256_mul_pd(a, b);
-    q = _mm256_round_pd(_mm256_add_pd(ab1, m_inv), 0); /* round to nearest */
+    q = _mm256_round_pd(_mm256_mul_pd(ab1, m_inv), 0); /* round to nearest */
     qm1 = _mm256_mul_pd(q, mf);
     qm0 = _mm256_fmsub_pd(q, mf, qm1); /* low part */
     ab0 = _mm256_fmsub_pd(a, b, ab1); /* low part */
