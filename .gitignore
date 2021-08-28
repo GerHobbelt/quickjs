@@ -20,4 +20,5 @@ run-test262-bn
 .obj/
 test262o/
 /microbench-new.txt
+/test262_report.txt
 tmp_file.txt
