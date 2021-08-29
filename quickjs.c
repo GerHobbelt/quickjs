@@ -184,7 +184,7 @@ enum {
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT  (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
 static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];
-#define typed_array_size_log2(classid)  (typed_array_size_log2[(classid)- JS_CLASS_UINT8C_ARRAY])
+#define typed_array_size_log2(classid)  (typed_array_size_log2[(classid) - JS_CLASS_UINT8C_ARRAY])
 
 typedef enum JSErrorEnum {
     JS_EVAL_ERROR,
