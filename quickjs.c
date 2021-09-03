@@ -183,7 +183,7 @@ enum {
 
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT  (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
-static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];
+static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];     // forward reference
 #define typed_array_size_log2(classid)  (typed_array_size_log2[(classid) - JS_CLASS_UINT8C_ARRAY])
 
 typedef enum JSErrorEnum {
@@ -1277,10 +1277,10 @@ static JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p,
                                                JSAtom atom, void *opaque);
 void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
 
-static const JSClassExoticMethods js_arguments_exotic_methods;
-static const JSClassExoticMethods js_string_exotic_methods;
-static const JSClassExoticMethods js_proxy_exotic_methods;
-static const JSClassExoticMethods js_module_ns_exotic_methods;
+static const JSClassExoticMethods js_arguments_exotic_methods;   // forward reference
+static const JSClassExoticMethods js_string_exotic_methods;      // forward reference
+static const JSClassExoticMethods js_proxy_exotic_methods;       // forward reference
+static const JSClassExoticMethods js_module_ns_exotic_methods;   // forward reference
 static JSClassID js_class_id_alloc = JS_CLASS_INIT_COUNT;
 
 static void js_trigger_gc(JSRuntime *rt, size_t size)

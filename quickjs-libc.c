@@ -168,7 +168,7 @@ static JSValue js_printf_internal(JSContext *ctx,
     double double_arg;
     const char *string_arg;
     /* Use indirect call to dbuf_printf to prevent gcc warning */
-    int (*dbuf_printf_fun)(DynBuf *s, const char *fmt, ...) = (void*)dbuf_printf;
+    int (*dbuf_printf_fun)(DynBuf *s, const char *fmt, ...) = dbuf_printf;
 
     js_std_dbuf_init(ctx, &dbuf);
 
@@ -3002,7 +3002,7 @@ static JSValue js_os_waitpid(JSContext *ctx, JSValueConst this_val,
     JS_DefinePropertyValueUint32(ctx, obj, 1, JS_NewInt32(ctx, status),
                                  JS_PROP_C_W_E);
     return obj;
-}    
+}
 
 /* kill(pid, sig) */
 static JSValue js_os_kill(JSContext *ctx, JSValueConst this_val,
