@@ -2761,7 +2761,7 @@ void build_compose_table(FILE *f, const DecompEntry *tab_de)
         CCInfo *ci = &unicode_db[i];
         if (ci->decomp_len == 2 && !ci->is_compat &&
             !ci->is_excluded) {
-            QJS_ASSERT(tab_ce_len < COMPOSE_LEN_MAX); 
+            QJS_ASSERT(tab_ce_len < COMPOSE_LEN_MAX);
             ce = &tab_ce[tab_ce_len++];
             ce->c[0] = ci->decomp_data[0];
             ce->c[1] = ci->decomp_data[1];
@@ -2961,7 +2961,7 @@ void normalization_test(const char *filename)
 #define main(cnt, arr)      qjs_unicode_gen_main(cnt, arr)
 #endif
 
-int main(int argc, const char **argv)
+int main(int argc, const char** argv)
 {
     const char *unicode_db_path, *outfilename;
     char filename[1024];

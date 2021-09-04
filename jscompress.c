@@ -1,6 +1,6 @@
 /*
  * Javascript Compressor
- * 
+ *
  * Copyright (c) 2008-2018 Fabrice Bellard
  * Copyright (c) 2017-2018 Charlie Gordon
  *
@@ -224,7 +224,7 @@ static int hex_to_num(int ch)
 
 static void next(void)
 {
-again:    
+again:
     tok_reset(&tokc);
     tokc.line_num = line_num;
     tokc.lines = 0;
@@ -382,7 +382,7 @@ again:
                         n = 0;
                         for(i = 0; i < hex_digit_count; i++) {
                             c = hex_to_num(ch);
-                            if (c < 0) 
+                            if (c < 0)
                                 error("unexpected char after '\\x'");
                             n = n * 16 + c;
                             nextch();
@@ -529,7 +529,7 @@ static void print_tok(FILE *f, JSZToken *tt)
                     /* XXX: no utf-8 support! */
                     if (c >= 32 && c <= 255) {
                         fprintf(f, "%c", c);
-                    } else if (c <= 255) 
+                    } else if (c <= 255)
                         fprintf(f, "\\x%02x", c);
                     else
                         fprintf(f, "\\u%04x", c);
@@ -548,7 +548,7 @@ static void print_tok(FILE *f, JSZToken *tt)
     output_line_num += tt->lines;
 }
 
-/* check if token pasting could occur */                    
+/* check if token pasting could occur */
 static BOOL compat_token(int c1, int c2)
 {
     if ((c1 == TOK_IDENT || c1 == TOK_NUM) &&
@@ -571,21 +571,21 @@ void js_compress(const char *filename, const char *outfilename,
 {
     FILE *outfile;
     int ltok, seen_space;
-    
+
     line_num = 1;
     infile = fopen(filename, "rb");
     if (!infile) {
         perror(filename);
         exit(1);
     }
-    
+
     output_line_num = 1;
     outfile = fopen(outfilename, "wb");
     if (!outfile) {
         perror(outfilename);
         exit(1);
     }
-        
+
     nextch();
     next();
     ltok = 0;
@@ -702,9 +702,9 @@ int lz_compress(uint8_t **pdst, const uint8_t *src, int src_len)
     uint32_t h, v;
     int i, dist, len, len1, dist1;
     uint8_t *dst, *q;
-    
+
     /* build the hash table */
-    
+
     hash_table = malloc(sizeof(hash_table[0]) * HASH_SIZE);
     for(i = 0; i < HASH_SIZE; i++)
         hash_table[i] = -1;
@@ -789,7 +789,7 @@ static int load_file(uint8_t **pbuf, const char *filename)
 static void save_file(const char *filename, const uint8_t *buf, int buf_len)
 {
     FILE *f;
-    
+
     f = fopen(filename, "wb");
     if (!f) {
         perror(filename);
@@ -804,7 +804,7 @@ static void save_c_source(const char *filename, const uint8_t *buf, int buf_len,
 {
     FILE *f;
     int i;
-    
+
     f = fopen(filename, "wb");
     if (!f) {
         perror(filename);
@@ -844,7 +844,7 @@ static void help(void)
 #define main(cnt, arr)      qjscompress_main(cnt, arr)
 #endif
 
-int main(int argc, const char **argv)
+int main(int argc, const char** argv)
 {
     int c, do_strip, keep_header, compress;
     const char *out_filename, *c_var, *fname;
@@ -909,11 +909,11 @@ int main(int argc, const char **argv)
         fname = out_filename;
     }
     js_compress(filename, fname, do_strip, keep_header);
-    
+
     if (compress) {
-        uint8_t *buf1, *buf2; 
+        uint8_t *buf1, *buf2;
         int buf1_len, buf2_len;
-        
+
         buf1_len = load_file(&buf1, fname);
         unlink(fname);
         buf2_len = lz_compress(&buf2, buf1, buf1_len);
@@ -921,7 +921,7 @@ int main(int argc, const char **argv)
             fprintf(stderr, "Could not compress file (UTF8 chars are forbidden)\n");
             exit(1);
         }
-        
+
         if (c_var) {
             save_c_source(out_filename, buf2, buf2_len, c_var);
         } else {

@@ -305,7 +305,7 @@ static int help(void)
 #define main(cnt, arr)      qjs_main(cnt, arr)
 #endif
 
-int main(int argc, const char **argv)
+int main(int argc, const char** argv)
 {
     JSRuntime *rt;
     JSContext *ctx;

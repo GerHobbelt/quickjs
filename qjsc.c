@@ -332,7 +332,7 @@ static void compile_file(JSContext *ctx, FILE *fo,
 }
 
 static const char main_c_template1[] =
-    "int main(int argc, char **argv)\n"
+    "int main(int argc, const char** argv)\n"
     "{\n"
     "  JSRuntime *rt;\n"
     "  JSContext *ctx;\n"
@@ -526,7 +526,7 @@ typedef enum {
 #define main(cnt, arr)      qjsc_main(cnt, arr)
 #endif
 
-int main(int argc, const char **argv)
+int main(int argc, const char** argv)
 {
     int c, i, verbose;
     const char *out_filename, *cname;

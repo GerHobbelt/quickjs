@@ -1956,7 +1956,7 @@ static const char *get_opt_arg(const char *option, const char *arg)
 #define main(c, a)			qjs_test262_main(c, a)
 #endif
 
-int main(int argc, const char **argv)
+int main(int argc, const char** argv)
 {
     int optind, start_index, stop_index;
     BOOL is_dir_list;

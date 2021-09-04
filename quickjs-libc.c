@@ -3678,7 +3678,7 @@ static JSValue js_print(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-void js_std_add_helpers(JSContext *ctx, int argc, const char **argv)
+void js_std_add_helpers(JSContext *ctx, int argc, const char** argv)
 {
     JSValue global_obj, console, args;
     int i;

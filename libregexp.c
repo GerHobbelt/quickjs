@@ -2567,7 +2567,7 @@ void *lre_realloc(void *opaque, void *ptr, size_t size)
     return realloc(ptr, size);
 }
 
-int main(int argc, char **argv)
+int main(int argc, const char** argv)
 {
     int len, ret, i;
     uint8_t *bc;
