@@ -2530,7 +2530,7 @@ fail:
 
 /* The rounding mode is always BF_RNDZ. Return BF_ST_INVALID_OP if there
    is an overflow and 0 otherwise. */
-int bf_get_int32(int *pres, const bf_t *a, int flags)
+int bf_get_int32(int32_t *pres, const bf_t *a, int flags)
 {
     uint32_t v;
     int ret;

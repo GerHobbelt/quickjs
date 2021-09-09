@@ -36,17 +36,19 @@
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
+#if !defined(__arm__)
 #include <dirent.h>
+#endif
+
 #if defined(_WIN32)
 #include <windows.h>
 #include <conio.h>
 #include <utime.h>
-#else
+#elif !defined(__arm__)
 #include <dlfcn.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
-
 #if defined(__APPLE__)
 typedef sig_t sighandler_t;
 #if !defined(environ)
@@ -453,7 +455,7 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__arm__)
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
@@ -1710,6 +1712,20 @@ static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
     }
     return JS_UNDEFINED;
 }
+#elif defined(__arm__)
+static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    JS_ThrowReferenceError(ctx, "TTY get window size isn't implemented on ARM");
+    return JS_UNDEFINED;
+}
+
+static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    JS_ThrowReferenceError(ctx, "TTY set raw isn't implemented on ARM");
+    return JS_UNDEFINED;
+}
 #else
 static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
@@ -2368,6 +2384,7 @@ static JSValue make_string_error(JSContext *ctx,
     return make_obj_error(ctx, JS_NewString(ctx, buf), err);
 }
 
+#if !defined(__arm__)
 /* return [cwd, errorcode] */
 static JSValue js_os_getcwd(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
@@ -3120,6 +3137,43 @@ static JSValue js_os_dup2(JSContext *ctx, JSValueConst this_val,
 
 #endif /* !_WIN32 */
 
+#else
+/**
+ * The ARM compiled version doesn't support the os module. This is because it's meant to be used
+ * on a processor without any built-in operating sytem.
+ */
+#define UNDEFINED_ARM_OS_FUNC(_func) \
+  static JSValue js_os_##_func(JSContext *ctx, JSValueConst this_val, \
+                              int argc, JSValueConst *argv) \
+  { \
+    JS_ThrowReferenceError(ctx, "os.##_func isn't implemented for ARM"); \
+    return JS_UNDEFINED; \
+  }
+
+static JSValue js_os_stat(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv, int is_lstat)
+{
+  JS_ThrowReferenceError(ctx, "os.stat isn't implemented for ARM");
+  return JS_UNDEFINED;
+}
+
+UNDEFINED_ARM_OS_FUNC(mkdir)
+UNDEFINED_ARM_OS_FUNC(readdir)
+UNDEFINED_ARM_OS_FUNC(utimes)
+UNDEFINED_ARM_OS_FUNC(sleep)
+UNDEFINED_ARM_OS_FUNC(realpath)
+UNDEFINED_ARM_OS_FUNC(exec)
+UNDEFINED_ARM_OS_FUNC(readlink)
+UNDEFINED_ARM_OS_FUNC(symlink)
+UNDEFINED_ARM_OS_FUNC(chdir)
+UNDEFINED_ARM_OS_FUNC(waitpid)
+UNDEFINED_ARM_OS_FUNC(getcwd)
+UNDEFINED_ARM_OS_FUNC(pipe)
+UNDEFINED_ARM_OS_FUNC(kill)
+UNDEFINED_ARM_OS_FUNC(dup)
+UNDEFINED_ARM_OS_FUNC(dup2)
+#endif
+
 #ifdef USE_WORKER
 
 /* Worker */
@@ -3651,7 +3705,9 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_DEF("readlink", 1, js_os_readlink ),
     JS_CFUNC_DEF("exec", 1, js_os_exec ),
     JS_CFUNC_DEF("waitpid", 2, js_os_waitpid ),
+#if !defined(__arm__)
     OS_FLAG(WNOHANG),
+#endif
     JS_CFUNC_DEF("pipe", 0, js_os_pipe ),
     JS_CFUNC_DEF("kill", 2, js_os_kill ),
     JS_CFUNC_DEF("dup", 1, js_os_dup ),

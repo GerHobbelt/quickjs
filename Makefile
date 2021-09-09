@@ -39,10 +39,7 @@ CONFIG_ARM=y
 
 ifdef CONFIG_DARWIN
 # use clang instead of gcc if we want to compile for mac
-ifndef CONFIG_ARM
-	CONFIG_CLANG=y
-endif
-
+CONFIG_CLANG=y
 CONFIG_DEFAULT_AR=y
 endif
 
@@ -70,10 +67,6 @@ else
   EXE=
 endif
 
-ifdef CONFIG_ARM
-	CROSS_PREFIX=arm-none-eabi-
-endif
-
 ifdef CONFIG_CLANG
   HOST_CC=clang
   CC=$(CROSS_PREFIX)clang
@@ -96,6 +89,7 @@ ifdef CONFIG_CLANG
     endif
   endif
 else
+	CROSS_PREFIX=arm-none-eabi-
   HOST_CC=gcc
   CC=$(CROSS_PREFIX)gcc
   CFLAGS=-g -Wall -MMD -MF $(OBJDIR)/$(@F).d
@@ -143,6 +137,27 @@ else
 LDEXPORT=-rdynamic
 endif
 
+ifdef CONFIG_ARM
+ARM_CORTEXM_CFLAGS = -mthumb \
+										 -mcpu=cortex-m4 \
+										 -mfloat-abi=hard \
+										 -mfpu=fpv4-sp-d16
+ARM_CORTEXM_CC = arm-none-eabi-gcc
+ARM_CORTEXM_SYSROOT = $(shell $(ARM_CORTEXM_CC) $(ARM_CORTEXM_CFLAGS) -print-sysroot)
+ARM_CORTEXM_MULTI_DIR = $(shell $(ARM_CORTEXM_CC) $(ARM_CORTEXM_CFLAGS) -print-multi-directory)
+ARM_CORTEXM_BUILTINS = $(shell $(ARM_CORTEXM_CC) $(ARM_CORTEXM_CFLAGS) -print-libgcc-file-name)
+
+CFLAGS += -D_POSIX_THREADS \
+					--target=arm-none-eabi \
+					$(ARM_CORTEXM_CFLAGS) \
+					--sysroot=$(ARM_CORTEXM_SYSROOT) \
+					-nostdlib
+LDFLAGS += -L$(ARM_CORTEXM_SYSROOT)/lib/$(ARM_CORTEXM_MULTI_DIR) \
+					--target=arm-none-eabi \
+					--rtlib=libgcc \
+					$(ARM_CORTEXM_BUILTINS)
+endif
+
 PROGS=qjs$(EXE) qjsc$(EXE) run-test262
 ifneq ($(CROSS_PREFIX),)
 QJSC_CC=gcc
@@ -188,7 +203,12 @@ endif
 HOST_LIBS=-lm -ldl -lpthread
 LIBS=-lm
 ifndef CONFIG_WIN32
-LIBS+=-ldl -lpthread
+ifndef CONFIG_ARM
+LIBS+=-lpthread
+LIBS += -ldl 
+else
+LIBS += -lc_nano
+endif
 endif
 LIBS+=$(EXTRA_LIBS)
 
