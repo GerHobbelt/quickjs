@@ -34,9 +34,15 @@ CONFIG_LTO=y
 # force 32 bit build for some utilities
 #CONFIG_M32=y
 
+# Compile for ARM architecture
+CONFIG_ARM=y
+
 ifdef CONFIG_DARWIN
-# use clang instead of gcc
-CONFIG_CLANG=y
+# use clang instead of gcc if we want to compile for mac
+ifndef CONFIG_ARM
+	CONFIG_CLANG=y
+endif
+
 CONFIG_DEFAULT_AR=y
 endif
 
@@ -63,6 +69,11 @@ else
   CROSS_PREFIX=
   EXE=
 endif
+
+ifdef CONFIG_ARM
+	CROSS_PREFIX=arm-none-eabi-
+endif
+
 ifdef CONFIG_CLANG
   HOST_CC=clang
   CC=$(CROSS_PREFIX)clang
