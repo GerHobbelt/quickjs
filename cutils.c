@@ -32,9 +32,10 @@
 
 void qjs_assert(const char* msg, const char* file, int line)
 {
-	DebugBreak();
 	fprintf(stderr, "\nAssertion failed (%s, %d): %s\n", file, line, msg);
 	fflush(stderr);
+	if (IsDebuggerPresent())
+		DebugBreak();
 
 	fprintf(stderr, "Triggering SEH exception\n");
 	fflush(stderr);
