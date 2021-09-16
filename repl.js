@@ -330,7 +330,7 @@ import * as os from "os";
         last_cursor_pos = cursor_pos;
 
     fs.flushSync(output);
-//    std.out.flush();
+    //    std.out.flush();
     }
 
     /* editing commands */

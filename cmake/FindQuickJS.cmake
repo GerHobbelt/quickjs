@@ -28,8 +28,6 @@ macro(find_quickjs)
   
   if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
     string(REPLACE "${CMAKE_SYSROOT}" "" QUICKJS_INSTALL_DIR "${QUICKJS_PREFIX}")
-  else(NOT "${CMAKE_SYSROOT}" STREQUAL "")
-    set(QUICKJS_INSTALL_DIR "${QUICKJS_PREFIX}")
   endif(NOT "${CMAKE_SYSROOT}" STREQUAL "")
   
   if("${QUICKJS_INSTALL_DIR}" STREQUAL "")
@@ -38,7 +36,7 @@ macro(find_quickjs)
 
   set(QUICKJS_INSTALL_PREFIX "${QUICKJS_INSTALL_DIR}" CACHE PATH "QuickJS installation prefix")
 
-  dump(QUICKJS_INSTALL_PREFIX)
+  ##dump(QUICKJS_INSTALL_PREFIX)
 
   # set(CMAKE_INSTALL_PREFIX "${QUICKJS_PREFIX}" CACHE PATH "Install directory" FORCE)
 
@@ -87,7 +85,7 @@ macro(find_quickjs)
     set(QUICKJS_INCLUDE_DIR "${QUICKJS_PREFIX}/include" CACHE STRING "QuickJS include dirs")
   endif(NOT QUICKJS_INCLUDE_DIR)]]
   if(EXISTS "${QUICKJS_PREFIX}/lib/quickjs")
-    set(QUICKJS_MODULE_DIR "${QUICKJS_PREFIX}/lib/quickjs")
+    set(QUICKJS_MODULE_DIR "${QUICKJS_INSTALL_PREFIX}/lib/quickjs")
   endif(EXISTS "${QUICKJS_PREFIX}/lib/quickjs")
 
   set(CMAKE_REQUIRED_INCLUDES "${QUICKJS_INCLUDE_DIR}")
