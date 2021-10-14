@@ -14828,9 +14828,14 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
 {
     JSObject *p;
     JSFunctionBytecode *b;
+    // sf为当前栈帧
     JSStackFrame sf_s, *sf = &sf_s;
+    // pc指向字节码
     const uint8_t *pc;
     int opcode, arg_allocated_size, i;
+    // local_buf是 参数，变量和栈的大小的和，存储函数所有的变量
+    // arg_buf var_buf stack_buf是指向local_buf数组中的指针
+    // sp是栈顶指针，stack_buf为栈底, ret_val为函数返回值
     JSValue *local_buf, *stack_buf, *var_buf, *arg_buf, *sp, ret_val, *pval;
     JSVarRef **var_refs;
     size_t alloca_size;
@@ -14928,6 +14933,8 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
 
     local_buf = alloca(alloca_size);
     if (unlikely(arg_allocated_size)) {
+        // argc是传入参数的个数，b->arg_count是定义时
+        // 参数的个数，如果传入比定义的少，剩余参数取undefined
         int n = min_int(argc, b->arg_count);
         arg_buf = local_buf;
         for(i = 0; i < n; i++)
@@ -14940,6 +14947,7 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
     sf->var_buf = var_buf;
     sf->arg_buf = arg_buf;
 
+    // 变量初始化为undefined
     for(i = 0; i < b->var_count; i++)
         var_buf[i] = JS_UNDEFINED;
 
@@ -14950,6 +14958,7 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
     ctx->current_stack_frame = sf;
  restart:
     for(;;) {
+        // 执行字节码
         int call_argc;
         JSValue *call_argv;
 
@@ -15569,8 +15578,10 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
         CASE(OP_put_var):
         CASE(OP_put_var_init):
             {
+                // 设置全局变量
                 int ret;
                 JSAtom atom;
+                // 变量名
                 atom = get_u32(pc);
                 pc += 4;
 
@@ -15647,6 +15658,8 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
             BREAK;
         CASE(OP_put_loc):
             {
+                // 设置局部变量的值;
+                // idx为局部变量在var_buf中的索引
                 int idx;
                 idx = get_u16(pc);
                 pc += 2;
@@ -15811,6 +15824,7 @@ static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
             BREAK;
         CASE(OP_get_loc_check):
             {
+                // 获取局部变量，并检查变量是否初始化
                 int idx;
                 idx = get_u16(pc);
                 pc += 2;
@@ -27733,11 +27747,13 @@ static int resolve_scope_var(JSContext *ctx, JSFunctionDef *s,
                      var_name == JS_ATOM_this);
 
     /* resolve local scoped variables */
+    // 查找本地变量
     var_idx = -1;
     for (idx = s->scopes[scope_level].first; idx >= 0;) {
         vd = &s->vars[idx];
         if (vd->var_name == var_name) {
             if (op == OP_scope_put_var || op == OP_scope_make_ref) {
+                // 如果是const变量则直接抛出异常
                 if (vd->is_const) {
                     dbuf_putc(bc, OP_throw_var);
                     dbuf_put_u32(bc, JS_DupAtom(ctx, var_name));
@@ -28036,7 +28052,10 @@ static int resolve_scope_var(JSContext *ctx, JSFunctionDef *s,
                                   TRUE, var_idx - ARGUMENT_VAR_OFFSET,
                                   var_name, FALSE, FALSE, JS_VAR_NORMAL);
         } else {
+            // fd->vars[var_idx] 是将要捕获的变量
             fd->vars[var_idx].is_captured = 1;
+            // 将变量添加到s的closeure_vars中，这个变量是close_var不是var
+            // 这个过程会将closture_var逐级添加到s至fd的函数中（s是子函数，fd是祖先函数）
             idx = get_closure_var(ctx, s, fd,
                                   FALSE, var_idx,
                                   var_name,
@@ -28126,7 +28145,7 @@ static int resolve_scope_var(JSContext *ctx, JSFunctionDef *s,
     }
 
     /* global variable access */
-
+    // 全局变量
     switch (op) {
     case OP_scope_make_ref:
         if (label_done == -1 && can_opt_put_global_ref_value(bc_buf, ls->pos)) {
