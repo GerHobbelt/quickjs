@@ -1,7 +1,3 @@
-function main() {
-  let a = 1;
-  function test(params) {
-    let b = a;
-    return b;
-  }
-}
+let a = {}
+let b = a
+let c = a

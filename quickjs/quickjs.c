@@ -107,6 +107,14 @@
 #include <errno.h>
 #endif
 
+int JS_GetRefCount(JSValueConst v) {
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        return p->ref_count;
+    }
+    return -2;
+}
+
 enum {
     /* classid tag        */    /* union usage   | properties */
     JS_CLASS_OBJECT = 1,        /* must be first */
