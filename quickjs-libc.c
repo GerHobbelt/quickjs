@@ -55,6 +55,13 @@ typedef sig_t sighandler_t;
 #endif
 #endif /* __APPLE__ */
 
+#if defined(__NetBSD__)
+typedef sig_t sighandler_t;
+#if !defined(environ)
+extern char ** environ;
+#endif
+#endif /* __NetBSD__ */
+
 #endif
 
 #if !defined(_WIN32)
