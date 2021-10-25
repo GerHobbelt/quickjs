@@ -183,7 +183,7 @@ enum {
 
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT  (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
-static uint8_t typed_array_size_log2[JS_TYPED_ARRAY_COUNT];     // forward reference
+static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];     // forward reference
 #define typed_array_size_log2(classid)  (typed_array_size_log2[(classid) - JS_CLASS_UINT8C_ARRAY])
 
 typedef enum JSErrorEnum {
@@ -1785,10 +1785,10 @@ void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state)
     s->current_stack_frame = rt->current_stack_frame;
     memcpy(&s->job_list, &rt->job_list, sizeof(rt->job_list));
 
-    rt->stack_top = nullptr;
+    rt->stack_top = NULL;
     rt->current_exception = JS_NULL;
     rt->in_prepare_stack_trace = FALSE;
-    rt->current_stack_frame = nullptr;
+    rt->current_stack_frame = NULL;
     init_list_head(&rt->job_list);
 }
 
@@ -1806,7 +1806,7 @@ void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state)
 
 void JS_Leave(JSRuntime *rt)
 {
-    rt->stack_top = nullptr;
+    rt->stack_top = NULL;
 }
 
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit)
