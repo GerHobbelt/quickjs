@@ -183,7 +183,7 @@ enum {
 
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT  (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
-static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];     // forward reference
+static uint8_t typed_array_size_log2[JS_TYPED_ARRAY_COUNT];     // forward reference
 #define typed_array_size_log2(classid)  (typed_array_size_log2[(classid) - JS_CLASS_UINT8C_ARRAY])
 
 typedef enum JSErrorEnum {
@@ -1785,10 +1785,10 @@ void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state)
     s->current_stack_frame = rt->current_stack_frame;
     memcpy(&s->job_list, &rt->job_list, sizeof(rt->job_list));
 
-    rt->stack_top = NULL;
+    rt->stack_top = nullptr;
     rt->current_exception = JS_NULL;
     rt->in_prepare_stack_trace = FALSE;
-    rt->current_stack_frame = NULL;
+    rt->current_stack_frame = nullptr;
     init_list_head(&rt->job_list);
 }
 
@@ -1806,7 +1806,7 @@ void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state)
 
 void JS_Leave(JSRuntime *rt)
 {
-    rt->stack_top = NULL;
+    rt->stack_top = nullptr;
 }
 
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit)
@@ -16964,7 +16964,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 int this_tag = JS_VALUE_GET_TAG(call_argv[-2]);
                 sf->cur_pc = pc;
                 if (func_tag == JS_TAG_UNDEFINED) {
-                    uintptr_t sp = pal_get_stack_pointer();
+                    uintptr_t sp = qjs_get_stack_pointer();
                     ret_val = JS_ThrowTypeError(ctx, "Calling to undefined function opcode:%d call_argc:%d this_tag:%d sp:0x%x\n",
                          opcode, call_argc, this_tag, sp);
                     goto exception;
