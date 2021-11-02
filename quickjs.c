@@ -104,7 +104,7 @@
 //#define DUMP_ATOMS      /* dump atoms in JS_FreeContext */
 //#define DUMP_SHAPES     /* dump shapes in JS_FreeContext */
 //#define DUMP_MODULE_RESOLVE
-//#define DUMP_PROMISE
+#define DUMP_PROMISE
 //#define DUMP_READ_OBJECT
 
 /* test the GC by forcing it before each object allocation */
@@ -6478,6 +6478,53 @@ static const char *get_func_name(JSContext *ctx, JSValueConst func)
 #define JS_BACKTRACE_FLAG_SKIP_FIRST_LEVEL (1 << 0)
 /* only taken into account if filename is provided */
 #define JS_BACKTRACE_FLAG_SINGLE_LEVEL     (1 << 1)
+
+static void print_backtrace(JSContext *ctx){
+  JSStackFrame *sf;
+  const char *func_name_str;
+  const char *str1;
+  JSObject *p;
+  BOOL backtrace_barrier;
+  char dbuf[1024] = {0};
+  for(sf = ctx->rt->current_stack_frame; sf != NULL; sf = sf->prev_frame) {
+    func_name_str = get_func_name(ctx, sf->cur_func);
+    if (!func_name_str || func_name_str[0] == '\0')
+        str1 = "<anonymous>";
+    else
+        str1 = func_name_str;
+    sprintf(dbuf + strlen(dbuf), "    at %s", str1);
+    JS_FreeCString(ctx, func_name_str);
+
+    p = JS_VALUE_GET_OBJ(sf->cur_func);
+    backtrace_barrier = FALSE;
+    if (js_class_has_bytecode(p->class_id)) {
+        JSFunctionBytecode *b;
+        const char *atom_str;
+        int line_num1;
+
+        b = p->u.func.function_bytecode;
+        backtrace_barrier = b->backtrace_barrier;
+        if (b->has_debug) {
+            line_num1 = find_line_num(ctx, b,
+                                      sf->cur_pc - b->byte_code_buf - 1);
+            atom_str = JS_AtomToCString(ctx, b->debug.filename);
+            sprintf(dbuf + strlen(dbuf), " (%s",
+                        atom_str ? atom_str : "<null>");
+            JS_FreeCString(ctx, atom_str);
+            if (line_num1 != -1)
+              sprintf(dbuf + strlen(dbuf), ":%d", line_num1);
+            sprintf(dbuf + strlen(dbuf), ")");
+        }
+    } else {
+      sprintf(dbuf + strlen(dbuf), " (native)");
+    }
+    sprintf(dbuf + strlen(dbuf), "\n");
+    /* stop backtrace if JS_EVAL_FLAG_BACKTRACE_BARRIER was used */
+    if (backtrace_barrier)
+        break;
+  }
+  printf("%s",dbuf);
+}
 
 /* if filename != NULL, an additional level is added with the filename
    and line number information (used for parse error). */
@@ -46533,6 +46580,9 @@ static JSValue js_promise_resolve_function_call(JSContext *ctx,
     printf("js_promise_resolving_function_call: is_reject=%d resolution=", is_reject);
     JS_DumpValue(ctx, resolution);
     printf("\n");
+    if(is_reject == 1) {
+      print_backtrace(ctx);
+    }
 #endif
     if (is_reject || !JS_IsObject(resolution)) {
         goto done;
