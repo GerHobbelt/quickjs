@@ -531,9 +531,9 @@ typedef struct JSClosureVar {
     JSAtom var_name;
 } JSClosureVar;
 
-#define ARG_SCOPE_INDEX 1
-#define ARG_SCOPE_END (-2)
-#define DEBUG_SCOP_INDEX (-3)
+#define ARG_SCOPE_INDEX     1
+#define ARG_SCOPE_END     (-2)
+#define DEBUG_SCOPE_INDEX (-3)
 
 typedef struct JSVarScope {
     int parent;  /* index into fd->scopes of the enclosing scope */
@@ -30726,7 +30726,7 @@ static __exception int add_closure_variables(JSContext *ctx, JSFunctionDef *s,
     if (!s->closure_var)
         return -1;
     /* Add lexical variables in scope at the point of evaluation */
-    if(scope_idx == DEBUG_SCOP_INDEX) {
+    if (scope_idx == DEBUG_SCOPE_INDEX) {
         for (i = 0; i < b->var_count; i++) {
             vd = &b->vardefs[b->arg_count + i];
             if (vd->scope_level > 0) {
@@ -31330,10 +31330,10 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                 /* remove dead code */
                 int line = -1;
                 dbuf_put(&bc_out, bc_buf + pos, len);
-                if(pos + len < bc_len)
+                if (pos + len < bc_len)
                     pos = skip_dead_code(s, bc_buf, bc_len, pos + len, &line);
                 else {
-                    //NOTE: already arrive the function end, give a valid value to save line num.
+                    //NOTE: already arrived at the function end, give a valid value to save line num.
                     pos += len;
                     line = line_num + 1;
                 }
@@ -54848,8 +54848,8 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
         if (!b->var_count)
             idx = -1;
         else
-            // use DEBUG_SCOP_INDEX to add all lexical variables to debug eval closure.
-            idx = DEBUG_SCOP_INDEX;
+            // use DEBUG_SCOPE_INDEX to add all lexical variables to debug eval closure.
+            idx = DEBUG_SCOPE_INDEX;
         if (add_closure_variables(ctx, fd, b, idx))
             goto fail;
     }
