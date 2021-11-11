@@ -60,10 +60,12 @@
 #define CONFIG_PRINTF_RNDN
 #endif
 
-#define abort qjs_abort
-#define malloc(s) malloc_is_forbidden(s)
-#define free(p) free_is_forbidden(p)
-#define realloc(p,s) realloc_is_forbidden(p,s)
+// make sure the compiler barfs a hairball when any of these is used in the code below:
+#define abort        b0rk b0rk b0rk qjs_abort
+#define malloc(s)    b0rk b0rk b0rk malloc_is_forbidden(s)
+#define free(p)      b0rk b0rk b0rk free_is_forbidden(p)
+#define realloc(p,s) b0rk b0rk b0rk realloc_is_forbidden(p,s)
+#define assert(x)    b0rk b0rk b0rk QJS_ASSERT(x)
 
 /* see quickjs_config.h for the active DUMP_* settings */
 
@@ -267,8 +269,8 @@ struct JSRuntime {
 #endif
     /* stack limitation */
     uintptr_t stack_size; /* in bytes, 0 if no limit */
-    uintptr_t stack_top;
-    uintptr_t stack_limit; /* lower stack limit */
+	const uint8_t* stack_top;
+	const uint8_t* stack_limit; /* lower stack limit */
 
     JSValue current_exception;
     /* true if inside an out of memory error, to avoid recursing */
@@ -1602,7 +1604,7 @@ static void set_dummy_numeric_ops(JSNumericOperations *ops)
 
 static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
 {
-    uintptr_t sp;
+	const uint8_t* sp;
     sp = qjs_get_stack_pointer() - alloca_size;
     return unlikely(sp < rt->stack_limit);
 }
@@ -2416,8 +2418,8 @@ void JS_SetGlobalAccessFunctions(JSContext *ctx,
 
 static void update_stack_limit(JSRuntime *rt)
 {
-    if (rt->stack_size == 0) {
-        rt->stack_limit = 0; /* no limit */
+    if (rt->stack_size == NULL) {
+        rt->stack_limit = NULL; /* no limit */
     } else {
         rt->stack_limit = rt->stack_top - rt->stack_size;
     }
