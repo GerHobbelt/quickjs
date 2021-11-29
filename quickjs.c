@@ -54034,3 +54034,36 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
     JS_AddIntrinsicAtomics(ctx);
 #endif
 }
+
+#pragma mark QJSExport
+
+int QJS_CLASS_MAP = JS_CLASS_MAP;
+int QJS_ATOM_next = JS_ATOM_next;
+
+JSValue QJS_GetIterator(JSContext *ctx, JSValueConst obj, BOOL is_async) {
+    return JS_GetIterator(ctx, obj, is_async);
+}
+
+JSValue QJS_IteratorNext(JSContext *ctx, JSValueConst enum_obj, JSValueConst method, int argc, JSValueConst *argv,
+                         BOOL *pdone){
+    return JS_IteratorNext(ctx, enum_obj, method, argc, argv, pdone);
+}
+
+int QJS_IteratorClose(JSContext *ctx, JSValueConst enum_obj, BOOL is_exception_pending) {
+    return JS_IteratorClose(ctx, enum_obj, is_exception_pending);
+}
+
+JSValue qjs_proxy_constructor(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv) {
+    return js_proxy_constructor(ctx, this_val, argc, argv);
+}
+
+JSValue qjs_proxy_target(JSContext *ctx, JSValue proxy) {
+    JSProxyData *s = JS_GetOpaque(proxy, JS_CLASS_PROXY);
+    if (s) {
+        return s->target;
+    }
+    
+    return JS_UNDEFINED;
+    
+}
