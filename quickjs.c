@@ -268,7 +268,7 @@ struct JSRuntime {
     struct list_head string_list; /* list of JSString.link */
 #endif
     /* stack limitation */
-    uintptr_t stack_size; /* in bytes, 0 if no limit */
+    uintptr_t stack_size;  /* in bytes, 0 if no limit */
 	uintptr_t stack_top;
 	uintptr_t stack_limit; /* lower stack limit */
 
