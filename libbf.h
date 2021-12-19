@@ -36,6 +36,7 @@
 #define LIMB_BITS (1 << LIMB_LOG2_BITS)
 
 #if (LIMB_BITS == 64)
+
 typedef __int128 int128_t;
 typedef unsigned __int128 uint128_t;
 typedef int64_t slimb_t;
