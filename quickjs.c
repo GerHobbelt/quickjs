@@ -269,8 +269,8 @@ struct JSRuntime {
 #endif
     /* stack limitation */
     uintptr_t stack_size; /* in bytes, 0 if no limit */
-	const uint8_t* stack_top;
-	const uint8_t* stack_limit; /* lower stack limit */
+	uintptr_t stack_top;
+	uintptr_t stack_limit; /* lower stack limit */
 
     JSValue current_exception;
     /* true if inside an out of memory error, to avoid recursing */
@@ -314,7 +314,7 @@ struct JSRuntime {
 };
 
 typedef struct JSRuntimeInternalThreadState {
-    const uint8_t *stack_top;
+	uintptr_t stack_top;
     JSValue current_exception;
     BOOL in_prepare_stack_trace : 8;
     struct JSStackFrame *current_stack_frame;
@@ -1604,8 +1604,7 @@ static void set_dummy_numeric_ops(JSNumericOperations *ops)
 
 static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
 {
-	const uint8_t* sp;
-    sp = qjs_get_stack_pointer() - alloca_size;
+	uintptr_t sp = qjs_get_stack_pointer() - alloca_size;
     return unlikely(sp < rt->stack_limit);
 }
 
@@ -1788,7 +1787,7 @@ void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state)
     s->current_stack_frame = rt->current_stack_frame;
     memcpy(&s->job_list, &rt->job_list, sizeof(rt->job_list));
 
-    rt->stack_top = NULL;
+    rt->stack_top = 0;
     rt->current_exception = JS_NULL;
     rt->in_prepare_stack_trace = FALSE;
     rt->current_stack_frame = NULL;
@@ -1809,7 +1808,7 @@ void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state)
 
 void JS_Leave(JSRuntime *rt)
 {
-    rt->stack_top = NULL;
+    rt->stack_top = 0;
 }
 
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit)
@@ -2418,8 +2417,8 @@ void JS_SetGlobalAccessFunctions(JSContext *ctx,
 
 static void update_stack_limit(JSRuntime *rt)
 {
-    if (rt->stack_size == NULL) {
-        rt->stack_limit = NULL; /* no limit */
+    if (rt->stack_size == 0) {
+        rt->stack_limit = 0; /* no limit */
     } else {
         rt->stack_limit = rt->stack_top - rt->stack_size;
     }
