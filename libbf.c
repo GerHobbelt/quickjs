@@ -59,10 +59,10 @@
 #define UDIV1NORM_THRESHOLD 3
 
 #if LIMB_BITS == 64
-#define FMT_LIMB1 "%" PRIx64
-#define FMT_LIMB "%016" PRIx64
-#define PRId_LIMB PRId64
-#define PRIu_LIMB PRIu64
+#define FMT_LIMB1 "%"    PRIx64
+#define FMT_LIMB  "%016" PRIx64
+#define PRId_LIMB        PRId64
+#define PRIu_LIMB        PRIu64
 
 #else
 

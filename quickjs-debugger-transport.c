@@ -49,6 +49,8 @@ int js_debugger_parse_sockaddr(const char *address, void *sock_addr)
     struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)&peer_addr;
     memset(&peer_addr, 0, sizeof(peer_addr));
 
+	// warning C4996: 'gethostbyname': Use getaddrinfo() or GetAddrInfoW() instead
+#pragma message("warning C4996: 'gethostbyname': Use getaddrinfo() or GetAddrInfoW() instead")
     struct hostent *host = gethostbyname(host_string);
     if (host != NULL)
     {
