@@ -725,6 +725,12 @@ object containing optional parameters:
   Boolean (default = true). If true, the file is searched in the
   @code{PATH} environment variable.
 
+  @item fork
+  Boolean (default = true). fork or replace current process with exec/execvp.
+  
+  @item alias
+  String (default = argv[0]). Set the argv[0] as function of shell exec -a "alias"
+
   @item file
   String (default = @code{args[0]}). Set the file to be executed.
 
