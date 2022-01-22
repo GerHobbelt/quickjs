@@ -36,6 +36,8 @@
 #include <malloc/malloc.h>
 #elif defined(__linux__)
 #include <malloc.h>
+#elif defined(__CYGWIN__)
+#include <malloc.h>
 #endif
 
 #include "cutils.h"

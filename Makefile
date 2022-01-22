@@ -25,6 +25,9 @@
 ifeq ($(shell uname -s),Darwin)
 CONFIG_DARWIN=y
 endif
+ifeq ($(shell uname -o),Cygwin)
+CONFIG_CYGWIN=y
+endif
 # Windows cross compilation from Linux
 #CONFIG_WIN32=y
 # use link time optimization (smaller and faster executables but slower build)
@@ -159,7 +162,9 @@ PROGS+=
 else
 PROGS+=examples/hello examples/hello_module examples/test_fib
 ifndef CONFIG_DARWIN
+ifndef CONFIG_CYGWIN
 PROGS+=examples/fib.so examples/point.so
+endif
 endif
 endif
 endif

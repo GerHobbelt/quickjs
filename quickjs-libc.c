@@ -2838,11 +2838,11 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
 {
     JSValueConst options, args = argv[0];
     JSValue val, ret_val;
-    const char **exec_argv, *file = NULL, *str, *cwd = NULL;
+    const char **exec_argv, *file = NULL, *str, *cwd = NULL, *alias = NULL;
     char **envp = environ;
     uint32_t exec_argc, i;
     int ret, pid, status;
-    BOOL block_flag = TRUE, use_path = TRUE;
+    BOOL block_flag = TRUE, use_path = TRUE, fork_flag = TRUE;
     static const char *std_name[3] = { "stdin", "stdout", "stderr" };
     int std_fds[3];
     uint32_t uid = -1, gid = -1;
@@ -2884,7 +2884,19 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
             goto exception;
         if (get_bool_option(ctx, &use_path, options, "usePath"))
             goto exception;
-        
+        if (get_bool_option(ctx, &fork_flag, options, "fork"))
+            goto exception;
+
+        val = JS_GetPropertyStr(ctx, options, "alias");
+        if (JS_IsException(val))
+            goto exception;
+        if (!JS_IsUndefined(val)) {
+            alias = JS_ToCString(ctx, val);
+            JS_FreeValue(ctx, val);
+            if (!alias)
+                goto exception;
+        }
+
         val = JS_GetPropertyStr(ctx, options, "file");
         if (JS_IsException(val))
             goto exception;
@@ -2951,40 +2963,45 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
         }
     }
 
-    pid = fork();
+    pid = fork_flag ? fork() : 0;
     if (pid < 0) {
         JS_ThrowTypeError(ctx, "fork error");
         goto exception;
     }
     if (pid == 0) {
-        /* child */
-        int fd_max = sysconf(_SC_OPEN_MAX);
+        if (fork_flag) {
 
-        /* remap the stdin/stdout/stderr handles if necessary */
-        for(i = 0; i < 3; i++) {
-            if (std_fds[i] != i) {
-                if (dup2(std_fds[i], i) < 0)
+            /* child */
+            int fd_max = sysconf(_SC_OPEN_MAX);
+
+            /* remap the stdin/stdout/stderr handles if necessary */
+            for(i = 0; i < 3; i++) {
+                if (std_fds[i] != i) {
+                    if (dup2(std_fds[i], i) < 0)
+                        _exit(127);
+                }
+            }
+
+            for(i = 3; i < fd_max; i++)
+                close(i);
+            if (cwd) {
+                if (chdir(cwd) < 0)
+                    _exit(127);
+            }
+            if (uid != -1) {
+                if (setuid(uid) < 0)
+                    _exit(127);
+            }
+            if (gid != -1) {
+                if (setgid(gid) < 0)
                     _exit(127);
             }
         }
 
-        for(i = 3; i < fd_max; i++)
-            close(i);
-        if (cwd) {
-            if (chdir(cwd) < 0)
-                _exit(127);
-        }
-        if (uid != -1) {
-            if (setuid(uid) < 0)
-                _exit(127);
-        }
-        if (gid != -1) {
-            if (setgid(gid) < 0)
-                _exit(127);
-        }
-
         if (!file)
             file = exec_argv[0];
+        if (alias)
+            exec_argv[0] = alias;
         if (use_path)
             ret = my_execvpe(file, (char **)exec_argv, envp);
         else
