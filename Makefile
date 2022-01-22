@@ -36,6 +36,8 @@ CONFIG_LTO=y
 #CONFIG_WERROR=y
 # force 32 bit build for some utilities
 #CONFIG_M32=y
+# compile to static executables
+#CONFIG_STATIC=y
 
 ifdef CONFIG_DARWIN
 # use clang instead of gcc
@@ -186,6 +188,11 @@ LIBS+=-ldl -lpthread
 endif
 LIBS+=$(EXTRA_LIBS)
 
+ifdef CONFIG_STATIC
+HOST_LIBS+=-static
+LIBS+=-static
+endif
+
 $(OBJDIR):
 	mkdir -p $(OBJDIR) $(OBJDIR)/examples $(OBJDIR)/tests
 
@@ -211,6 +218,10 @@ ifdef CONFIG_LTO
 QJSC_DEFINES+=-DCONFIG_LTO
 endif
 QJSC_HOST_DEFINES:=-DCONFIG_CC=\"$(HOST_CC)\" -DCONFIG_PREFIX=\"$(prefix)\"
+
+ifdef CONFIG_STATIC
+QJSC_DEFINES+=-DCONFIG_STATIC
+endif
 
 $(OBJDIR)/qjsc.o: CFLAGS+=$(QJSC_DEFINES)
 $(OBJDIR)/qjsc.host.o: CFLAGS+=$(QJSC_HOST_DEFINES)

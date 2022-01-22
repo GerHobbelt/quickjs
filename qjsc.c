@@ -452,6 +452,10 @@ static int output_executable(const char *out_filename, const char *cfilename,
     *arg++ = "-lm";
     *arg++ = "-ldl";
     *arg++ = "-lpthread";
+#ifdef CONFIG_STATIC
+    if (!dynamic_export)
+        *arg++ = "-static";
+#endif    
     *arg = NULL;
     
     if (verbose) {
