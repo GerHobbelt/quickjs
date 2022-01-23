@@ -1734,10 +1734,14 @@ static JSValue js_os_ttyGetWinSize(JSContext *ctx, JSValueConst this_val,
 }
 
 static struct termios oldtty;
+static BOOL tty_setting_flag = FALSE;
 
 static void term_exit(void)
 {
-    tcsetattr(0, TCSANOW, &oldtty);
+    if (tty_setting_flag) {
+        tcsetattr(0, TCSANOW, &oldtty);
+        tty_setting_flag = FALSE;
+    }
 }
 
 /* XXX: should add a way to go back to normal mode */
@@ -1750,9 +1754,14 @@ static JSValue js_os_ttySetRaw(JSContext *ctx, JSValueConst this_val,
     if (JS_ToInt32(ctx, &fd, argv[0]))
         return JS_EXCEPTION;
     
+    assert(fd == 0);
     memset(&tty, 0, sizeof(tty));
     tcgetattr(fd, &tty);
-    oldtty = tty;
+
+    if (!tty_setting_flag) {
+        oldtty = tty;
+        tty_setting_flag = TRUE;
+    }
 
     tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
                           |INLCR|IGNCR|ICRNL|IXON);
@@ -2996,6 +3005,10 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
                 if (setgid(gid) < 0)
                     _exit(127);
             }
+#if !defined(_WIN32)
+        } else {
+            term_exit();
+#endif
         }
 
         if (!file)
