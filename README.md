@@ -16,6 +16,7 @@ This version is
   * [JSX](doc/jsx.md) - built-in [facebook::JSX](https://facebook.github.io/jsx/) support with Sciter specific extras.
   * Built-in [Persistence](storage/doc/README.md) - you can think of it as local MongoDB (NoSQL) DB embedded into the language. Pretty small, adds just 70kb into binary.
     Persistence is based on [DyBASE of Konstantin Knizhnik](http://garret.ru/)
+* Suppot MinGW toolchains and CMake
 
 The main documentation is in doc/quickjs.pdf or [doc/quickjs.html](doc/quickjs.html).
 
@@ -45,6 +46,7 @@ Supported targets (these are built into [Premake](https://premake.github.io/) it
 
 Few examples of other possible configurations: 
 ```bat
+cd src
 premake5 vs2019 --jsx --storage
 premake5 codeblocks --cc=gcc --jsx --storage
 premake5 gmake2 --cc=gcc --jsx --storage
@@ -53,6 +55,17 @@ premake5 gmake2 --cc=clang --jsx --storage
 premake5 xcode4 --jsx --storage
 ```
 
+Building With CMake
+```shell
+cmake -S . -B build
+cmake --build build --config Release
+```
+
+Using as package
+```cmake
+add_subdirectory(quickjs-cmake)
+target_link_libraries(YOUR_TARGET quickjs)
+```
 
 
 
