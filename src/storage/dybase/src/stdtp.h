@@ -13,7 +13,7 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
 #pragma warning(disable : 4800 4355 4146 4251)
 #pragma warning(disable : 4458 4456 4457 4459) // warning C4458 : declaration of
                                                // 'name' hides class member

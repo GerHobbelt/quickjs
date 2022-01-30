@@ -10392,7 +10392,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
             } else
 #endif
             {
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
                 double d = INFINITY;
 #else
                 double d = 1.0 / 0.0;
@@ -10895,10 +10895,10 @@ static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
             if (isnan(d)) {
                 *pres = 0;
             } else {
-                if (d < INT64_MIN)
+                if ((int64_t)d < INT64_MIN)
                     *pres = INT64_MIN;
-                else if (d > INT64_MAX)
-                    *pres = INT64_MAX;
+                else if ((int64_t)d > INT64_MAX)
+                    *pres = (int64_t)INT64_MAX;
                 else
                     *pres = (int64_t)d;
             }
@@ -23808,7 +23808,7 @@ static __exception int js_parse_array_literal(JSParseState *s)
     }
   done:
     if (tag != JS_UNINITIALIZED) {
-      emit_push_const(s, tag, 0);
+      (void)emit_push_const(s, tag, 0);
       JS_FreeValue(s->ctx, tag);
       emit_op(s, OP_define_field);
       emit_atom(s, JS_ATOM_tag);
@@ -24799,7 +24799,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
         return -1;
       {
         JSValue filename = JS_NewString(s->ctx, s->filename);
-        emit_push_const(s, filename, 0);
+          (void)emit_push_const(s, filename, 0);
         JS_FreeValue(s->ctx, filename);
       }
       break;
@@ -24817,7 +24817,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
           else if (*pc == '?' || *pc == '#') break;
         }
         JSValue dir = JS_NewStringLen(s->ctx, s->filename, n + 1);
-        emit_push_const(s, dir, 0);
+        (void)emit_push_const(s, dir, 0);
         JS_FreeValue(s->ctx, dir);
       }
       break;
@@ -54329,7 +54329,7 @@ static JSValue js_atomics_wait(JSContext *ctx,
     }
     if (JS_ToFloat64(ctx, &d, argv[3]))
         return JS_EXCEPTION;
-    if (isnan(d) || d > INT64_MAX)
+    if (isnan(d) || (int64_t)d > INT64_MAX)
         timeout = INT64_MAX;
     else if (d < 0)
         timeout = 0;

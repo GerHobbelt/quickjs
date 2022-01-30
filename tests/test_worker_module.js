@@ -1,5 +1,4 @@
 /* Worker code for test_worker.js */
-import * as std from "std";
 import * as os from "os";
 
 var parent = os.Worker.parent;

@@ -29,10 +29,12 @@
 #include <assert.h>
 #include <errno.h>
 #if !defined(_WIN32)
-#include <sys/wait.h>
+  #include <sys/wait.h>
   #include <unistd.h>
-#else
+#elif defined(_MSC_VER)
   #include "win/getopt.h"
+#elif defined(__MINGW32__)
+  #include <unistd.h>
 #endif
 
 #include "cutils.h"

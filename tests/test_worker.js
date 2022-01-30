@@ -1,5 +1,4 @@
 /* os.Worker API test */
-import * as std from "std";
 import * as os from "os";
 
 function assert(actual, expected, message) {

@@ -29,9 +29,10 @@
 #include <inttypes.h>
 #include <string.h>
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
   #include <windows.h>
   #include <intrin.h>
+  #include <sys/time.h>
   #ifndef alloca
     #define alloca(s) _alloca(s)
   #endif
@@ -139,7 +140,7 @@ static inline int64_t min_int64(int64_t a, int64_t b)
 /* WARNING: undefined if a = 0 */
 static inline int clz32(unsigned int a)
 {
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
     unsigned long idx;
     _BitScanReverse(&idx, a);
     return 31 ^ idx;
@@ -151,7 +152,7 @@ static inline int clz32(unsigned int a)
 /* WARNING: undefined if a = 0 */
 static inline int clz64(uint64_t a)
 {
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
   unsigned long where;
   // BitScanReverse scans from MSB to LSB for first set bit.
   // Returns 0 if no set bit is found.
@@ -175,7 +176,7 @@ static inline int clz64(uint64_t a)
 /* WARNING: undefined if a = 0 */
 static inline int ctz32(unsigned int a)
 {
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
     unsigned long idx;
     _BitScanForward(&idx, a);
     return 31 ^ idx;
@@ -187,7 +188,7 @@ static inline int ctz32(unsigned int a)
 /* WARNING: undefined if a = 0 */
 static inline int ctz64(uint64_t a)
 {
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
   unsigned long where;
   // Search from LSB to MSB for first set bit.
   // Returns zero if no set bit is found.
@@ -209,7 +210,7 @@ static inline int ctz64(uint64_t a)
 #endif
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
 #pragma pack(push, 1)
 struct packed_u64 {
     uint64_t v;

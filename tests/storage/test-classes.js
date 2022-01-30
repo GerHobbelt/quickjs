@@ -1,5 +1,4 @@
 import * as storage from "storage";
-import * as std from "std";
 import * as os from "os";
 
 function assert(actual, expected, message) {
