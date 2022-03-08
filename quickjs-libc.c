@@ -67,6 +67,13 @@ typedef sig_t sighandler_t;
 
 #endif
 
+#ifndef environ
+#define environ __environ
+#endif
+#ifndef sighandler_t
+#define sighandler_t __sighandler_t
+#endif
+
 #if !defined(_WIN32)
 /* enable the os.Worker API. IT relies on POSIX threads */
 #define USE_WORKER
