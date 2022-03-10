@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#define timeval ws_timeval
 #include <winsock2.h>
 
 struct js_transport_data {

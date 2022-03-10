@@ -1,5 +1,9 @@
 project(quickjs)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
 add_library(quickjs STATIC
 		config.h
 	  cutils.c
@@ -38,8 +42,24 @@ target_compile_definitions(quickjs PUBLIC CONFIG_VERSION="${QUICKJS_VERSION}")
 target_include_directories(quickjs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(quickjs PUBLIC OS)
 
-add_executable(qjs qjs.c)
-target_link_libraries(qjs PRIVATE quickjs)
-
 add_executable(qjsc qjsc.c)
 target_link_libraries(qjsc PRIVATE quickjs)
+
+add_custom_command(
+		COMMAND qjsc -c -o repl.c -m ${CMAKE_CURRENT_SOURCE_DIR}/repl.js
+		OUTPUT repl.c
+		DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/repl.js
+	)
+
+add_executable(qjs qjs.c repl.c)
+target_link_libraries(qjs PRIVATE quickjs)
+
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang") # https://bugs.llvm.org/show_bug.cgi?id=25305
+	target_compile_definitions(quickjs PUBLIC CONFIG_BIGNUM)
+	target_sources(qjs PRIVATE qjscalc.c)
+	add_custom_command(
+			COMMAND qjsc -fbignum -c -o qjscalc.c -m ${CMAKE_CURRENT_SOURCE_DIR}/qjscalc.js
+			OUTPUT qjscalc.c
+			DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/qjscalc.js
+		)
+endif()
