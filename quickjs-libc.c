@@ -41,6 +41,10 @@
 #include <windows.h>
 #include <conio.h>
 #include <utime.h>
+#include <direct.h>
+#include <io.h>
+#define popen _popen
+#define pclose _pclose
 #else
 #include <dlfcn.h>
 #include <termios.h>

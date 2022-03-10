@@ -27,6 +27,7 @@
 
 #include <stdlib.h>
 #include <inttypes.h>
+#include <sys/types.h>
 
 /* set if CPU is big endian */
 #undef WORDS_BIGENDIAN
