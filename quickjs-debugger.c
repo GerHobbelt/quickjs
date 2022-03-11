@@ -399,6 +399,10 @@ static void js_process_breakpoints(JSDebuggerInfo *info, JSValue message) {
 
     JSValue path_property = JS_GetPropertyStr(ctx, message, "path");
     const char *path = JS_ToCString(ctx, path_property);
+#ifdef _WIN32
+    for (char *p = (char *)path; *p != '\0'; ++p)
+        if (*p == '\\') *p = '/';
+#endif
     JSValue path_data = JS_GetPropertyStr(ctx, info->breakpoints, path);
 
     if (!JS_IsUndefined(path_data))
