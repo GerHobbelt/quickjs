@@ -308,6 +308,9 @@ struct JSRuntime {
     void *user_opaque;
 };
 
+// Tell edbrowse where the jobs field is within this structure.
+int JSRuntimeJobIndex = (int) offsetof(struct JSRuntime, job_list);
+
 struct JSClass {
     uint32_t class_id; /* 0 means free entry */
     JSAtom class_name;
