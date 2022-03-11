@@ -20,8 +20,6 @@ add_library(quickjs STATIC
 		quickjs-atom.h
 		quickjs-debugger.c
 		quickjs-debugger.h
-	  quickjs-libc.c
-		quickjs-libc.h
 		quickjs-opcode.h
 	  quickjs.c
     quickjs.h
@@ -46,8 +44,14 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 	target_compile_definitions(quickjs PRIVATE DUMP_LEAKS=1)
 endif()
 
+add_library(quickjs-libc STATIC
+	  quickjs-libc.c
+		quickjs-libc.h
+  )
+target_link_libraries(quickjs-libc PUBLIC quickjs)
+
 add_executable(qjsc qjsc.c)
-target_link_libraries(qjsc PRIVATE quickjs)
+target_link_libraries(qjsc PRIVATE quickjs-libc)
 
 add_custom_command(
 		COMMAND qjsc -c -o repl.c -m ${CMAKE_CURRENT_SOURCE_DIR}/repl.js
@@ -56,7 +60,7 @@ add_custom_command(
 	)
 
 add_executable(qjs qjs.c repl.c)
-target_link_libraries(qjs PRIVATE quickjs)
+target_link_libraries(qjs PRIVATE quickjs-libc)
 
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang") # https://bugs.llvm.org/show_bug.cgi?id=25305
 	target_compile_definitions(quickjs PUBLIC CONFIG_BIGNUM)
