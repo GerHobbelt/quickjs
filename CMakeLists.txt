@@ -39,7 +39,7 @@ endif()
 
 file(STRINGS "VERSION" QUICKJS_VERSION)
 target_compile_definitions(quickjs PUBLIC CONFIG_VERSION="${QUICKJS_VERSION}")
-target_include_directories(quickjs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(quickjs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(quickjs PUBLIC OS)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
