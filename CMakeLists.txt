@@ -42,6 +42,10 @@ target_compile_definitions(quickjs PUBLIC CONFIG_VERSION="${QUICKJS_VERSION}")
 target_include_directories(quickjs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(quickjs PUBLIC OS)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	target_compile_definitions(quickjs PRIVATE DUMP_LEAKS=1)
+endif()
+
 add_executable(qjsc qjsc.c)
 target_link_libraries(qjsc PRIVATE quickjs)
 
