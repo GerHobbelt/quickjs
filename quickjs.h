@@ -820,7 +820,6 @@ void *JS_GetArrayBufferOpaque(JSValueConst obj);
 void JS_DetachArrayBuffer(JSContext *ctx, JSValueConst obj);
 int JS_IsArrayBuffer(JSContext *ctx, JSValueConst val);
 uint8_t *JS_GetArrayBuffer(JSContext *ctx, size_t *psize, JSValueConst obj);
-uint8_t *JS_GetUint8Array(JSContext *ctx, size_t *psize, JSValueConst obj);
 JSValue JS_GetTypedArrayBuffer(JSContext *ctx, JSValueConst obj,
                                size_t *pbyte_offset,
                                size_t *pbyte_length,
