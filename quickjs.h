@@ -1223,6 +1223,11 @@ JSValue  js_debugger_local_variables(JSContext *ctx, int stack_index);
 
 void*    js_debugger_get_object_id(JSValue val);
 
+JSValue JS_GetStackFunction(JSContext* ctx, int back_level);
+int JS_GetModuleExportEntriesCount(JSModuleDef* m);
+JSValue JS_GetModuleExportEntry(JSContext* ctx, JSModuleDef* m, int idx);
+JSAtom JS_GetModuleExportEntryName(JSContext* ctx, JSModuleDef* m, int idx);
+
 #undef js_unlikely
 #undef js_force_inline
 
