@@ -307,8 +307,9 @@ struct JSRuntime {
     uint32_t operator_count;
 #endif
     void *user_opaque;
-
+#ifdef CONFIG_DEBUGGER
     JSDebuggerInfo debugger_info;
+#endif
 };
 
 struct JSClass {
@@ -625,7 +626,9 @@ typedef struct JSFunctionBytecode {
         uint8_t *pc2line_buf;
         char *source;
     } debug;
+#ifdef CONFIG_DEBUGGER
     struct JSDebuggerFunctionInfo debugger;
+#endif
 } JSFunctionBytecode;
 
 typedef struct JSBoundFunction {
@@ -1931,8 +1934,9 @@ void JS_SetRuntimeInfo(JSRuntime *rt, const char *s)
 
 void JS_FreeRuntime(JSRuntime *rt)
 {
+#ifdef CONFIG_DEBUGGER
     js_debugger_free(rt, &rt->debugger_info);
-
+#endif
     struct list_head *el, *el1;
     int i;
 
@@ -2151,9 +2155,9 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
     init_list_head(&ctx->loaded_modules);
 
     JS_AddIntrinsicBasicObjects(ctx);
-
+#ifdef CONFIG_DEBUGGER
     js_debugger_new_context(ctx);
-
+#endif
     return ctx;
 }
 
@@ -2316,8 +2320,9 @@ void JS_FreeContext(JSContext *ctx)
     }
 #endif
 
+#ifdef CONFIG_DEBUGGER
     js_debugger_free_context(ctx);
-
+#endif
     js_free_modules(ctx, JS_FREE_MODULE_ALL);
 
     JS_FreeValue(ctx, ctx->global_obj);
@@ -6340,7 +6345,9 @@ JSValue JS_Throw(JSContext *ctx, JSValue obj)
     JSRuntime *rt = ctx->rt;
     JS_FreeValue(ctx, rt->current_exception);
     rt->current_exception = obj;
+#ifdef CONFIG_DEBUGGER
     js_debugger_exception(ctx);
+#endif
     return JS_EXCEPTION;
 }
 
@@ -16225,7 +16232,11 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
 #if !DIRECT_DISPATCH
 #define SWITCH(pc)      switch (opcode = *pc++)
+#ifdef CONFIG_DEBUGGER
 #define CASE(op)        case op: if (caller_ctx->rt->debugger_info.transport_close) js_debugger_check(ctx, pc); stub_ ## op
+#else
+#define CASE(op)        case op
+#endif
 #define DEFAULT         default
 #define BREAK           break
 #else
@@ -16239,6 +16250,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #include "quickjs-opcode.h"
         [ OP_COUNT ... 255 ] = &&case_default
     };
+#ifdef CONFIG_DEBUGGER
     static const void * const debugger_dispatch_table[256] = {
 #define DEF(id, size, n_pop, n_push, f) && case_debugger_OP_ ## id,
 #if SHORT_OPCODES
@@ -16253,9 +16265,14 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #define CASE(op)        case_debugger_ ## op: js_debugger_check(ctx, pc); case_ ## op
 #define DEFAULT         case_default
 #define BREAK           SWITCH(pc)
-
     const void * const * active_dispatch_table = caller_ctx->rt->debugger_info.transport_close
         ? debugger_dispatch_table : dispatch_table;
+#else // CONFIG_DEBUGGER
+#define SWITCH(pc)      goto *dispatch_table[opcode = *pc++];
+#define CASE(op)        case_ ## op
+#define DEFAULT         case_default
+#define BREAK           SWITCH(pc)
+#endif // CONFIG_DEBUGGER
 #endif
 
     if (js_poll_interrupts(caller_ctx))
@@ -16346,8 +16363,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
         int call_argc;
         JSValue *call_argv;
 
+#ifdef CONFIG_DEBUGGER
         js_debugger_check(ctx, NULL);
-
+#endif
         SWITCH(pc) {
         CASE(OP_push_i32):
             *sp++ = JS_NewInt32(ctx, get_u32(pc));
@@ -30404,7 +30422,11 @@ static __exception int add_closure_variables(JSContext *ctx, JSFunctionDef *s,
     if (!s->closure_var)
         return -1;
     /* Add lexical variables in scope at the point of evaluation */
+#ifdef CONFIG_DEBUGGER
     if(scope_idx == DEBUG_SCOP_INDEX) {
+#else
+    if(0) {
+#endif
         for (i = 0; i < b->var_count; i++) {
             vd = &b->vardefs[b->arg_count + i];
             if (vd->scope_level > 0) {
@@ -32758,9 +32780,10 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
         JS_FreeAtomRT(rt, b->debug.filename);
         js_free_rt(rt, b->debug.pc2line_buf);
         js_free_rt(rt, b->debug.source);
-
+#ifdef CONFIG_DEBUGGER
         if (b->debugger.breakpoints)
             js_free_rt(rt, b->debugger.breakpoints);
+#endif
     }
 
     remove_gc_object(&b->header);
@@ -51631,7 +51654,7 @@ JSValue JS_GetTypedArrayBuffer(JSContext *ctx, JSValueConst obj,
     }
     return JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, ta->buffer));
 }
-
+                               
 static JSValue js_typed_array_get_toStringTag(JSContext *ctx,
                                               JSValueConst this_val)
 {
@@ -54103,7 +54126,7 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
     JS_AddIntrinsicAtomics(ctx);
 #endif
 }
-
+#ifdef CONFIG_DEBUGGER
 JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *cur_pc) {
     JSDebuggerLocation location;
     location.filename = 0;
@@ -54506,3 +54529,4 @@ JSValue js_debugger_evaluate(JSContext *ctx, int stack_index, JSValue expression
     }
     return JS_UNDEFINED;
 }
+#endif // CONFIG_DEBUGGER

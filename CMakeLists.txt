@@ -42,6 +42,7 @@ target_link_libraries(quickjs PUBLIC OS)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 	target_compile_definitions(quickjs PRIVATE DUMP_LEAKS=1)
+	#target_compile_definitions(quickjs PUBLIC CONFIG_DEBUGGER)
 endif()
 
 add_library(quickjs-libc STATIC
