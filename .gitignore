@@ -1,0 +1,6 @@
+/qjs-debug
+/qjsc
+/test.bytecode
+.obj
+repl.c
+qjscalc.c
