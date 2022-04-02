@@ -20,3 +20,4 @@ run-test262
 run-test262-bn
 test_fib.c
 *.exe
+CMakeTools-*.cmake

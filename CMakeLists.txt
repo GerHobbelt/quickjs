@@ -51,8 +51,15 @@ add_library(quickjs-libc STATIC
   )
 target_link_libraries(quickjs-libc PUBLIC quickjs)
 
-add_executable(qjsc qjsc.c)
-target_link_libraries(qjsc PRIVATE quickjs-libc)
+set(IMPORT_EXECUTABLES ${CMAKE_CURRENT_SOURCE_DIR}/CMakeTools-${CMAKE_BUILD_TYPE}.cmake)
+if(CMAKE_CROSSCOMPILING)
+  include(${IMPORT_EXECUTABLES})
+	set_target_properties(qjsc PROPERTIES IMPORTED_GLOBAL ON)
+else()
+	add_executable(qjsc qjsc.c)
+	target_link_libraries(qjsc PRIVATE quickjs-libc)
+  export(TARGETS qjsc FILE ${IMPORT_EXECUTABLES})
+endif()
 
 add_custom_command(
 		COMMAND qjsc -c -o repl.c -m ${CMAKE_CURRENT_SOURCE_DIR}/repl.js
