@@ -51371,6 +51371,29 @@ void *JS_GetArrayBufferOpaque(JSValueConst obj)
     return abuf->opaque;
 }
 
+void JS_ResetArrayBuffer(JSContext *ctx, JSValueConst obj, uint8_t *buf, size_t len)
+{
+    JSArrayBuffer *abuf = JS_GetOpaque(obj, JS_CLASS_ARRAY_BUFFER);
+    struct list_head *el;
+
+    if (!abuf || abuf->detached || (abuf->data == buf && abuf->byte_length == len))
+        return;
+    abuf->data = buf;
+    abuf->byte_length = len;
+
+    list_for_each(el, &abuf->array_list) {
+        JSTypedArray *ta;
+        JSObject *p;
+
+        ta = list_entry(el, JSTypedArray, link);
+        p = ta->obj;
+        if (p->class_id != JS_CLASS_DATAVIEW) {
+            p->u.array.count = (ta->length = len) >> typed_array_size_log2(p->class_id);
+            p->u.array.u.ptr = buf + ta->offset;
+        }
+    }
+}
+
 void JS_DetachArrayBuffer(JSContext *ctx, JSValueConst obj)
 {
     JSArrayBuffer *abuf = JS_GetOpaque(obj, JS_CLASS_ARRAY_BUFFER);
