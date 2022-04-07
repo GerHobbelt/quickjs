@@ -1727,6 +1727,15 @@ static void js_def_free(JSMallocState *s, void *ptr)
     free(ptr);
 }
 
+static void js_def_detach(JSMallocState *s, void *ptr)
+{
+    if (!ptr)
+        return;
+
+    s->malloc_count--;
+    s->malloc_size -= js_def_malloc_usable_size(ptr) + MALLOC_OVERHEAD;
+}
+
 static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
 {
     size_t old_size;
@@ -1771,6 +1780,12 @@ static const JSMallocFunctions def_malloc_funcs = {
     malloc_usable_size,
 #endif
 };
+
+void js_detach(JSContext *ctx, void *ptr)
+{
+    assert(def_malloc_funcs.js_free == ctx->rt->mf.js_free);
+    js_def_detach(&ctx->rt->malloc_state, ptr);
+}
 
 JSRuntime *JS_NewRuntime(void)
 {

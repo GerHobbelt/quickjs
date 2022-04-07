@@ -389,6 +389,7 @@ void *js_mallocz_rt(JSRuntime *rt, size_t size);
 
 void *js_malloc(JSContext *ctx, size_t size);
 void js_free(JSContext *ctx, void *ptr);
+void js_detach(JSContext *ctx, void *ptr);
 void *js_realloc(JSContext *ctx, void *ptr, size_t size);
 size_t js_malloc_usable_size(JSContext *ctx, const void *ptr);
 void *js_realloc2(JSContext *ctx, void *ptr, size_t size, size_t *pslack);
