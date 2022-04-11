@@ -36,7 +36,7 @@ else()
 endif()
 
 file(STRINGS "VERSION" QUICKJS_VERSION)
-target_compile_definitions(quickjs PUBLIC CONFIG_VERSION="${QUICKJS_VERSION}")
+target_compile_definitions(quickjs PRIVATE CONFIG_VERSION="${QUICKJS_VERSION}")
 target_include_directories(quickjs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(quickjs PUBLIC OS)
 
@@ -57,6 +57,7 @@ if(CMAKE_CROSSCOMPILING)
 	set_target_properties(qjsc PROPERTIES IMPORTED_GLOBAL ON)
 else()
 	add_executable(qjsc qjsc.c)
+	target_compile_definitions(qjsc PRIVATE CONFIG_VERSION="${QUICKJS_VERSION}")
 	target_link_libraries(qjsc PRIVATE quickjs-libc)
   export(TARGETS qjsc FILE ${IMPORT_EXECUTABLES})
 endif()
@@ -68,6 +69,7 @@ add_custom_command(
 	)
 
 add_executable(qjs qjs.c repl.c)
+target_compile_definitions(qjs PRIVATE CONFIG_VERSION="${QUICKJS_VERSION}")
 target_link_libraries(qjs PRIVATE quickjs-libc)
 
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang") # https://bugs.llvm.org/show_bug.cgi?id=25305
