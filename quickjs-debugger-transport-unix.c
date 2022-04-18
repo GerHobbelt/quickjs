@@ -14,6 +14,10 @@
 #include <poll.h>
 #include <arpa/inet.h>
 
+struct js_transport_data {
+    int handle;
+} js_transport_data;
+
 static int js_transport_read(void *udata, char *buffer, int length) {
     struct js_transport_data* data = (struct js_transport_data *)udata;
     if (data->handle <= 0)
@@ -87,6 +91,37 @@ static void js_transport_close(JSRuntime* rt, void *udata) {
     close(data->handle);
     data->handle = 0;
     free(udata);
+}
+
+// todo: fixup asserts to return errors.
+static int js_debugger_parse_sockaddr(const char* address, struct sockaddr_in *addr_ref) {
+    const char* port_string = strstr(address, ":");
+    if (!port_string)
+		return -1;
+
+    int port = atoi(port_string + 1);
+    if (port <= 0)
+		return -2;
+
+    char host_string[256];
+    strcpy(host_string, address);
+    host_string[port_string - address] = 0;
+
+    struct hostent *host = gethostbyname(host_string);
+    if (!host)
+		return -3;
+    struct sockaddr_in addr;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    memcpy((char *)&addr.sin_addr.s_addr, (char *)host->h_addr, host->h_length);
+    addr.sin_port = htons(port);
+
+	if (addr_ref) {
+		*addr_ref = addr;
+		return 0;
+	}
+	return -4;
 }
 
 void js_debugger_connect(JSContext *ctx, const char *address) {

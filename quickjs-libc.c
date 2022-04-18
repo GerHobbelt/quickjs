@@ -3043,7 +3043,6 @@ static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
     return obj;
 }
 
-
 /* dup(fd) */
 static JSValue js_os_dup(JSContext *ctx, JSValueConst this_val,
                          int argc, JSValueConst *argv)
