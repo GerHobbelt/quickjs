@@ -1,8 +1,8 @@
 #
 # QuickJS Javascript Engine
 # 
-# Copyright (c) 2017-2020 Fabrice Bellard
-# Copyright (c) 2017-2020 Charlie Gordon
+# Copyright (c) 2017-2021 Fabrice Bellard
+# Copyright (c) 2017-2021 Charlie Gordon
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,9 +28,9 @@ endif
 # Windows cross compilation from Linux
 #CONFIG_WIN32=y
 # use link time optimization (smaller and faster executables but slower build)
-#CONFIG_LTO=y
+CONFIG_LTO=y
 # consider warnings as errors (for development)
-CONFIG_WERROR=y
+#CONFIG_WERROR=y
 # force 32 bit build for some utilities
 #CONFIG_M32=y
 
@@ -179,6 +179,7 @@ LIBS=-lm
 ifndef CONFIG_WIN32
 LIBS+=-ldl -lpthread
 endif
+LIBS+=$(EXTRA_LIBS)
 
 $(OBJDIR):
 	mkdir -p $(OBJDIR) $(OBJDIR)/examples $(OBJDIR)/tests
