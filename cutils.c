@@ -22,6 +22,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -257,7 +263,7 @@ int unicode_to_utf8(uint8_t *buf, unsigned int c)
         }
         *q++ = (c & 0x3f) | 0x80;
     }
-    return q - buf;
+    return (int)(q - buf);
 }
 
 static const unsigned int utf8_min_code[5] = {

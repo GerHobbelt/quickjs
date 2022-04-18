@@ -1,3 +1,9 @@
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -10,6 +16,11 @@
 
 #include <string.h>
 #include <stdlib.h>
+
+#include "quickjs-debugger.h"
+#include "quickjs-debugger-transport.h"
+#include "cutils.h"
+
 
 int js_debugger_sockaddr_length(void *sock_addr)
 {

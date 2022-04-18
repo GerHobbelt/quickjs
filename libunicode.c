@@ -21,6 +21,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -806,7 +812,7 @@ static void sort_cc(int *buf, int len)
 }
 
 static void to_nfd_rec(DynBuf *dbuf,
-                       const int *src, int src_len, int is_compat)
+                       const int *src, int src_len, BOOL is_compat)
 {
     uint32_t c, v;
     int i, l;
@@ -857,7 +863,7 @@ int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
     BOOL is_compat;
     DynBuf dbuf_s, *dbuf = &dbuf_s;
 
-    is_compat = n_type >> 1;
+    is_compat = (n_type >> 1);
 
     dbuf_init2(dbuf, opaque, realloc_func);
     if (dbuf_realloc(dbuf, sizeof(int) * src_len))

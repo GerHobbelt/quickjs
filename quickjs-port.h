@@ -24,14 +24,16 @@
 #ifndef QUICKJS_PORT_H
 #define QUICKJS_PORT_H
 
-#ifdef HAVE_QUICKJS_CONFIG_H
-#include "quickjs-config.h"
-#endif
-
 /* define to include Atomics.* operations which depend on the OS
    threads */
 #if !defined(EMSCRIPTEN) && !defined(CONFIG_ATOMICS)
 #define CONFIG_ATOMICS 1
+#endif
+
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
 #endif
 
 #include <stdlib.h>

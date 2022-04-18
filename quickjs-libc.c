@@ -22,6 +22,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -34,16 +40,17 @@
 #include <limits.h>
 #include <sys/stat.h>
 #if defined(_WIN32)
+#define _CRT_INTERNAL_NONSTDC_NAMES 1
 #include <windows.h>
 #include <conio.h>
 #include <io.h>
 #include <direct.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/utime.h>
 #include "win/dirent.h"
-
-#include "sys_time.h"
+#include "win/sys_time.h"
 
 #define PATH_MAX MAX_PATH
 
@@ -58,8 +65,6 @@ typedef intptr_t ssize_t;
 // in order for Microsoft's stat.h to define names like S_IFMT, S_IFREG, and
 // S_IFDIR, rather than just defining  _S_IFMT, _S_IFREG, and _S_IFDIR as it
 // normally does.
-#define _CRT_INTERNAL_NONSTDC_NAMES 1
-#include <sys/stat.h>
 
 #if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
 #define S_ISREG(m) (((m)&S_IFMT) == S_IFREG)
@@ -98,7 +103,7 @@ typedef sig_t sighandler_t;
 
 #ifndef USE_WORKER
 /* enable the os.Worker API */
-#define USE_WORKER
+#define USE_WORKER  1
 #endif
 
 JSModuleLoaderFunc* js_std_get_module_loader_func();

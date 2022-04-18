@@ -57,6 +57,8 @@
 
 #ifdef HAVE_QUICKJS_CONFIG_H
 #include "quickjs-config.h"
+#else
+#include "config.h"
 #endif
 
 #if defined(BUILD_MONOLITHIC)

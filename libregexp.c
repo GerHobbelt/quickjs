@@ -21,6 +21,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -2079,6 +2085,7 @@ static int push_state(REExecContext *s,
     s->state_stack_len++;
     rs->type = type;
     rs->count = count;
+	QJS_ASSERT(stack_len < 256);
     rs->stack_len = stack_len;
     rs->cptr = cptr;
     rs->pc = pc;
@@ -2263,7 +2270,7 @@ static intptr_t lre_exec_backtrack(REExecContext *s, uint8_t **capture,
         case REOP_save_start:
         case REOP_save_end:
             val = *pc++;
-            QJS_ASSERT(val < s->capture_count);
+            QJS_ASSERT((int)val < s->capture_count);
             capture[2 * val + opcode - REOP_save_start] = (uint8_t *)cptr;
             break;
         case REOP_save_reset:
@@ -2272,7 +2279,7 @@ static intptr_t lre_exec_backtrack(REExecContext *s, uint8_t **capture,
                 val = pc[0];
                 val2 = pc[1];
                 pc += 2;
-                QJS_ASSERT(val2 < s->capture_count);
+                QJS_ASSERT((int)val2 < s->capture_count);
                 while (val <= val2) {
                     capture[2 * val] = NULL;
                     capture[2 * val + 1] = NULL;
@@ -2333,7 +2340,7 @@ static intptr_t lre_exec_backtrack(REExecContext *s, uint8_t **capture,
                 uint32_t c1, c2;
 
                 val = *pc++;
-                if (val >= s->capture_count)
+                if ((int)val >= s->capture_count)
                     goto no_match;
                 cptr1_start = capture[2 * val];
                 cptr1_end = capture[2 * val + 1];

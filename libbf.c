@@ -22,6 +22,12 @@
  * THE SOFTWARE.
  */
 
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>

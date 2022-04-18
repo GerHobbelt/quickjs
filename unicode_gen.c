@@ -92,7 +92,7 @@ const char *get_field_buf(char *buf, size_t buf_size, const char *p, int n)
     p = get_field(p, n);
     q = buf;
     while (*p != ';' && *p != '\0') {
-        if ((q - buf) < buf_size - 1)
+        if ((size_t)(q - buf) < buf_size - 1)
             *q++ = *p;
         p++;
     }

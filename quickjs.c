@@ -35,7 +35,7 @@
 
 #ifdef _MSC_VER
 
-#include "sys_time.h"
+#include "win/sys_time.h"
 
 typedef intptr_t ssize_t;
 

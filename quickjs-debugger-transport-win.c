@@ -1,5 +1,11 @@
 #if defined(WIN32) || defined(WIN64)
 
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <winsock2.h>
 #include <WS2tcpip.h>
 

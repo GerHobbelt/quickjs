@@ -8,7 +8,6 @@ string(REGEX REPLACE "\n$" "" QUICKJS_CONFIG_VERSION "${QUICKJS_CONFIG_VERSION}"
 function(qjs_setup_common_flags target)
   target_compile_definitions(${target} PRIVATE
     QUICKJS_CONFIG_VERSION="${QUICKJS_CONFIG_VERSION}"
-    CONFIG_BIGNUM="${CONFIG_BIGNUM}"
   )
   if (UNIX)
     target_compile_definitions(${target} PRIVATE _GNU_SOURCE)

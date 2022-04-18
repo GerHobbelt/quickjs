@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.11.0)
 project(quickjs)
 
-option(USE_BIGNUM "use bignum" ON)
+option(CONFIG_BIGNUM "use bignum" ON)
 
 include(CTest)
 set(QUICKJS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -20,7 +20,6 @@ ExternalProject_Add(hostquickjs
   CMAKE_ARGS
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DCMAKE_INSTALL_PREFIX=${QUICKJS_HOST_DIR}/install
-    -DCONFIG_BIGNUM=${CONFIG_BIGNUM}
   BUILD_BYPRODUCTS
     ${QJSC_EXECUTABLE}
     ${UNICODE_GEN_EXECUTABLE}
@@ -114,3 +113,5 @@ target_include_directories(quickjs PUBLIC
 )
 
 add_subdirectory(tests)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/config.h)
