@@ -42,6 +42,7 @@
   #include <sys/types.h>
   #include <sys/stat.h>
   #include <sys/utime.h>
+  #include <direct.h>
   #include "win/dirent.h"
   #ifndef PATH_MAX
     #define PATH_MAX MAX_PATH
@@ -1092,7 +1093,7 @@ static JSValue js_std_file_tell(JSContext *ctx, JSValueConst this_val,
     int64_t pos;
     if (!f)
         return JS_EXCEPTION;
-#if defined(__linux__)
+#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24)
     pos = ftello(f);
 #else
     pos = ftell(f);
@@ -1115,7 +1116,7 @@ static JSValue js_std_file_seek(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[1]))
         return JS_EXCEPTION;
-#if defined(__linux__)
+#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24)
     ret = fseeko(f, pos, whence);
 #else
     ret = fseek(f, pos, whence);

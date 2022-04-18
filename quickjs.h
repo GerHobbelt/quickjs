@@ -25,6 +25,7 @@
 #ifndef QUICKJS_H
 #define QUICKJS_H
 
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
@@ -76,34 +77,41 @@ typedef enum JS_PERSISTENT_STATUS {
 #define JS_NAN_BOXING
 #endif
 
+#ifdef _MSC_VER
+#define JS_STRICT_NAN_BOXING
+#endif
+
 typedef struct JSRefCountHeader {
     int ref_count;
 } JSRefCountHeader;
 
 #define JS_FLOAT64_NAN NAN
 
-#if defined(JS_STRICT_NAN_BOXING) 
+#if defined(JS_STRICT_NAN_BOXING)
 
-  // This schema defines strict NAN boxing for both 32 and 64 versions 
+/*
+ * This schema defines strict NAN boxing for both 32 and 64 versions.
+ *
+ * This is a method of storing values in the IEEE 754 double-precision
+ * floating-point number. double type is 64-bit, comprised of 1 sign bit, 11
+ * exponent bits and 52 mantissa bits:
+ *    7         6        5        4        3        2        1        0
+ * seeeeeee|eeeemmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm
+ */
 
-  // This is a method of storing values in the IEEE 754 double-precision
-  // floating-point number. double type is 64-bit, comprised of 1 sign bit, 11
-  // exponent bits and 52 mantissa bits:
-  //    7         6        5        4        3        2        1        0
-  // seeeeeee|eeeemmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm|mmmmmmmm
-  //
+/*
+ * s0000000|0000tttt|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv
+ * NaN marker   |tag|  48-bit placeholder for values: pointers, strings
+ * all bits 0   | 4 |
+ * for non float|bit|
+ *
+ * Doubles contain non-zero in NaN marker field and are stored with bits
+ * inversed.
+ *
+ * JS_UNINITIALIZED is strictly uint64_t(0)
+ */
 
-  // s0000000|0000tttt|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv|vvvvvvvv
-  // NaN marker   |tag|  48-bit placeholder for values: pointers, strings
-  // all bits 0   | 4 |  
-  // for non float|bit|  
-
-  // Doubles contain non-zero in NaN marker field and are stored with bits inversed 
-
-  // JS_UNINITIALIZED is strictly uint64_t(0)
-
-  enum {
-
+enum {
     JS_TAG_UNINITIALIZED = 0,
     JS_TAG_INT = 1,
     JS_TAG_BOOL = 2,
@@ -122,54 +130,53 @@ typedef struct JSRefCountHeader {
     JS_TAG_BIG_FLOAT = 13,
     JS_TAG_BIG_INT = 14,
     JS_TAG_BIG_DECIMAL = 15,
+};
 
-  };
+typedef uint64_t JSValue;
 
-  typedef uint64_t JSValue;
+#define JSValueConst JSValue
 
-  #define JSValueConst JSValue
+#define JS_VALUE_GET_TAG(v) (((v) > 0xFFFFFFFFFFFFFULL) ? (unsigned)JS_TAG_FLOAT64 : (unsigned)((v) >> 48))
 
-  #define JS_VALUE_GET_TAG(v) (((v)>0xFFFFFFFFFFFFFull)? (unsigned)JS_TAG_FLOAT64 : (unsigned)((v) >> 48))
+#define JS_VALUE_GET_INT(v) (int)(v)
+#define JS_VALUE_GET_BOOL(v) (int)(v)
+#ifdef JS_PTR64
+#define JS_VALUE_GET_PTR(v) ((void *)((intptr_t)(v) & 0x0000FFFFFFFFFFFFULL))
+#else
+#define JS_VALUE_GET_PTR(v) ((void *)(intptr_t)(v))
+#endif
 
-  #define JS_VALUE_GET_INT(v)  (int)(v)
-  #define JS_VALUE_GET_BOOL(v) (int)(v)
-  #ifdef JS_PTR64
-  #define JS_VALUE_GET_PTR(v)  ((void *)((intptr_t)(v) & 0x0000FFFFFFFFFFFFull))
-  #else
-  #define JS_VALUE_GET_PTR(v)  ((void *)(intptr_t)(v))
-  #endif
+#define JS_MKVAL(tag, val) (((uint64_t)(0xF & tag) << 48) | (uint32_t)(val))
+#define JS_MKPTR(tag, ptr) (((uint64_t)(0xF & tag) << 48) | ((uint64_t)(ptr) & 0x0000FFFFFFFFFFFFULL))
 
-  #define JS_MKVAL(tag, val) (((uint64_t)(0xF & tag) << 48) | (uint32_t)(val))
-  #define JS_MKPTR(tag, ptr) (((uint64_t)(0xF & tag) << 48) | ((uint64_t)(ptr) & 0x0000FFFFFFFFFFFFull))
+#define JS_NAN JS_MKVAL(JS_TAG_FLOAT64,0)
+#define JS_INFINITY_NEGATIVE JS_MKVAL(JS_TAG_FLOAT64,1)
+#define JS_INFINITY_POSITIVE JS_MKVAL(JS_TAG_FLOAT64,2)
 
-  #define JS_NAN JS_MKVAL(JS_TAG_FLOAT64,0)
-  #define JS_INFINITY_NEGATIVE JS_MKVAL(JS_TAG_FLOAT64,1)
-  #define JS_INFINITY_POSITIVE JS_MKVAL(JS_TAG_FLOAT64,2)
-
-  static inline double JS_VALUE_GET_FLOAT64(JSValue v)
-  {
-    if (v > 0xFFFFFFFFFFFFFull) {
+static inline double JS_VALUE_GET_FLOAT64(JSValue v)
+{
     union { JSValue v; double d; } u;
+    if (js_unlikely(v > 0xFFFFFFFFFFFFFull)) {
+      else if (v == JS_INFINITY_POSITIVE)
+        return INFINITY;
+      else if (v == JS_INFINITY_NEGATIVE)
+        return -INFINITY;
+      return JS_FLOAT64_NAN;
+	}
     u.v = ~v;
     return u.d;
   }
-    else if (v == JS_NAN)
-      return JS_FLOAT64_NAN;
-    else if (v == JS_INFINITY_POSITIVE)
-      return INFINITY;
-    else 
-      return -INFINITY;
   }
 
-  static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
-  {
+static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
+{
     union { double d; uint64_t u64; } u;
     JSValue v;
     u.d = d;
     /* normalize NaN */
     if (js_unlikely((u.u64 & 0x7ff0000000000000) == 0x7ff0000000000000)) {
       if( isnan(d))
-      v = JS_NAN;
+        v = JS_NAN;
       else if (d < 0.0)
         v = JS_INFINITY_NEGATIVE;
       else
@@ -178,18 +185,17 @@ typedef struct JSRefCountHeader {
     else
       v = ~u.u64;
     return v;
-  }
+}
 
-  //#define JS_TAG_IS_FLOAT64(tag) ((tag & 0x7ff0) != 0)
-  #define JS_TAG_IS_FLOAT64(tag) (tag == JS_TAG_FLOAT64)
+#define JS_TAG_IS_FLOAT64(tag) (tag == JS_TAG_FLOAT64)
 
-  /* same as JS_VALUE_GET_TAG, but return JS_TAG_FLOAT64 with NaN boxing */
-  /* Note: JS_VALUE_GET_TAG already normalized in this packaging schema*/
-  #define JS_VALUE_GET_NORM_TAG(v) JS_VALUE_GET_TAG(v)
+/* Same as JS_VALUE_GET_TAG, but return JS_TAG_FLOAT64 with NaN boxing. */
+/* Note: JS_VALUE_GET_TAG already normalized in this packaging schema. */
+#define JS_VALUE_GET_NORM_TAG(v) JS_VALUE_GET_TAG(v)
 
-  #define JS_VALUE_IS_NAN(v) (v == JS_NAN)
+#define JS_VALUE_IS_NAN(v) (v == JS_NAN)
 
-  #define JS_VALUE_HAS_REF_COUNT(v) ((JS_VALUE_GET_TAG(v) & 0xFFF8) == 0x8)
+#define JS_VALUE_HAS_REF_COUNT(v) ((JS_VALUE_GET_TAG(v) & 0xFFF8) == 0x8)
 
 #else // !JS_STRICT_NAN_BOXING
 
@@ -367,7 +373,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 
 #endif /* !JS_NAN_BOXING */
 
-  #define JS_VALUE_HAS_REF_COUNT(v) ((unsigned)JS_VALUE_GET_TAG(v) >= (unsigned)JS_TAG_FIRST)
+#define JS_VALUE_HAS_REF_COUNT(v) ((unsigned)JS_VALUE_GET_TAG(v) >= (unsigned)JS_TAG_FIRST)
 
 #endif /* !JS_STRICT_NAN_BOXING */
 
@@ -376,7 +382,6 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 
 #define JS_VALUE_GET_OBJ(v) ((JSObject *)JS_VALUE_GET_PTR(v))
 #define JS_VALUE_GET_STRING(v) ((JSString *)JS_VALUE_GET_PTR(v))
-
 
 /* special values */
 #define JS_NULL      JS_MKVAL(JS_TAG_NULL, 0)
@@ -439,6 +444,10 @@ typedef JSValue JSCFunction(JSContext *ctx, JSValueConst this_val, int argc, JSV
 typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 typedef JSValue JSCFunctionData(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic, JSValue *func_data);
 
+typedef struct JSRuntimeThreadState {
+    char data[64];
+} JSRuntimeThreadState;
+
 typedef struct JSMallocState {
     size_t malloc_count;
     size_t malloc_size;
@@ -456,6 +465,10 @@ typedef struct JSMallocFunctions {
 typedef struct JSGCObjectHeader JSGCObjectHeader;
 
 JSRuntime *JS_NewRuntime(void);
+void JS_Enter(JSRuntime *rt);
+void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state);
+void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state);
+void JS_Leave(JSRuntime *rt);
 /* info lifetime must exceed that of rt */
 void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit);
@@ -480,6 +493,12 @@ JSContext *JS_DupContext(JSContext *ctx);
 void *JS_GetContextOpaque(JSContext *ctx);
 void JS_SetContextOpaque(JSContext *ctx, void *opaque);
 JSRuntime *JS_GetRuntime(JSContext *ctx);
+typedef struct {
+    JSValue (*get)(JSContext *ctx, JSAtom name, void *opaque);
+    void *opaque;
+} JSGlobalAccessFunctions;
+void JS_SetGlobalAccessFunctions(JSContext *ctx,
+                                 const JSGlobalAccessFunctions *af);
 void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
 JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
 JSValue JS_GetClassName(JSContext *ctx, JSClassID class_id);
@@ -518,6 +537,7 @@ void *js_mallocz_rt(JSRuntime *rt, size_t size);
 
 void *js_malloc(JSContext *ctx, size_t size);
 void js_free(JSContext *ctx, void *ptr);
+void js_detach(JSContext *ctx, void *ptr);
 void *js_realloc(JSContext *ctx, void *ptr, size_t size);
 size_t js_malloc_usable_size(JSContext *ctx, const void *ptr);
 void *js_realloc2(JSContext *ctx, void *ptr, size_t size, size_t *pslack);
@@ -778,6 +798,7 @@ void JS_ResetUncatchableError(JSContext *ctx);
 JSValue JS_NewError(JSContext *ctx);
 JSValue __js_printf_like(2, 3) JS_ThrowSyntaxError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowTypeError(JSContext *ctx, const char *fmt, ...);
+JSValue JS_ThrowTypeErrorInvalidClass(JSContext *ctx, JSClassID class_id);
 JSValue __js_printf_like(2, 3) JS_ThrowReferenceError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fmt, ...);
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
@@ -926,6 +947,8 @@ int JS_CopyDataProperties(JSContext *ctx, JSValueConst target, JSValueConst sour
 
 int JS_GetOwnPropertyNames(JSContext *ctx, JSPropertyEnum **ptab,
                            uint32_t *plen, JSValueConst obj, int flags);
+int JS_GetOwnPropertyCount(JSContext *ctx, JSValueConst obj);
+int JS_GetOwnPropertyCountUnchecked(JSValueConst obj);
 int JS_GetOwnProperty(JSContext *ctx, JSPropertyDescriptor *desc,
                       JSValueConst obj, JSAtom prop);
 
@@ -968,6 +991,7 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
 void JS_SetOpaque(JSValue obj, void *opaque);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
+void *JS_GetAnyOpaque(JSValueConst obj, JSClassID *class_id);
 JSClassID JS_GetClassID(JSValueConst obj, void** ppopaque);
 
 /* 'buf' must be zero terminated i.e. buf[buf_len] = '\0'. */
@@ -984,7 +1008,10 @@ JSValue JS_NewArrayBuffer(JSContext *ctx, uint8_t *buf, size_t len,
                           JSFreeArrayBufferDataFunc *free_func, void *opaque,
                           JS_BOOL is_shared);
 JSValue JS_NewArrayBufferCopy(JSContext *ctx, const uint8_t *buf, size_t len);
+void *JS_GetArrayBufferOpaque(JSValueConst obj);
+void JS_ResetArrayBuffer(JSContext *ctx, JSValueConst obj, uint8_t *buf, size_t len);
 void JS_DetachArrayBuffer(JSContext *ctx, JSValueConst obj);
+int JS_IsArrayBuffer(JSContext *ctx, JSValueConst val);
 uint8_t *JS_GetArrayBuffer(JSContext *ctx, size_t *psize, JSValueConst obj);
 JSValue JS_GetTypedArrayBuffer(JSContext *ctx, JSValueConst obj,
                                size_t *pbyte_offset,
@@ -1228,6 +1255,7 @@ JSValue JS_GetStackFunction(JSContext* ctx, int back_level);
 int JS_GetModuleExportEntriesCount(JSModuleDef* m);
 JSValue JS_GetModuleExportEntry(JSContext* ctx, JSModuleDef* m, int idx);
 JSAtom JS_GetModuleExportEntryName(JSContext* ctx, JSModuleDef* m, int idx);
+JSValue JS_GetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name);
 
 #undef js_unlikely
 #undef js_force_inline
