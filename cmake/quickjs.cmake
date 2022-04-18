@@ -26,6 +26,7 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/libbf.c
   ${QUICKJS_SOURCE_DIR}/libregexp.c
   ${QUICKJS_SOURCE_DIR}/libunicode.c
+  ${QUICKJS_SOURCE_DIR}/gettimeofday.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
   ${QUICKJS_SOURCE_DIR}/quickjs_dump_flags.c
   ${QUICKJS_SOURCE_DIR}/quickjs-find-module.c

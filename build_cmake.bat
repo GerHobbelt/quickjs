@@ -13,4 +13,5 @@ cd b
 cmake ..
 cmake --build . --target qjs --config Release
 
+cd ..
 pause

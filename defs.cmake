@@ -8,7 +8,7 @@ if(NOT quickjs_sources_root)
   set(quickjs_sources_root "${CMAKE_CURRENT_SOURCE_DIR}")
 endif(NOT quickjs_sources_root)
 
-file(READ "${quickjs_sources_root}/VERSION" version)
+file(READ "${quickjs_sources_root}/VERSION.txt" version)
 string(STRIP "${version}" quickjs_version)
 
 if(NOT quickjs_version)

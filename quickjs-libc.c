@@ -41,6 +41,7 @@
 #include <sys/stat.h>
 #if defined(_WIN32)
 #define _CRT_INTERNAL_NONSTDC_NAMES 1
+#include "win/sys_time.h"
 #include <windows.h>
 #include <conio.h>
 #include <io.h>
@@ -50,7 +51,6 @@
 #include <sys/stat.h>
 #include <sys/utime.h>
 #include "win/dirent.h"
-#include "win/sys_time.h"
 
 #define PATH_MAX MAX_PATH
 

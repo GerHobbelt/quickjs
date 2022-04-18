@@ -22,6 +22,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <inttypes.h>
@@ -42,32 +48,10 @@ typedef intptr_t ssize_t;
 //#pragma function (ceil)
 //#pragma function (floor)
 
-#include <WinSock2.h>
-
-// From: https://stackoverflow.com/a/26085827
-int gettimeofday(struct timeval * tp, struct timezone * tzp)
-{
-	static const uint64_t EPOCH = ((uint64_t)116444736000000000ULL);
-
-	SYSTEMTIME  system_time;
-	FILETIME    file_time;
-	uint64_t    time;
-
-	GetSystemTime(&system_time);
-	SystemTimeToFileTime(&system_time, &file_time);
-	time = ((uint64_t)file_time.dwLowDateTime);
-	time += ((uint64_t)file_time.dwHighDateTime) << 32;
-
-	tp->tv_sec = (long)((time - EPOCH) / 10000000L);
-	tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
-
-	return 0;
-}
-
 #else
 #include <sys/time.h>
 #ifndef INFINITY
-#define INFINITY 1.0 / 0.0
+#define INFINITY (1.0 / 0.0)
 #endif
 #endif
 

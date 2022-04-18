@@ -1,10 +1,20 @@
 // https://github.com/Alexpux/mingw-w64/blob/master/mingw-w64-crt/misc/gettimeofday.c
-#include "sys_time.h"
+
+#ifdef HAVE_QUICKJS_CONFIG_H
+#include "quickjs-config.h"
+#else
+#include "config.h"
+#endif
+
+#ifdef _MSC_VER
+#include "win/sys_time.h"
+#endif
+
 #include <time.h>
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 
-#define FILETIME_1970 116444736000000000ull /* seconds between 1/1/1601 and 1/1/1970 */
+#define FILETIME_1970        116444736000000000ull /* seconds between 1/1/1601 and 1/1/1970 */
 #define HECTONANOSEC_PER_SEC 10000000ull
 
 int getntptimeofday(struct timespec *tp, struct timezone *z)
@@ -43,7 +53,7 @@ int getntptimeofday(struct timespec *tp, struct timezone *z)
 	return res;
 }
 
-int __cdecl gettimeofday(struct timeval *p, struct timezone *z)
+int gettimeofday(struct timeval *p, struct timezone *z)
 {
 	struct timespec tp;
 
