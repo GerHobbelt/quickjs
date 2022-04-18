@@ -28,16 +28,21 @@
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/time.h>
 #include <time.h>
 #include <fenv.h>
 #include <math.h>
+#if defined(HAVE_UNISTD_H)
+#include <unistd.h>
+#endif
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
+#include <sys/time.h>
 #elif defined(__linux__)
 #include <malloc.h>
+#include <sys/time.h>
 #elif defined(__FreeBSD__)
 #include <malloc_np.h>
+#include <sys/time.h>
 #endif
 
 #include "cutils.h"
@@ -51,7 +56,7 @@
 
 #define OPTIMIZE         1
 #define SHORT_OPCODES    1
-#if defined(EMSCRIPTEN)
+#if defined(EMSCRIPTEN) || defined(_MSC_VER)
 #define DIRECT_DISPATCH  0
 #else
 #define DIRECT_DISPATCH  1
@@ -67,18 +72,6 @@
 /* define it if printf uses the RNDN rounding mode instead of RNDNA */
 #define CONFIG_PRINTF_RNDN
 #endif
-
-/* define to include Atomics.* operations which depend on the OS
-   threads */
-#if !defined(EMSCRIPTEN)
-#define CONFIG_ATOMICS
-#endif
-
-#if !defined(EMSCRIPTEN)
-/* enable stack limitation */
-#define CONFIG_STACK_CHECK
-#endif
-
 
 /* dump object free */
 //#define DUMP_FREE
@@ -114,6 +107,31 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <errno.h>
+#endif
+
+#ifdef _MSC_VER
+
+struct timezone;
+
+ /* From: https://stackoverflow.com/a/26085827 */
+static int gettimeofday(struct timeval *tp, struct timezone *tzp)
+{
+    static const uint64_t EPOCH = (uint64_t)116444736000000000ULL;
+    SYSTEMTIME system_time;
+    FILETIME file_time;
+    uint64_t time;
+
+    GetSystemTime(&system_time);
+    SystemTimeToFileTime(&system_time, &file_time);
+    time = (uint64_t)file_time.dwLowDateTime;
+    time += ((uint64_t)file_time.dwHighDateTime) << 32;
+
+    tp->tv_sec = (long)((time - EPOCH) / 10000000L);
+    tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
+
+    return 0;
+}
+
 #endif
 
 enum {
@@ -275,6 +293,8 @@ struct JSRuntime {
     JSValue current_exception;
     /* true if inside an out of memory error, to avoid recursing */
     BOOL in_out_of_memory : 8;
+    /* and likewise if inside Error.prepareStackTrace() */
+    BOOL in_prepare_stack_trace : 8;
 
     struct JSStackFrame *current_stack_frame;
 
@@ -311,6 +331,14 @@ struct JSRuntime {
     JSDebuggerInfo debugger_info;
 #endif
 };
+
+typedef struct JSRuntimeInternalThreadState {
+    uintptr_t stack_top;
+    JSValue current_exception;
+    BOOL in_prepare_stack_trace : 8;
+    struct JSStackFrame *current_stack_frame;
+    struct list_head job_list;
+} JSRuntimeInternalThreadState;
 
 struct JSClass {
     uint32_t class_id; /* 0 means free entry */
@@ -431,6 +459,7 @@ struct JSContext {
     JSValue regexp_ctor;
     JSValue promise_ctor;
     JSValue native_error_proto[JS_NATIVE_ERROR_COUNT];
+    JSValue error_ctor;
     JSValue iterator_proto;
     JSValue async_iterator_proto;
     JSValue array_proto_values;
@@ -439,6 +468,8 @@ struct JSContext {
 
     JSValue global_obj; /* global object */
     JSValue global_var_obj; /* contains the global let/const definitions */
+    JSGlobalAccessFunctions *global_access_funcs;
+    JSGlobalAccessFunctions global_access_funcs_storage;
 
     uint64_t random_state;
 #ifdef CONFIG_BIGNUM
@@ -1690,11 +1721,10 @@ static inline size_t js_def_malloc_usable_size(void *ptr)
     return _msize(ptr);
 #elif defined(EMSCRIPTEN)
     return 0;
-#elif defined(__linux__)
+#elif defined(HAVE_MALLOC_USABLE_SIZE)
     return malloc_usable_size(ptr);
 #else
-    /* change this to `return 0;` if compilation fails */
-    return malloc_usable_size(ptr);
+    return 0;
 #endif
 }
 
@@ -1773,11 +1803,10 @@ static const JSMallocFunctions def_malloc_funcs = {
     (size_t (*)(const void *))_msize,
 #elif defined(EMSCRIPTEN)
     NULL,
-#elif defined(__linux__)
+#elif defined(HAVE_MALLOC_USABLE_SIZE)
     (size_t (*)(const void *))malloc_usable_size,
 #else
-    /* change this to `NULL,` if compilation fails */
-    malloc_usable_size,
+    NULL,
 #endif
 };
 
@@ -1790,6 +1819,45 @@ void js_detach(JSContext *ctx, void *ptr)
 JSRuntime *JS_NewRuntime(void)
 {
     return JS_NewRuntime2(&def_malloc_funcs, NULL);
+}
+
+void JS_Enter(JSRuntime *rt)
+{
+    rt->stack_top = js_get_stack_pointer();
+}
+
+void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state)
+{
+    JSRuntimeInternalThreadState *s = (JSRuntimeInternalThreadState *)state;
+
+    s->stack_top = rt->stack_top;
+    s->current_exception = rt->current_exception;
+    s->in_prepare_stack_trace = rt->in_prepare_stack_trace;
+    s->current_stack_frame = rt->current_stack_frame;
+    memcpy(&s->job_list, &rt->job_list, sizeof(rt->job_list));
+
+    rt->stack_top = 0;
+    rt->current_exception = JS_NULL;
+    rt->in_prepare_stack_trace = FALSE;
+    rt->current_stack_frame = NULL;
+    init_list_head(&rt->job_list);
+}
+
+void JS_Resume(JSRuntime *rt, const JSRuntimeThreadState *state)
+{
+    const JSRuntimeInternalThreadState *s =
+        (const JSRuntimeInternalThreadState *)state;
+
+    rt->stack_top = s->stack_top;
+    rt->current_exception = s->current_exception;
+    rt->in_prepare_stack_trace = s->in_prepare_stack_trace;
+    rt->current_stack_frame = s->current_stack_frame;
+    list_splice(&s->job_list, &rt->job_list);
+}
+
+void JS_Leave(JSRuntime *rt)
+{
+    rt->stack_top = 0;
 }
 
 void JS_SetMemoryLimit(JSRuntime *rt, size_t limit)
@@ -2167,6 +2235,7 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
     ctx->array_ctor = JS_NULL;
     ctx->regexp_ctor = JS_NULL;
     ctx->promise_ctor = JS_NULL;
+    ctx->error_ctor = JS_NULL;
     init_list_head(&ctx->loaded_modules);
 
     JS_AddIntrinsicBasicObjects(ctx);
@@ -2222,15 +2291,13 @@ static inline void set_value(JSContext *ctx, JSValue *pval, JSValue new_val)
 
 void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj)
 {
-    JSRuntime *rt = ctx->rt;
-    assert(class_id < rt->class_count);
+    assert(class_id < ctx->rt->class_count);
     set_value(ctx, &ctx->class_proto[class_id], obj);
 }
 
 JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id)
 {
-    JSRuntime *rt = ctx->rt;
-    assert(class_id < rt->class_count);
+    assert(class_id < ctx->rt->class_count);
     return JS_DupValue(ctx, ctx->class_proto[class_id]);
 }
 
@@ -2284,6 +2351,7 @@ static void JS_MarkContext(JSRuntime *rt, JSContext *ctx,
     for(i = 0; i < JS_NATIVE_ERROR_COUNT; i++) {
         JS_MarkValue(rt, ctx->native_error_proto[i], mark_func);
     }
+    JS_MarkValue(rt, ctx->error_ctor, mark_func);
     for(i = 0; i < rt->class_count; i++) {
         JS_MarkValue(rt, ctx->class_proto[i], mark_func);
     }
@@ -2350,6 +2418,7 @@ void JS_FreeContext(JSContext *ctx)
     for(i = 0; i < JS_NATIVE_ERROR_COUNT; i++) {
         JS_FreeValue(ctx, ctx->native_error_proto[i]);
     }
+    JS_FreeValue(ctx, ctx->error_ctor);
     for(i = 0; i < rt->class_count; i++) {
         JS_FreeValue(ctx, ctx->class_proto[i]);
     }
@@ -2372,6 +2441,19 @@ void JS_FreeContext(JSContext *ctx)
 JSRuntime *JS_GetRuntime(JSContext *ctx)
 {
     return ctx->rt;
+}
+
+void JS_SetGlobalAccessFunctions(JSContext *ctx,
+                                 const JSGlobalAccessFunctions *af)
+{
+    if (af != NULL) {
+        memcpy(&ctx->global_access_funcs_storage, af, sizeof(*af));
+        ctx->global_access_funcs = &ctx->global_access_funcs_storage;
+    } else {
+        ctx->global_access_funcs = NULL;
+        memset(&ctx->global_access_funcs_storage, 0,
+               sizeof(ctx->global_access_funcs_storage));
+    }
 }
 
 static void update_stack_limit(JSRuntime *rt)
@@ -6573,10 +6655,44 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
     }
  done:
     dbuf_putc(&dbuf, '\0');
-    if (dbuf_error(&dbuf))
+    if (dbuf_error(&dbuf)) {
         str = JS_NULL;
-    else
+    } else {
+        JSRuntime *rt = ctx->rt;
+
         str = JS_NewString(ctx, (char *)dbuf.buf);
+
+        if (!rt->in_prepare_stack_trace && !JS_IsNull(ctx->error_ctor)) {
+            JSValue saved_exception, prepare;
+
+            rt->in_prepare_stack_trace = TRUE;
+
+            saved_exception = rt->current_exception;
+            rt->current_exception = JS_NULL;
+
+            prepare = JS_GetProperty(ctx, ctx->error_ctor,
+                                     JS_ATOM_prepareStackTrace);
+            if (!JS_IsUndefined(prepare)) {
+                JSValueConst args[] = {
+                    error_obj,
+                    str,
+                };
+                JSValue s;
+
+                s = JS_Call(ctx, prepare, JS_UNDEFINED, countof(args), args);
+                if (!JS_IsException(s)) {
+                    JS_FreeValue(ctx, str);
+                    str = s;
+                }
+            }
+            JS_FreeValue(ctx, prepare);
+
+            JS_FreeValue(ctx, rt->current_exception);
+            rt->current_exception = saved_exception;
+
+            rt->in_prepare_stack_trace = FALSE;
+        }
+    }
     dbuf_free(&dbuf);
     JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_stack, str,
                            JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
@@ -6797,7 +6913,7 @@ static JSValue JS_ThrowReferenceErrorUninitialized2(JSContext *ctx,
     return JS_ThrowReferenceErrorUninitialized(ctx, atom);
 }
 
-static JSValue JS_ThrowTypeErrorInvalidClass(JSContext *ctx, int class_id)
+JSValue JS_ThrowTypeErrorInvalidClass(JSContext *ctx, JSClassID class_id)
 {
     JSRuntime *rt = ctx->rt;
     JSAtom name;
@@ -7455,11 +7571,16 @@ static int num_keys_cmp(const void *p1, const void *p2, void *opaque)
     JSAtom atom1 = ((const JSPropertyEnum *)p1)->atom;
     JSAtom atom2 = ((const JSPropertyEnum *)p2)->atom;
     uint32_t v1, v2;
+#ifndef NDEBUG
     BOOL atom1_is_integer, atom2_is_integer;
 
     atom1_is_integer = JS_AtomIsArrayIndex(ctx, &v1, atom1);
     atom2_is_integer = JS_AtomIsArrayIndex(ctx, &v2, atom2);
     assert(atom1_is_integer && atom2_is_integer);
+#else
+    JS_AtomIsArrayIndex(ctx, &v1, atom1);
+    JS_AtomIsArrayIndex(ctx, &v2, atom2);
+#endif
     if (v1 < v2)
         return -1;
     else if (v1 == v2)
@@ -7680,6 +7801,21 @@ int JS_GetOwnPropertyNames(JSContext *ctx, JSPropertyEnum **ptab,
     }
     return JS_GetOwnPropertyNamesInternal(ctx, ptab, plen,
                                           JS_VALUE_GET_OBJ(obj), flags);
+}
+
+int JS_GetOwnPropertyCount(JSContext *ctx, JSValueConst obj)
+{
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT) {
+        JS_ThrowTypeErrorNotAnObject(ctx);
+        return -1;
+    }
+    return JS_GetOwnPropertyCountUnchecked(obj);
+}
+
+int JS_GetOwnPropertyCountUnchecked(JSValueConst obj)
+{
+    JSShape *sh = JS_VALUE_GET_OBJ(obj)->shape;
+    return sh->prop_count - sh->deleted_prop_count;
 }
 
 /* Return -1 if exception,
@@ -9588,6 +9724,8 @@ static JSValue JS_GetGlobalVar(JSContext *ctx, JSAtom prop,
     JSObject *p;
     JSShapeProperty *prs;
     JSProperty *pr;
+    JSValue res;
+    JSGlobalAccessFunctions *af;
 
     /* no exotic behavior is possible in global_var_obj */
     p = JS_VALUE_GET_OBJ(ctx->global_var_obj);
@@ -9598,8 +9736,30 @@ static JSValue JS_GetGlobalVar(JSContext *ctx, JSAtom prop,
             return JS_ThrowReferenceErrorUninitialized(ctx, prs->atom);
         return JS_DupValue(ctx, pr->u.value);
     }
-    return JS_GetPropertyInternal(ctx, ctx->global_obj, prop,
+    res = JS_GetPropertyInternal(ctx, ctx->global_obj, prop,
                                  ctx->global_obj, throw_ref_error);
+
+    if (unlikely((af = ctx->global_access_funcs) != NULL)) {
+        JSRuntime *rt = ctx->rt;
+
+        if (JS_IsException(res) || (!throw_ref_error && JS_IsUndefined(res))) {
+            JSValue saved_exception, replacement_res;
+
+            saved_exception = rt->current_exception;
+            rt->current_exception = JS_NULL;
+
+            replacement_res = af->get(ctx, prop, af->opaque);
+            if (!JS_IsUndefined(replacement_res) && !JS_IsException(replacement_res)) {
+                res = replacement_res;
+                JS_FreeValue(ctx, saved_exception);
+            } else {
+                JS_FreeValue(ctx, rt->current_exception);
+                rt->current_exception = saved_exception;
+            }
+        }
+    }
+
+    return res;
 }
 
 /* construct a reference to a global variable */
@@ -9847,6 +10007,18 @@ void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id)
         JS_ThrowTypeErrorInvalidClass(ctx, class_id);
     }
     return p;
+}
+
+void *JS_GetAnyOpaque(JSValueConst obj, JSClassID *class_id)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT) {
+        *class_id = 0;
+        return NULL;
+    }
+    p = JS_VALUE_GET_OBJ(obj);
+    *class_id = p->class_id;
+    return p->u.opaque;
 }
 
 #define HINT_STRING  0
@@ -10272,7 +10444,11 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
             } else
 #endif
             {
+#ifdef _MSC_VER
+                double d = INFINITY;
+#else
                 double d = 1.0 / 0.0;
+#endif
                 if (is_neg)
                     d = -d;
                 val = JS_NewFloat64(ctx, d);
@@ -12368,8 +12544,10 @@ static JSValue JS_CompactBigInt1(JSContext *ctx, JSValue val,
         JS_FreeValue(ctx, val);
         return JS_NewInt64(ctx, v);
     } else if (a->expn == BF_EXP_ZERO && a->sign) {
+#ifndef NDEBUG
         JSBigFloat *p = JS_VALUE_GET_PTR(val);
         assert(p->header.ref_count == 1);
+#endif
         a->sign = 0;
     }
     return val;
@@ -24275,6 +24453,7 @@ static int js_parse_destructuring_element(JSParseState *s, int tok, int is_arg,
                         goto var_error;
                     opcode = OP_scope_get_var;
                     scope = s->cur_func->scope_level;
+                    label_lvalue = -1;
                 } else {
                     if (js_parse_left_hand_side_expr(s))
                         return -1;
@@ -33819,11 +33998,12 @@ JSValue JS_EvalThis(JSContext *ctx, JSValueConst this_obj,
                     const char *input, size_t input_len,
                     const char *filename, int eval_flags)
 {
-    int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
     JSValue ret;
-
+#ifndef NDEBUG
+    int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
     assert(eval_type == JS_EVAL_TYPE_GLOBAL ||
            eval_type == JS_EVAL_TYPE_MODULE);
+#endif
     ret = JS_EvalInternal(ctx, this_obj, input, input_len, filename,
                           eval_flags, -1);
     return ret;
@@ -41898,7 +42078,7 @@ static JSValue js_math_min_max(JSContext *ctx, JSValueConst this_val,
     uint32_t tag;
 
     if (unlikely(argc == 0)) {
-        return __JS_NewFloat64(ctx, is_max ? -1.0 / 0.0 : 1.0 / 0.0);
+        return __JS_NewFloat64(ctx, is_max ? -INFINITY : INFINITY);
     }
 
     tag = JS_VALUE_GET_TAG(argv[0]);
@@ -45936,13 +46116,17 @@ static void map_decref_record(JSRuntime *rt, JSMapRecord *mr)
 static void reset_weak_ref(JSRuntime *rt, JSObject *p)
 {
     JSMapRecord *mr, *mr_next;
+#ifndef NDEBUG
     JSMapState *s;
+#endif
     
     /* first pass to remove the records from the WeakMap/WeakSet
        lists */
     for(mr = p->first_weak_ref; mr != NULL; mr = mr->next_weak_ref) {
+#ifndef NDEBUG
         s = mr->map;
         assert(s->is_weak);
+#endif
         assert(!mr->empty); /* no iterator on WeakMap/WeakSet */
         list_del(&mr->hash_link);
         list_del(&mr->link);
@@ -51094,9 +51278,9 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)
                               ctx->function_proto);
 
     /* Error */
-    obj1 = JS_NewCFunctionMagic(ctx, js_error_constructor,
-                                "Error", 1, JS_CFUNC_constructor_or_func_magic, -1);
-    JS_NewGlobalCConstructor2(ctx, obj1,
+    ctx->error_ctor = JS_NewCFunctionMagic(ctx, js_error_constructor,
+                                           "Error", 1, JS_CFUNC_constructor_or_func_magic, -1);
+    JS_NewGlobalCConstructor2(ctx, JS_DupValue(ctx, ctx->error_ctor),
                               "Error", ctx->class_proto[JS_CLASS_ERROR]);
 
     for(i = 0; i < JS_NATIVE_ERROR_COUNT; i++) {
@@ -51105,7 +51289,8 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)
         n_args = 1 + (i == JS_AGGREGATE_ERROR);
         func_obj = JS_NewCFunction3(ctx, (JSCFunction *)js_error_constructor,
                                     native_error_name[i], n_args,
-                                    JS_CFUNC_constructor_or_func_magic, i, obj1);
+                                    JS_CFUNC_constructor_or_func_magic, i,
+                                    ctx->error_ctor);
         JS_NewGlobalCConstructor2(ctx, func_obj, native_error_name[i],
                                   ctx->native_error_proto[i]);
     }
