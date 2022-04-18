@@ -34824,9 +34824,38 @@ js_object_hasOwnProperty(JSContext* ctx, JSValueConst this_val, int argc, JSValu
     return JS_NewBool(ctx, ret);
 }
 
-static JSValue
-js_object_valueOf(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv) {
-  return JS_ToObject(ctx, this_val);
+static JSValue 
+js_object_hasOwn(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    JSValue obj;
+    JSAtom atom;
+    JSObject *p;
+    BOOL ret;
+
+    obj = JS_ToObject(ctx, argv[0]);
+    if (JS_IsException(obj))
+        return obj;
+    atom = JS_ValueToAtom(ctx, argv[1]);
+    if (unlikely(atom == JS_ATOM_NULL)) {
+        JS_FreeValue(ctx, obj);
+        return JS_EXCEPTION;
+    }
+    p = JS_VALUE_GET_OBJ(obj);
+    ret = JS_GetOwnPropertyInternal(ctx, NULL, p, atom);
+    JS_FreeAtom(ctx, atom);
+    JS_FreeValue(ctx, obj);
+    if (ret < 0)
+        return JS_EXCEPTION;
+    else
+        return JS_NewBool(ctx, ret);
+}
+
+static JSValue 
+js_object_valueOf(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    return JS_ToObject(ctx, this_val);
 }
 
 static JSValue
@@ -35375,6 +35404,7 @@ static const JSCFunctionListEntry js_object_funcs[] = {
     // JS_CFUNC_DEF("__getObjectData", 1, js_object___getObjectData ),
     // JS_CFUNC_DEF("__setObjectData", 2, js_object___setObjectData ),
     JS_CFUNC_DEF("fromEntries", 1, js_object_fromEntries),
+    JS_CFUNC_DEF("hasOwn", 2, js_object_hasOwn ),
 };
 
 static const JSCFunctionListEntry js_object_proto_funcs[] = {
@@ -35853,35 +35883,70 @@ js_aggregate_error_constructor(JSContext* ctx, JSValueConst errors) {
 
 static int
 JS_CopySubArray(JSContext* ctx, JSValueConst obj, int64_t to_pos, int64_t from_pos, int64_t count, int dir) {
-  int64_t i, from, to;
-  JSValue val;
-  int fromPresent;
+    JSObject *p;
+    int64_t i, from, to, len;
+    JSValue val;
+    int fromPresent;
 
-  /* XXX: should special case fast arrays */
-  for(i = 0; i < count; i++) {
-    if(dir < 0) {
-      from = from_pos + count - i - 1;
-      to = to_pos + count - i - 1;
-    } else {
-      from = from_pos + i;
-      to = to_pos + i;
+    p = NULL;
+    if (JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT) {
+        p = JS_VALUE_GET_OBJ(obj);
+        if (p->class_id != JS_CLASS_ARRAY || !p->fast_array) {
+            p = NULL;
+        }
     }
-    fromPresent = JS_TryGetPropertyInt64(ctx, obj, from, &val);
-    if(fromPresent < 0)
-      goto exception;
 
-    if(fromPresent) {
-      if(JS_SetPropertyInt64(ctx, obj, to, val) < 0)
-        goto exception;
-    } else {
-      if(JS_DeletePropertyInt64(ctx, obj, to, JS_PROP_THROW) < 0)
-        goto exception;
+    for (i = 0; i < count; ) {
+        if (dir < 0) {
+            from = from_pos + count - i - 1;
+            to = to_pos + count - i - 1;
+        } else {
+            from = from_pos + i;
+            to = to_pos + i;
+        }
+        if (p && p->fast_array &&
+            from >= 0 && from < (len = p->u.array.count)  &&
+            to >= 0 && to < len) {
+            int64_t l, j;
+            /* Fast path for fast arrays. Since we don't look at the
+               prototype chain, we can optimize only the cases where
+               all the elements are present in the array. */
+            l = count - i;
+            if (dir < 0) {
+                l = min_int64(l, from + 1);
+                l = min_int64(l, to + 1);
+                for(j = 0; j < l; j++) {
+                    set_value(ctx, &p->u.array.u.values[to - j],
+                              JS_DupValue(ctx, p->u.array.u.values[from - j]));
+                }
+            } else {
+                l = min_int64(l, len - from);
+                l = min_int64(l, len - to);
+                for(j = 0; j < l; j++) {
+                    set_value(ctx, &p->u.array.u.values[to + j],
+                              JS_DupValue(ctx, p->u.array.u.values[from + j]));
+                }
+            }
+            i += l;
+        } else {
+            fromPresent = JS_TryGetPropertyInt64(ctx, obj, from, &val);
+            if (fromPresent < 0)
+                goto exception;
+            
+            if (fromPresent) {
+                if (JS_SetPropertyInt64(ctx, obj, to, val) < 0)
+                    goto exception;
+            } else {
+                if (JS_DeletePropertyInt64(ctx, obj, to, JS_PROP_THROW) < 0)
+                    goto exception;
+            }
+            i++;
+        }
     }
-  }
-  return 0;
+    return 0;
 
-exception:
-  return -1;
+ exception:
+    return -1;
 }
 
 static JSValue
@@ -36792,70 +36857,38 @@ exception:
 
 static JSValue
 js_array_push(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv, int unshift) {
-  JSValue obj;
-  int i;
-  int64_t len, from, newLen;
+    JSValue obj;
+    int i;
+    int64_t len, from, newLen;
 
-  obj = JS_ToObject(ctx, this_val);
-
-  if(JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT) {
-    JSObject* p = JS_VALUE_GET_OBJ(obj);
-    if(p->class_id != JS_CLASS_ARRAY || !p->fast_array || !p->extensible)
-      goto generic_case;
-    /* length must be writable */
-    if(unlikely(!(get_shape_prop(p->shape)->flags & JS_PROP_WRITABLE)))
-      goto generic_case;
-    /* check the length */
-    if(unlikely(JS_VALUE_GET_TAG(p->prop[0].u.value) != JS_TAG_INT))
-      goto generic_case;
-    len = JS_VALUE_GET_INT(p->prop[0].u.value);
-    /* we don't support holes */
-    if(unlikely(len != p->u.array.count))
-      goto generic_case;
-    newLen = len + argc;
-    if(unlikely(newLen > INT32_MAX))
-      goto generic_case;
-    if(newLen > p->u.array.u1.size) {
-      if(expand_fast_array(ctx, p, newLen))
+    obj = JS_ToObject(ctx, this_val);
+    if (js_get_length64(ctx, &len, obj))
         goto exception;
-    }
-    if(unshift && argc > 0) {
-      memmove(p->u.array.u.values + argc, p->u.array.u.values, len * sizeof(p->u.array.u.values[0]));
-      from = 0;
-    } else {
-      from = len;
-    }
-    for(i = 0; i < argc; i++) { p->u.array.u.values[from + i] = JS_DupValue(ctx, argv[i]); }
-    p->u.array.count = newLen;
-    p->prop[0].u.value = JS_NewInt32(ctx, newLen);
-  } else {
-  generic_case:
-    if(js_get_length64(ctx, &len, obj))
-      goto exception;
     newLen = len + argc;
-    if(newLen > MAX_SAFE_INTEGER) {
-      JS_ThrowTypeError(ctx, "Array loo long");
-      goto exception;
+    if (newLen > MAX_SAFE_INTEGER) {
+        JS_ThrowTypeError(ctx, "Array loo long");
+        goto exception;
     }
     from = len;
-    if(unshift && argc > 0) {
-      if(JS_CopySubArray(ctx, obj, argc, 0, len, -1))
-        goto exception;
-      from = 0;
+    if (unshift && argc > 0) {
+        if (JS_CopySubArray(ctx, obj, argc, 0, len, -1))
+            goto exception;
+        from = 0;
     }
     for(i = 0; i < argc; i++) {
-      if(JS_SetPropertyInt64(ctx, obj, from + i, JS_DupValue(ctx, argv[i])) < 0)
-        goto exception;
+        if (JS_SetPropertyInt64(ctx, obj, from + i,
+                                JS_DupValue(ctx, argv[i])) < 0)
+            goto exception;
     }
-    if(JS_SetProperty(ctx, obj, JS_ATOM_length, JS_NewInt64(ctx, newLen)) < 0)
-      goto exception;
-  }
-  JS_FreeValue(ctx, obj);
-  return JS_NewInt64(ctx, newLen);
+    if (JS_SetProperty(ctx, obj, JS_ATOM_length, JS_NewInt64(ctx, newLen)) < 0)
+        goto exception;
 
-exception:
-  JS_FreeValue(ctx, obj);
-  return JS_EXCEPTION;
+    JS_FreeValue(ctx, obj);
+    return JS_NewInt64(ctx, newLen);
+
+ exception:
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
 }
 
 static JSValue
