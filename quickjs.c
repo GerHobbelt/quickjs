@@ -1,8 +1,8 @@
 /*
  * QuickJS Javascript Engine
  *
- * Copyright (c) 2017-2020 Fabrice Bellard
- * Copyright (c) 2017-2020 Charlie Gordon
+ * Copyright (c) 2017-2021 Fabrice Bellard
+ * Copyright (c) 2017-2021 Charlie Gordon
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -1302,7 +1302,7 @@ static JSValue js_instantiate_prototype(JSContext *ctx, JSObject *p, JSAtom atom
 static JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
                                  void *opaque);
 static JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p,
-                                          JSAtom atom, void *opaque);
+                                               JSAtom atom, void *opaque);
 void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
 
 static const JSClassExoticMethods js_arguments_exotic_methods;
@@ -7740,8 +7740,8 @@ static int __exception JS_GetOwnPropertyNamesInternal(JSContext *ctx,
                     JS_FreeAtom(ctx, atom);
                 }
             }
-        js_free(ctx, tab_exotic);
-    }
+            js_free(ctx, tab_exotic);
+        }
     }
 
     assert(num_index == num_keys_count);
@@ -8875,8 +8875,8 @@ static int JS_SetPropertyValue(JSContext *ctx, JSValueConst this_obj,
                 return -1;
             if (unlikely(idx >= (uint32_t)p->u.array.count)) {
             ta_out_of_bound:
-                    return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound numeric index");
-                }
+                return JS_ThrowTypeErrorOrFalse(ctx, flags, "out-of-bound numeric index");
+            }
             p->u.array.u.double_ptr[idx] = d;
             break;
         default:
@@ -9261,10 +9261,10 @@ int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
                     if ((prs->flags & (JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE)) == 0 &&
                         (flags & JS_PROP_HAS_VALUE)) {
                         if (!js_same_value(ctx, val, pr->u.value)) {
-                        goto not_configurable;
-                    } else {
+                            goto not_configurable;
+                        } else {
                             return TRUE;
-                    }
+                        }
                     }
                 }
                 if ((prs->flags & JS_PROP_TMASK) == JS_PROP_VARREF) {
@@ -11201,16 +11201,16 @@ static __exception int JS_ToArrayLengthFree(JSContext *ctx, uint32_t *plen,
                     return -1;
                 /* cannot recurse because val is a number */
                 if (JS_ToArrayLengthFree(ctx, &len, val, TRUE))
-                return -1;
-        } else {
+                    return -1;
+            } else {
                 /* legacy behavior: must do the conversion twice and compare */
                 if (JS_ToUint32(ctx, &len, val)) {
                     JS_FreeValue(ctx, val);
                     return -1;
                 }
-            val = JS_ToNumberFree(ctx, val);
-            if (JS_IsException(val))
-                return -1;
+                val = JS_ToNumberFree(ctx, val);
+                if (JS_IsException(val))
+                    return -1;
                 /* cannot recurse because val is a number */
                 if (JS_ToArrayLengthFree(ctx, &len1, val, FALSE))
                     return -1;
@@ -15359,7 +15359,7 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
         if (js_poll_interrupts(ctx)) {
             JS_FreeValue(ctx, obj1);
             goto fail;
-    }
+        }
     }
 
     p = JS_VALUE_GET_OBJ(obj);
@@ -17754,8 +17754,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         ret = JS_CallFree(ctx, method, sp[-4],
                                           0, NULL);
                     } else {
-                    ret = JS_CallFree(ctx, method, sp[-4],
-                                      1, (JSValueConst *)(sp - 1));
+                        ret = JS_CallFree(ctx, method, sp[-4],
+                                          1, (JSValueConst *)(sp - 1));
                     }
                     if (JS_IsException(ret))
                         goto exception;
@@ -22254,7 +22254,7 @@ static JSGlobalVar *add_global_var(JSContext *ctx, JSFunctionDef *s,
     hf->is_lexical = FALSE;
     hf->is_const = FALSE;
     hf->scope_level = s->scope_level;
-        hf->var_name = JS_DupAtom(ctx, name);
+    hf->var_name = JS_DupAtom(ctx, name);
     return hf;
 }
 
@@ -22762,8 +22762,8 @@ static BOOL is_regexp_allowed(int tok)
     }
 }
 
-#define SKIP_HAS_SEMI      (1 << 0)
-#define SKIP_HAS_ELLIPSIS  (1 << 1)
+#define SKIP_HAS_SEMI       (1 << 0)
+#define SKIP_HAS_ELLIPSIS   (1 << 1)
 #define SKIP_HAS_ASSIGNMENT (1 << 2)
 
 /* XXX: improve speed with early bailout */
@@ -23050,13 +23050,13 @@ static __exception int js_parse_object_literal(JSParseState *s)
 }
 
 /* allow the 'in' binary operator */
-#define PF_IN_ACCEPTED  (1 << 0)
+#define PF_IN_ACCEPTED   (1 << 0)
 /* allow function calls parsing in js_parse_postfix_expr() */
-#define PF_POSTFIX_CALL (1 << 1)
+#define PF_POSTFIX_CALL  (1 << 1)
 /* allow arrow functions parsing in js_parse_postfix_expr() */
-#define PF_ARROW_FUNC   (1 << 2)
+#define PF_ARROW_FUNC    (1 << 2)
 /* allow the exponentiation operator in js_parse_unary() */
-#define PF_POW_ALLOWED  (1 << 3)
+#define PF_POW_ALLOWED   (1 << 3)
 /* forbid the exponentiation operator in js_parse_unary() */
 #define PF_POW_FORBIDDEN (1 << 4)
 
@@ -24852,8 +24852,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
                         return -1;
                 } else if ((parse_flags & PF_ARROW_FUNC) &&
                            ((s->token.val == '(' &&
-                            js_parse_skip_parens_token(s, NULL, TRUE) == TOK_ARROW) ||
-                           (s->token.val == TOK_IDENT && !s->token.u.ident.is_reserved &&
+                             js_parse_skip_parens_token(s, NULL, TRUE) == TOK_ARROW) ||
+                            (s->token.val == TOK_IDENT && !s->token.u.ident.is_reserved &&
                              peek_token(s, TRUE) == TOK_ARROW))) {
                     if (js_parse_function_decl(s, JS_PARSE_FUNC_ARROW,
                                                JS_FUNC_ASYNC, JS_ATOM_NULL,
@@ -25832,27 +25832,27 @@ static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
             int label_return1, label_yield, label_throw, label_throw1;
             int label_throw2;
 
-                label_loop = new_label(s);
-                label_yield = new_label(s);
+            label_loop = new_label(s);
+            label_yield = new_label(s);
 
             emit_op(s, is_async ? OP_for_await_of_start : OP_for_of_start);
 
-                /* remove the catch offset (XXX: could avoid pushing back
-                   undefined) */
-                emit_op(s, OP_drop);
-                emit_op(s, OP_undefined);
-
-                emit_op(s, OP_undefined); /* initial value */
-
-                emit_label(s, label_loop);
+            /* remove the catch offset (XXX: could avoid pushing back
+               undefined) */
+            emit_op(s, OP_drop);
+            emit_op(s, OP_undefined);
+            
+            emit_op(s, OP_undefined); /* initial value */
+            
+            emit_label(s, label_loop);
             emit_op(s, OP_iterator_next);
             if (is_async)
                 emit_op(s, OP_await);
             emit_op(s, OP_iterator_check_object);
             emit_op(s, OP_get_field2);
             emit_atom(s, JS_ATOM_done);
-                label_next = emit_goto(s, OP_if_true, -1); /* end of loop */
-                emit_label(s, label_yield);
+            label_next = emit_goto(s, OP_if_true, -1); /* end of loop */
+            emit_label(s, label_yield);
             if (is_async) {
                 /* OP_async_yield_star takes the value as parameter */
                 emit_op(s, OP_get_field);
@@ -25863,77 +25863,77 @@ static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
                 /* OP_yield_star takes (value, done) as parameter */
                 emit_op(s, OP_yield_star);
             }
-                emit_op(s, OP_dup);
-                label_return = emit_goto(s, OP_if_true, -1);
-                emit_op(s, OP_drop);
-                emit_goto(s, OP_goto, label_loop);
-
-                emit_label(s, label_return);
-                emit_op(s, OP_push_i32);
-                emit_u32(s, 2);
-                emit_op(s, OP_strict_eq);
-                label_throw = emit_goto(s, OP_if_true, -1);
-
-                /* return handling */
+            emit_op(s, OP_dup);
+            label_return = emit_goto(s, OP_if_true, -1);
+            emit_op(s, OP_drop);
+            emit_goto(s, OP_goto, label_loop);
+            
+            emit_label(s, label_return);
+            emit_op(s, OP_push_i32);
+            emit_u32(s, 2);
+            emit_op(s, OP_strict_eq);
+            label_throw = emit_goto(s, OP_if_true, -1);
+            
+            /* return handling */
             if (is_async)
                 emit_op(s, OP_await);
             emit_op(s, OP_iterator_call);
-                emit_u8(s, 0);
-                label_return1 = emit_goto(s, OP_if_true, -1);
+            emit_u8(s, 0);
+            label_return1 = emit_goto(s, OP_if_true, -1);
             if (is_async)
                 emit_op(s, OP_await);
             emit_op(s, OP_iterator_check_object);
             emit_op(s, OP_get_field2);
             emit_atom(s, JS_ATOM_done);
-                emit_goto(s, OP_if_false, label_yield);
+            emit_goto(s, OP_if_false, label_yield);
 
             emit_op(s, OP_get_field);
             emit_atom(s, JS_ATOM_value);
-
-                emit_label(s, label_return1);
-                emit_op(s, OP_nip);
-                emit_op(s, OP_nip);
-                emit_op(s, OP_nip);
-                emit_return(s, TRUE);
-
-                /* throw handling */
-                emit_label(s, label_throw);
+            
+            emit_label(s, label_return1);
+            emit_op(s, OP_nip);
+            emit_op(s, OP_nip);
+            emit_op(s, OP_nip);
+            emit_return(s, TRUE);
+            
+            /* throw handling */
+            emit_label(s, label_throw);
             emit_op(s, OP_iterator_call);
-                emit_u8(s, 1);
-                label_throw1 = emit_goto(s, OP_if_true, -1);
+            emit_u8(s, 1);
+            label_throw1 = emit_goto(s, OP_if_true, -1);
             if (is_async)
                 emit_op(s, OP_await);
             emit_op(s, OP_iterator_check_object);
             emit_op(s, OP_get_field2);
             emit_atom(s, JS_ATOM_done);
-                emit_goto(s, OP_if_false, label_yield);
-                emit_goto(s, OP_goto, label_next);
-                /* close the iterator and throw a type error exception */
-                emit_label(s, label_throw1);
+            emit_goto(s, OP_if_false, label_yield);
+            emit_goto(s, OP_goto, label_next);
+            /* close the iterator and throw a type error exception */
+            emit_label(s, label_throw1);
             emit_op(s, OP_iterator_call);
             emit_u8(s, 2);
-                label_throw2 = emit_goto(s, OP_if_true, -1);
+            label_throw2 = emit_goto(s, OP_if_true, -1);
             if (is_async)
                 emit_op(s, OP_await);
-                emit_label(s, label_throw2);
+            emit_label(s, label_throw2);
 
             emit_op(s, OP_throw_error);
             emit_atom(s, JS_ATOM_NULL);
             emit_u8(s, JS_THROW_ERROR_ITERATOR_THROW);
-
-                emit_label(s, label_next);
+            
+            emit_label(s, label_next);
             emit_op(s, OP_get_field);
             emit_atom(s, JS_ATOM_value);
-                emit_op(s, OP_nip); /* keep the value associated with
-                                       done = true */
-                emit_op(s, OP_nip);
-                emit_op(s, OP_nip);
-            } else {
+            emit_op(s, OP_nip); /* keep the value associated with
+                                   done = true */
+            emit_op(s, OP_nip);
+            emit_op(s, OP_nip);
+        } else {
             int label_next;
 
             if (is_async)
                 emit_op(s, OP_await);
-                emit_op(s, OP_yield);
+            emit_op(s, OP_yield);
             label_next = emit_goto(s, OP_if_false, -1);
             emit_return(s, TRUE);
             emit_label(s, label_next);
@@ -28063,7 +28063,7 @@ static int exported_names_cmp(const void *p1, const void *p2, void *opaque)
 static JSValue js_get_module_ns(JSContext *ctx, JSModuleDef *m);
 
 static JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
-                                 void *opaque)
+                                     void *opaque)
 {
     JSModuleDef *m = opaque;
     return js_get_module_ns(ctx, m);
@@ -30018,7 +30018,7 @@ static int resolve_scope_var(JSContext *ctx, JSFunctionDef *s,
         /* argument scope: variables are not visible but pseudo
            variables are visible */
         if (!is_arg_scope) {
-        var_idx = find_var(ctx, s, var_name);
+            var_idx = find_var(ctx, s, var_name);
         }
 
         if (var_idx < 0 && is_pseudo_var)
@@ -30176,9 +30176,9 @@ static int resolve_scope_var(JSContext *ctx, JSFunctionDef *s,
             break;
 
         if (!is_arg_scope) {
-        var_idx = find_var(ctx, fd, var_name);
+            var_idx = find_var(ctx, fd, var_name);
             if (var_idx >= 0)
-            break;
+                break;
         }
         if (is_pseudo_var) {
             var_idx = resolve_pseudo_var(ctx, fd, var_name);
@@ -30696,26 +30696,26 @@ static void add_eval_variables(JSContext *ctx, JSFunctionDef *s)
         }
         is_arg_scope = (scope_idx == ARG_SCOPE_END);
         if (!is_arg_scope) {
-        /* add unscoped variables */
-        for(i = 0; i < fd->arg_count; i++) {
-            vd = &fd->args[i];
-            if (vd->var_name != JS_ATOM_NULL) {
-                get_closure_var(ctx, s, fd,
-                                TRUE, i, vd->var_name, FALSE, FALSE,
-                                JS_VAR_NORMAL);
+            /* add unscoped variables */
+            for(i = 0; i < fd->arg_count; i++) {
+                vd = &fd->args[i];
+                if (vd->var_name != JS_ATOM_NULL) {
+                    get_closure_var(ctx, s, fd,
+                                    TRUE, i, vd->var_name, FALSE, FALSE,
+                                    JS_VAR_NORMAL);
+                }
             }
-        }
-        for(i = 0; i < fd->var_count; i++) {
-            vd = &fd->vars[i];
-            /* do not close top level last result */
-            if (vd->scope_level == 0 &&
-                vd->var_name != JS_ATOM__ret_ &&
-                vd->var_name != JS_ATOM_NULL) {
-                get_closure_var(ctx, s, fd,
-                                FALSE, i, vd->var_name, FALSE, FALSE,
-                                JS_VAR_NORMAL);
+            for(i = 0; i < fd->var_count; i++) {
+                vd = &fd->vars[i];
+                /* do not close top level last result */
+                if (vd->scope_level == 0 &&
+                    vd->var_name != JS_ATOM__ret_ &&
+                    vd->var_name != JS_ATOM_NULL) {
+                    get_closure_var(ctx, s, fd,
+                                    FALSE, i, vd->var_name, FALSE, FALSE,
+                                    JS_VAR_NORMAL);
+                }
             }
-        }
         } else {
             for(i = 0; i < fd->var_count; i++) {
                 vd = &fd->vars[i];
@@ -30783,23 +30783,23 @@ static __exception int add_closure_variables(JSContext *ctx, JSFunctionDef *s,
     }
     is_arg_scope = (i == ARG_SCOPE_END);
     if (!is_arg_scope) {
-    /* Add argument variables */
-    for(i = 0; i < b->arg_count; i++) {
-        JSClosureVar *cv = &s->closure_var[s->closure_var_count++];
-        vd = &b->vardefs[i];
-        cv->is_local = TRUE;
-        cv->is_arg = TRUE;
-        cv->is_const = FALSE;
-        cv->is_lexical = FALSE;
-        cv->var_kind = JS_VAR_NORMAL;
-        cv->var_idx = i;
-        cv->var_name = JS_DupAtom(ctx, vd->var_name);
-    }
-    /* Add local non lexical variables */
-    for(i = 0; i < b->var_count; i++) {
-        vd = &b->vardefs[b->arg_count + i];
-        if (vd->scope_level == 0 && vd->var_name != JS_ATOM__ret_) {
+        /* Add argument variables */
+        for(i = 0; i < b->arg_count; i++) {
             JSClosureVar *cv = &s->closure_var[s->closure_var_count++];
+            vd = &b->vardefs[i];
+            cv->is_local = TRUE;
+            cv->is_arg = TRUE;
+            cv->is_const = FALSE;
+            cv->is_lexical = FALSE;
+            cv->var_kind = JS_VAR_NORMAL;
+            cv->var_idx = i;
+            cv->var_name = JS_DupAtom(ctx, vd->var_name);
+        }
+        /* Add local non lexical variables */
+        for(i = 0; i < b->var_count; i++) {
+            vd = &b->vardefs[b->arg_count + i];
+            if (vd->scope_level == 0 && vd->var_name != JS_ATOM__ret_) {
+                JSClosureVar *cv = &s->closure_var[s->closure_var_count++];
                 set_closure_from_var(ctx, cv, vd, i);
             }
         }
@@ -31011,53 +31011,53 @@ static void instantiate_hoisted_definitions(JSContext *ctx, JSFunctionDef *s, Dy
         JSGlobalVar *hf = &s->global_vars[i];
         int has_closure = 0;
         BOOL force_init = hf->force_init;
-            /* we are in an eval, so the closure contains all the
-               enclosing variables */
-            /* If the outer function has a variable environment,
-               create a property for the variable there */
-            for(idx = 0; idx < s->closure_var_count; idx++) {
-                JSClosureVar *cv = &s->closure_var[idx];
-                if (cv->var_name == hf->var_name) {
-                    has_closure = 2;
-                    force_init = FALSE;
-                    break;
-                }
+        /* we are in an eval, so the closure contains all the
+           enclosing variables */
+        /* If the outer function has a variable environment,
+           create a property for the variable there */
+        for(idx = 0; idx < s->closure_var_count; idx++) {
+            JSClosureVar *cv = &s->closure_var[idx];
+            if (cv->var_name == hf->var_name) {
+                has_closure = 2;
+                force_init = FALSE;
+                break;
+            }
             if (cv->var_name == JS_ATOM__var_ ||
                 cv->var_name == JS_ATOM__arg_var_) {
-                    dbuf_putc(bc, OP_get_var_ref);
-                    dbuf_put_u16(bc, idx);
-                    has_closure = 1;
-                    force_init = TRUE;
-                    break;
-                }
+                dbuf_putc(bc, OP_get_var_ref);
+                dbuf_put_u16(bc, idx);
+                has_closure = 1;
+                force_init = TRUE;
+                break;
             }
-            if (!has_closure) {
-                int flags;
-
-                flags = 0;
-                if (s->eval_type != JS_EVAL_TYPE_GLOBAL)
-                    flags |= JS_PROP_CONFIGURABLE;
-                if (hf->cpool_idx >= 0 && !hf->is_lexical) {
-                    /* global function definitions need a specific handling */
-                    dbuf_putc(bc, OP_fclosure);
-                    dbuf_put_u32(bc, hf->cpool_idx);
-
-                    dbuf_putc(bc, OP_define_func);
-                    dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
-                    dbuf_putc(bc, flags);
-
+        }
+        if (!has_closure) {
+            int flags;
+            
+            flags = 0;
+            if (s->eval_type != JS_EVAL_TYPE_GLOBAL)
+                flags |= JS_PROP_CONFIGURABLE;
+            if (hf->cpool_idx >= 0 && !hf->is_lexical) {
+                /* global function definitions need a specific handling */
+                dbuf_putc(bc, OP_fclosure);
+                dbuf_put_u32(bc, hf->cpool_idx);
+                
+                dbuf_putc(bc, OP_define_func);
+                dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
+                dbuf_putc(bc, flags);
+                
                 goto done_global_var;
-                } else {
-                    if (hf->is_lexical) {
-                        flags |= DEFINE_GLOBAL_LEX_VAR;
-                        if (!hf->is_const)
-                            flags |= JS_PROP_WRITABLE;
-                    }
-                    dbuf_putc(bc, OP_define_var);
-                    dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
-                    dbuf_putc(bc, flags);
+            } else {
+                if (hf->is_lexical) {
+                    flags |= DEFINE_GLOBAL_LEX_VAR;
+                    if (!hf->is_const)
+                        flags |= JS_PROP_WRITABLE;
                 }
+                dbuf_putc(bc, OP_define_var);
+                dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
+                dbuf_putc(bc, flags);
             }
+        }
         if (hf->cpool_idx >= 0 || force_init) {
             if (hf->cpool_idx >= 0) {
                 dbuf_putc(bc, OP_fclosure);
@@ -31070,19 +31070,19 @@ static void instantiate_hoisted_definitions(JSContext *ctx, JSFunctionDef *s, Dy
             } else {
                 dbuf_putc(bc, OP_undefined);
             }
-                if (has_closure == 2) {
-                    dbuf_putc(bc, OP_put_var_ref);
-                    dbuf_put_u16(bc, idx);
-                } else if (has_closure == 1) {
-                    dbuf_putc(bc, OP_define_field);
-                    dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
-                    dbuf_putc(bc, OP_drop);
-                } else {
-                    /* XXX: Check if variable is writable and enumerable */
-                    dbuf_putc(bc, OP_put_var);
-                    dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
-                }
+            if (has_closure == 2) {
+                dbuf_putc(bc, OP_put_var_ref);
+                dbuf_put_u16(bc, idx);
+            } else if (has_closure == 1) {
+                dbuf_putc(bc, OP_define_field);
+                dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
+                dbuf_putc(bc, OP_drop);
+            } else {
+                /* XXX: Check if variable is writable and enumerable */
+                dbuf_putc(bc, OP_put_var);
+                dbuf_put_u32(bc, JS_DupAtom(ctx, hf->var_name));
             }
+        }
     done_global_var:
         JS_FreeAtom(ctx, hf->var_name);
     }
@@ -31193,40 +31193,40 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
        variables are created) */
     for(i = 0; i < s->global_var_count; i++) {
         JSGlobalVar *hf = &s->global_vars[i];
-            int flags;
-
-                /* check if global variable (XXX: simplify) */
-                for(idx = 0; idx < s->closure_var_count; idx++) {
-                    JSClosureVar *cv = &s->closure_var[idx];
-                    if (cv->var_name == hf->var_name) {
-                        if (s->eval_type == JS_EVAL_TYPE_DIRECT &&
-                            cv->is_lexical) {
-                            /* Check if a lexical variable is
-                               redefined as 'var'. XXX: Could abort
-                               compilation here, but for consistency
-                               with the other checks, we delay the
-                               error generation. */
+        int flags;
+        
+        /* check if global variable (XXX: simplify) */
+        for(idx = 0; idx < s->closure_var_count; idx++) {
+            JSClosureVar *cv = &s->closure_var[idx];
+            if (cv->var_name == hf->var_name) {
+                if (s->eval_type == JS_EVAL_TYPE_DIRECT &&
+                    cv->is_lexical) {
+                    /* Check if a lexical variable is
+                       redefined as 'var'. XXX: Could abort
+                       compilation here, but for consistency
+                       with the other checks, we delay the
+                       error generation. */
                     dbuf_putc(&bc_out, OP_throw_error);
-                            dbuf_put_u32(&bc_out, JS_DupAtom(ctx, hf->var_name));
-                            dbuf_putc(&bc_out, JS_THROW_VAR_REDECL);
-                        }
-                        goto next;
-                    }
+                    dbuf_put_u32(&bc_out, JS_DupAtom(ctx, hf->var_name));
+                    dbuf_putc(&bc_out, JS_THROW_VAR_REDECL);
+                }
+                goto next;
+            }
             if (cv->var_name == JS_ATOM__var_ ||
                 cv->var_name == JS_ATOM__arg_var_)
-                        goto next;
-                }
-
-                dbuf_putc(&bc_out, OP_check_define_var);
-                dbuf_put_u32(&bc_out, JS_DupAtom(ctx, hf->var_name));
-                flags = 0;
-                if (hf->is_lexical)
-                    flags |= DEFINE_GLOBAL_LEX_VAR;
-                if (hf->cpool_idx >= 0)
-                    flags |= DEFINE_GLOBAL_FUNC_VAR;
-                dbuf_putc(&bc_out, flags);
-        next: ;
+                goto next;
         }
+        
+        dbuf_putc(&bc_out, OP_check_define_var);
+        dbuf_put_u32(&bc_out, JS_DupAtom(ctx, hf->var_name));
+        flags = 0;
+        if (hf->is_lexical)
+            flags |= DEFINE_GLOBAL_LEX_VAR;
+        if (hf->cpool_idx >= 0)
+            flags |= DEFINE_GLOBAL_FUNC_VAR;
+        dbuf_putc(&bc_out, flags);
+    next: ;
+    }
 
     line_num = 0; /* avoid warning */
     for (pos = 0; pos < bc_len; pos = pos_next) {
@@ -31400,19 +31400,19 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                     JSVarDef *vd = &s->vars[scope_idx];
                     if (vd->scope_level == scope) {
                         if (scope_idx != s->arguments_arg_idx) {
-                        if (vd->var_kind == JS_VAR_FUNCTION_DECL ||
-                            vd->var_kind == JS_VAR_NEW_FUNCTION_DECL) {
-                            /* Initialize lexical variable upon entering scope */
-                            dbuf_putc(&bc_out, OP_fclosure);
+                            if (vd->var_kind == JS_VAR_FUNCTION_DECL ||
+                                vd->var_kind == JS_VAR_NEW_FUNCTION_DECL) {
+                                /* Initialize lexical variable upon entering scope */
+                                dbuf_putc(&bc_out, OP_fclosure);
                                 dbuf_put_u32(&bc_out, vd->func_pool_idx);
-                            dbuf_putc(&bc_out, OP_put_loc);
-                            dbuf_put_u16(&bc_out, scope_idx);
-                        } else {
-                            /* XXX: should check if variable can be used
-                               before initialization */
-                            dbuf_putc(&bc_out, OP_set_loc_uninitialized);
-                            dbuf_put_u16(&bc_out, scope_idx);
-                        }
+                                dbuf_putc(&bc_out, OP_put_loc);
+                                dbuf_put_u16(&bc_out, scope_idx);
+                            } else {
+                                /* XXX: should check if variable can be used
+                                   before initialization */
+                                dbuf_putc(&bc_out, OP_set_loc_uninitialized);
+                                dbuf_put_u16(&bc_out, scope_idx);
+                            }
                         }
                         scope_idx = vd->scope_next;
                     } else {
@@ -32642,7 +32642,7 @@ typedef struct StackSizeState {
 
 /* 'op' is only used for error indication */
 static __exception int ss_check(JSContext *ctx, StackSizeState *s,
-                                              int pos, int op, int stack_len)
+                                int pos, int op, int stack_len)
 {
     if ((unsigned)pos >= s->bc_len) {
         JS_ThrowInternalError(ctx, "bytecode buffer overflow (op=%d, pc=%d)", op, pos);
@@ -32655,16 +32655,16 @@ static __exception int ss_check(JSContext *ctx, StackSizeState *s,
             return -1;
         }
     }
-        if (s->stack_level_tab[pos] != 0xffff) {
-            /* already explored: check that the stack size is consistent */
-            if (s->stack_level_tab[pos] != stack_len) {
-                JS_ThrowInternalError(ctx, "unconsistent stack size: %d %d (pc=%d)",
-                                      s->stack_level_tab[pos], stack_len, pos);
-                return -1;
-            } else {
-                return 0;
-            }
+    if (s->stack_level_tab[pos] != 0xffff) {
+        /* already explored: check that the stack size is consistent */
+        if (s->stack_level_tab[pos] != stack_len) {
+            JS_ThrowInternalError(ctx, "unconsistent stack size: %d %d (pc=%d)",
+                                  s->stack_level_tab[pos], stack_len, pos);
+            return -1;
+        } else {
+            return 0;
         }
+    }
 
     /* mark as explored and store the stack size */
     s->stack_level_tab[pos] = stack_len;
@@ -33494,8 +33494,8 @@ static __exception int js_parse_function_decl2(JSParseState *s,
             if (next_token(s))
                 goto fail;
         } else {
-        if (js_parse_expect(s, '('))
-            goto fail;
+            if (js_parse_expect(s, '('))
+                goto fail;
         }
 
         if (fd->has_parameter_expressions) {
@@ -33576,27 +33576,27 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                         goto fail;
 
                     label = new_label(s);
-                        emit_op(s, OP_get_arg);
-                        emit_u16(s, idx);
+                    emit_op(s, OP_get_arg);
+                    emit_u16(s, idx);
                     emit_op(s, OP_dup);
-                        emit_op(s, OP_undefined);
-                        emit_op(s, OP_strict_eq);
-                        emit_goto(s, OP_if_false, label);
+                    emit_op(s, OP_undefined);
+                    emit_op(s, OP_strict_eq);
+                    emit_goto(s, OP_if_false, label);
                     emit_op(s, OP_drop);
                     if (js_parse_assign_expr(s))
-                            goto fail;
-                        set_object_name(s, name);
+                        goto fail;
+                    set_object_name(s, name);
                     emit_op(s, OP_dup);
-                        emit_op(s, OP_put_arg);
-                        emit_u16(s, idx);
-                        emit_label(s, label);
+                    emit_op(s, OP_put_arg);
+                    emit_u16(s, idx);
+                    emit_label(s, label);
                     emit_op(s, OP_scope_put_var_init);
                     emit_atom(s, name);
                     emit_u16(s, fd->scope_level);
                 } else {
                     if (!has_opt_arg) {
-                    fd->defined_arg_count++;
-                }
+                        fd->defined_arg_count++;
+                    }
                     if (fd->has_parameter_expressions) {
                         /* copy the argument to the argument scope */
                         emit_op(s, OP_get_arg);
@@ -34120,7 +34120,7 @@ static JSValue JS_EvalObject(JSContext *ctx, JSValueConst this_obj,
 
 JSValue JS_EvalThis(JSContext *ctx, JSValueConst this_obj,
                     const char *input, size_t input_len,
-                const char *filename, int eval_flags)
+                    const char *filename, int eval_flags)
 {
     int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
     JSValue ret;
@@ -34128,36 +34128,16 @@ JSValue JS_EvalThis(JSContext *ctx, JSValueConst this_obj,
     assert(eval_type == JS_EVAL_TYPE_GLOBAL ||
            eval_type == JS_EVAL_TYPE_MODULE);
     ret = JS_EvalInternal(ctx, this_obj, input, input_len, filename,
-                          eval_flags, -1,1);
+                          eval_flags, -1, 1);
     return ret;
 }
 
 JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
                 const char *filename, int eval_flags)
 {
-    int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
-    JSValue ret;
-
-    assert(eval_type == JS_EVAL_TYPE_GLOBAL ||
-           eval_type == JS_EVAL_TYPE_MODULE);
-    ret = JS_EvalInternal(ctx, ctx->global_obj, input, input_len, filename,
-                          eval_flags, -1, 1);
-    return ret;
+    return JS_EvalThis(ctx, ctx->global_obj, input, input_len, filename,
+                       eval_flags);
 }
-
-JSValue JS_Eval2(JSContext *ctx, const char *input, size_t input_len,
-  const char *filename, int eval_flags, int line_no)
-{
-  int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
-  JSValue ret;
-
-  assert(eval_type == JS_EVAL_TYPE_GLOBAL ||
-    eval_type == JS_EVAL_TYPE_MODULE);
-  ret = JS_EvalInternal(ctx, ctx->global_obj, input, input_len, filename,
-    eval_flags, -1, line_no);
-  return ret;
-}
-
 
 int JS_ResolveModule(JSContext *ctx, JSValueConst obj)
 {
@@ -36426,7 +36406,7 @@ static JSAtom find_atom(JSContext *ctx, const char *name)
 }
 
 static JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p,
-                                          JSAtom atom, void *opaque)
+                                               JSAtom atom, void *opaque)
 {
     const JSCFunctionListEntry *e = opaque;
     JSValue val;
@@ -36480,7 +36460,7 @@ static int JS_InstantiateFunctionListItem(JSContext *ctx, JSValueConst obj,
             } else if (atom == JS_ATOM_Symbol_hasInstance) {
                 /* Function.prototype[Symbol.hasInstance] is not writable nor configurable */
                 prop_flags = 0;
-        }
+            }
         }
         break;
     case JS_DEF_CFUNC:
@@ -37323,6 +37303,32 @@ static JSValue js_object_hasOwnProperty(JSContext *ctx, JSValueConst this_val,
         return JS_NewBool(ctx, ret);
 }
 
+static JSValue js_object_hasOwn(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    JSValue obj;
+    JSAtom atom;
+    JSObject *p;
+    BOOL ret;
+
+    obj = JS_ToObject(ctx, argv[0]);
+    if (JS_IsException(obj))
+        return obj;
+    atom = JS_ValueToAtom(ctx, argv[1]);
+    if (unlikely(atom == JS_ATOM_NULL)) {
+        JS_FreeValue(ctx, obj);
+        return JS_EXCEPTION;
+    }
+    p = JS_VALUE_GET_OBJ(obj);
+    ret = JS_GetOwnPropertyInternal(ctx, NULL, p, atom);
+    JS_FreeAtom(ctx, atom);
+    JS_FreeValue(ctx, obj);
+    if (ret < 0)
+        return JS_EXCEPTION;
+    else
+        return JS_NewBool(ctx, ret);
+}
+
 static JSValue js_object_valueOf(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
@@ -37895,6 +37901,7 @@ static const JSCFunctionListEntry js_object_funcs[] = {
     //JS_CFUNC_DEF("__getObjectData", 1, js_object___getObjectData ),
     //JS_CFUNC_DEF("__setObjectData", 2, js_object___setObjectData ),
     JS_CFUNC_DEF("fromEntries", 1, js_object_fromEntries ),
+    JS_CFUNC_DEF("hasOwn", 2, js_object_hasOwn ),
 };
 
 static const JSCFunctionListEntry js_object_proto_funcs[] = {
@@ -38420,12 +38427,20 @@ static int JS_CopySubArray(JSContext *ctx,
                            JSValueConst obj, int64_t to_pos,
                            int64_t from_pos, int64_t count, int dir)
 {
-    int64_t i, from, to;
+    JSObject *p;
+    int64_t i, from, to, len;
     JSValue val;
     int fromPresent;
 
-    /* XXX: should special case fast arrays */
-    for (i = 0; i < count; i++) {
+    p = NULL;
+    if (JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT) {
+        p = JS_VALUE_GET_OBJ(obj);
+        if (p->class_id != JS_CLASS_ARRAY || !p->fast_array) {
+            p = NULL;
+        }
+    }
+
+    for (i = 0; i < count; ) {
         if (dir < 0) {
             from = from_pos + count - i - 1;
             to = to_pos + count - i - 1;
@@ -38433,16 +38448,43 @@ static int JS_CopySubArray(JSContext *ctx,
             from = from_pos + i;
             to = to_pos + i;
         }
-        fromPresent = JS_TryGetPropertyInt64(ctx, obj, from, &val);
-        if (fromPresent < 0)
-            goto exception;
-
-        if (fromPresent) {
-            if (JS_SetPropertyInt64(ctx, obj, to, val) < 0)
-                goto exception;
+        if (p && p->fast_array &&
+            from >= 0 && from < (len = p->u.array.count)  &&
+            to >= 0 && to < len) {
+            int64_t l, j;
+            /* Fast path for fast arrays. Since we don't look at the
+               prototype chain, we can optimize only the cases where
+               all the elements are present in the array. */
+            l = count - i;
+            if (dir < 0) {
+                l = min_int64(l, from + 1);
+                l = min_int64(l, to + 1);
+                for(j = 0; j < l; j++) {
+                    set_value(ctx, &p->u.array.u.values[to - j],
+                              JS_DupValue(ctx, p->u.array.u.values[from - j]));
+                }
+            } else {
+                l = min_int64(l, len - from);
+                l = min_int64(l, len - to);
+                for(j = 0; j < l; j++) {
+                    set_value(ctx, &p->u.array.u.values[to + j],
+                              JS_DupValue(ctx, p->u.array.u.values[from + j]));
+                }
+            }
+            i += l;
         } else {
-            if (JS_DeletePropertyInt64(ctx, obj, to, JS_PROP_THROW) < 0)
+            fromPresent = JS_TryGetPropertyInt64(ctx, obj, from, &val);
+            if (fromPresent < 0)
                 goto exception;
+            
+            if (fromPresent) {
+                if (JS_SetPropertyInt64(ctx, obj, to, val) < 0)
+                    goto exception;
+            } else {
+                if (JS_DeletePropertyInt64(ctx, obj, to, JS_PROP_THROW) < 0)
+                    goto exception;
+            }
+            i++;
         }
     }
     return 0;
@@ -38866,9 +38908,9 @@ static JSValue js_array_every(JSContext *ctx, JSValueConst this_val,
                 goto exception;
             present = TRUE;
         } else {
-        present = JS_TryGetPropertyInt64(ctx, obj, k, &val);
-        if (present < 0)
-            goto exception;
+            present = JS_TryGetPropertyInt64(ctx, obj, k, &val);
+            if (present < 0)
+                goto exception;
         }
         if (present) {
             index_val = JS_NewInt64(ctx, k);
@@ -38993,13 +39035,13 @@ static JSValue js_array_reduce(JSContext *ctx, JSValueConst this_val,
                     goto exception;
                 break;
             } else {
-            present = JS_TryGetPropertyInt64(ctx, obj, k1, &acc);
-            if (present < 0)
-                goto exception;
-            if (present)
-                break;
+                present = JS_TryGetPropertyInt64(ctx, obj, k1, &acc);
+                if (present < 0)
+                    goto exception;
+                if (present)
+                    break;
+            }
         }
-    }
     }
     for (; k < len; k++) {
         k1 = (special & special_reduceRight) ? len - k - 1 : k;
@@ -39009,9 +39051,9 @@ static JSValue js_array_reduce(JSContext *ctx, JSValueConst this_val,
                 goto exception;
             present = TRUE;
         } else {
-        present = JS_TryGetPropertyInt64(ctx, obj, k1, &val);
-        if (present < 0)
-            goto exception;
+            present = JS_TryGetPropertyInt64(ctx, obj, k1, &val);
+            if (present < 0)
+                goto exception;
         }
         if (present) {
             index_val = JS_NewInt64(ctx, k1);
@@ -41220,17 +41262,17 @@ static JSValue js_string___GetSubstitution(JSContext *ctx, JSValueConst this_val
         } else if (c >= '0' && c <= '9') {
             k = c - '0';
             if (j < len) {
-            c1 = string_get(rp, j);
-            if (c1 >= '0' && c1 <= '9') {
-                /* This behavior is specified in ES6 and refined in ECMA 2019 */
-                /* ECMA 2019 does not have the extra test, but
-                   Test262 S15.5.4.11_A3_T1..3 require this behavior */
-                k1 = k * 10 + c1 - '0';
-                if (k1 >= 1 && k1 < captures_len) {
-                    k = k1;
-                    j++;
+                c1 = string_get(rp, j);
+                if (c1 >= '0' && c1 <= '9') {
+                    /* This behavior is specified in ES6 and refined in ECMA 2019 */
+                    /* ECMA 2019 does not have the extra test, but
+                       Test262 S15.5.4.11_A3_T1..3 require this behavior */
+                    k1 = k * 10 + c1 - '0';
+                    if (k1 >= 1 && k1 < captures_len) {
+                        k = k1;
+                        j++;
+                    }
                 }
-            }
             }
             if (k >= 1 && k < captures_len) {
                 s = JS_GetPropertyInt64(ctx, captures, k);
@@ -43798,7 +43840,7 @@ static JSValue js_regexp_Symbol_search(JSContext *ctx, JSValueConst this_val,
         if (JS_SetProperty(ctx, rx, JS_ATOM_lastIndex, previousLastIndex) < 0) {
             previousLastIndex = JS_UNDEFINED;
             goto exception;
-    }
+        }
     }
     JS_FreeValue(ctx, str);
     JS_FreeValue(ctx, currentLastIndex);
@@ -48497,7 +48539,7 @@ static double set_date_fields(double fields[], int is_local) {
         days += md;
     }
     days += fields[2] - 1;
-    h = fields[3] * 3600000 + fields[4] * 60000 +
+    h = fields[3] * 3600000 + fields[4] * 60000 + 
         fields[5] * 1000 + fields[6];
     d = days * 86400000 + h;
     if (is_local)
@@ -48805,7 +48847,7 @@ static int string_get_digits(JSString *sp, int *pp, int64_t *pval) {
             if (p == p_start)
                 return -1;
             else
-            break;
+                break;
         }
         v = v * 10 + c - '0';
         p++;
@@ -48951,9 +48993,9 @@ static JSValue js_Date_parse(JSContext *ctx, JSValueConst this_val,
             case 6:
                 c = '.';
                 break;
-        }
+            }
             if (string_get(sp, p) != c)
-                    break;
+                break;
             p++;
             if (i == 6) {
                 if (string_get_milliseconds(sp, &p, &fields[i]))
@@ -49915,7 +49957,7 @@ void JS_AddIntrinsicBigInt(JSContext *ctx)
                                js_bigint_proto_funcs,
                                countof(js_bigint_proto_funcs));
     obj1 = JS_NewGlobalCConstructor(ctx, "BigInt", js_bigint_constructor, 1,
-                              ctx->class_proto[JS_CLASS_BIG_INT]);
+                                    ctx->class_proto[JS_CLASS_BIG_INT]);
     JS_SetPropertyFunctionList(ctx, obj1, js_bigint_funcs,
                                countof(js_bigint_funcs));
 }
@@ -50814,7 +50856,7 @@ void JS_AddIntrinsicBigFloat(JSContext *ctx)
                                js_bigfloat_proto_funcs,
                                countof(js_bigfloat_proto_funcs));
     obj1 = JS_NewGlobalCConstructor(ctx, "BigFloat", js_bigfloat_constructor, 1,
-                              ctx->class_proto[JS_CLASS_BIG_FLOAT]);
+                                    ctx->class_proto[JS_CLASS_BIG_FLOAT]);
     JS_SetPropertyFunctionList(ctx, obj1, js_bigfloat_funcs,
                                countof(js_bigfloat_funcs));
 
@@ -51303,7 +51345,7 @@ void JS_AddIntrinsicBigDecimal(JSContext *ctx)
                                countof(js_bigdecimal_proto_funcs));
     obj1 = JS_NewGlobalCConstructor(ctx, "BigDecimal",
                                     js_bigdecimal_constructor, 1,
-                              ctx->class_proto[JS_CLASS_BIG_DECIMAL]);
+                                    ctx->class_proto[JS_CLASS_BIG_DECIMAL]);
     JS_SetPropertyFunctionList(ctx, obj1, js_bigdecimal_funcs,
                                countof(js_bigdecimal_funcs));
 }
@@ -52862,14 +52904,14 @@ static JSValue js_typed_array_join(JSContext *ctx, JSValueConst this_val,
         el = JS_GetPropertyUint32(ctx, this_val, i);
         /* Can return undefined for example if the typed array is detached */
         if (!JS_IsNull(el) && !JS_IsUndefined(el)) {
-        if (JS_IsException(el))
-            goto fail;
-        if (toLocaleString) {
-            el = JS_ToLocaleStringFree(ctx, el);
+            if (JS_IsException(el))
+                goto fail;
+            if (toLocaleString) {
+                el = JS_ToLocaleStringFree(ctx, el);
+            }
+            if (string_buffer_concat_value_free(b, el))
+                goto fail;
         }
-        if (string_buffer_concat_value_free(b, el))
-            goto fail;
-    }
     }
     JS_FreeValue(ctx, sep);
     return string_buffer_end(b);
