@@ -176,77 +176,163 @@ static inline int64_t min_int64(int64_t a, int64_t b)
         return b;
 }
 
+
+// this chunk ripped from https://github.com/llvm-mirror/libcxx/blob/9dcbb46826fd4d29b1485f25e8986d36019a6dca/include/support/win32/support.h#L106-L182
+#if defined(_MSC_VER)
+
+// Bit builtin's make these assumptions when calling _BitScanForward/Reverse
+// etc. These assumptions are expected to be true for Win32/Win64 which this
+// file supports.
+static_assert(sizeof(unsigned long long) == 8, "");
+static_assert(sizeof(unsigned long) == 4, "");
+static_assert(sizeof(unsigned int) == 4, "");
+
+static inline int __builtin_popcount(unsigned int x)
+{
+	// Binary: 0101...
+	static const unsigned int m1 = 0x55555555;
+	// Binary: 00110011..
+	static const unsigned int m2 = 0x33333333;
+	// Binary:  4 zeros,  4 ones ...
+	static const unsigned int m4 = 0x0f0f0f0f;
+	// The sum of 256 to the power of 0,1,2,3...
+	static const unsigned int h01 = 0x01010101;
+	// Put count of each 2 bits into those 2 bits.
+	x -= (x >> 1) & m1;
+	// Put count of each 4 bits into those 4 bits.
+	x = (x & m2) + ((x >> 2) & m2);
+	// Put count of each 8 bits into those 8 bits.
+	x = (x + (x >> 4)) & m4;
+	// Returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24).
+	return (x * h01) >> 24;
+}
+
+static inline int __builtin_popcountl(unsigned long x)
+{
+	return __builtin_popcount((int)(x));
+}
+
+static inline int __builtin_popcountll(unsigned long long x)
+{
+	// Binary: 0101...
+	static const unsigned long long m1 = 0x5555555555555555;
+	// Binary: 00110011..
+	static const unsigned long long m2 = 0x3333333333333333;
+	// Binary:  4 zeros,  4 ones ...
+	static const unsigned long long m4 = 0x0f0f0f0f0f0f0f0f;
+	// The sum of 256 to the power of 0,1,2,3...
+	static const unsigned long long h01 = 0x0101010101010101;
+	// Put count of each 2 bits into those 2 bits.
+	x -= (x >> 1) & m1;
+	// Put count of each 4 bits into those 4 bits.
+	x = (x & m2) + ((x >> 2) & m2);
+	// Put count of each 8 bits into those 8 bits.
+	x = (x + (x >> 4)) & m4;
+	// Returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24) + ...
+	return (int)((x * h01) >> 56);
+}
+
+// Returns the number of trailing 0-bits in x, starting at the least significant
+// bit position. If x is 0, the result is undefined.
+static inline int __builtin_ctzll(unsigned long long mask)
+{
+	unsigned long where;
+	// Search from LSB to MSB for first set bit.
+	// Returns zero if no set bit is found.
+#if INTPTR_MAX >= INT64_MAX // 64-bit
+	if (_BitScanForward64(&where, mask))
+		return (int)(where);
+#else
+  // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls.
+  // Scan the Low Word.
+	if (_BitScanForward(&where, (unsigned long)(mask)))
+		return (int)(where);
+	// Scan the High Word.
+	if (_BitScanForward(&where, (unsigned long)(mask >> 32)))
+		return (int)(where + 32); // Create a bit offset from the LSB.
+#endif
+	return 64;
+}
+
+static inline int __builtin_ctzl(unsigned long mask)
+{
+	unsigned long where;
+	// Search from LSB to MSB for first set bit.
+	// Returns zero if no set bit is found.
+	if (_BitScanForward(&where, mask))
+		return (int)(where);
+	return 32;
+}
+
+static inline int __builtin_ctz(unsigned int mask)
+{
+	// Win32 and Win64 expectations.
+	static_assert(sizeof(mask) == 4, "");
+	static_assert(sizeof(unsigned long) == 4, "");
+	return __builtin_ctzl((unsigned long)(mask));
+}
+
+// Returns the number of leading 0-bits in x, starting at the most significant
+// bit position. If x is 0, the result is undefined.
+static inline int __builtin_clzll(unsigned long long mask)
+{
+	unsigned long where;
+	// BitScanReverse scans from MSB to LSB for first set bit.
+	// Returns 0 if no set bit is found.
+#if INTPTR_MAX >= INT64_MAX // 64-bit
+	if (_BitScanReverse64(&where, mask))
+		return (int)(63 - where);
+#else
+  // Scan the high 32 bits.
+	if (_BitScanReverse(&where, (unsigned long)(mask >> 32)))
+		return (int)(63 -
+			(where + 32)); // Create a bit offset from the MSB.
+// Scan the low 32 bits.
+	if (_BitScanReverse(&where, (unsigned long)(mask)))
+		return (int)(63 - where);
+#endif
+	return 64; // Undefined Behavior.
+}
+
+static inline int __builtin_clzl(unsigned long mask)
+{
+	unsigned long where;
+	// Search from LSB to MSB for first set bit.
+	// Returns zero if no set bit is found.
+	if (_BitScanReverse(&where, mask))
+		return (int)(31 - where);
+	return 32; // Undefined Behavior.
+}
+
+static inline int __builtin_clz(unsigned int x)
+{
+	return __builtin_clzl(x);
+}
+
+#endif // _LIBCPP_MSVC
+
 /* WARNING: undefined if a = 0 */
 static inline int clz32(unsigned int a)
 {
-#ifdef _MSC_VER
-    unsigned long idx;
-    _BitScanReverse(&idx, a);
-    return 31 ^ idx;
-#else
     return __builtin_clz(a);
-#endif
 }
 
 /* WARNING: undefined if a = 0 */
 static inline int clz64(uint64_t a)
 {
-#ifdef _MSC_VER
-  unsigned long where;
-  // BitScanReverse scans from MSB to LSB for first set bit.
-  // Returns 0 if no set bit is found.
-#if INTPTR_MAX >= INT64_MAX // 64-bit
-  if (_BitScanReverse64(&where, a))
-    return (int)(63 - where);
-#else
-  // Scan the high 32 bits.
-  if (_BitScanReverse(&where, (uint32_t)(a >> 32)))
-    return (int)(63 - (where + 32)); // Create a bit offset from the MSB.
-  // Scan the low 32 bits.
-  if (_BitScanReverse(&where, (uint32_t)(a)))
-    return (int)(63 - where);
-#endif
-  return 64; // Undefined Behavior.
-#else
   return __builtin_clzll(a);
-#endif
 }
 
 /* WARNING: undefined if a = 0 */
 static inline int ctz32(unsigned int a)
 {
-#ifdef _MSC_VER
-    unsigned long idx;
-    _BitScanForward(&idx, a);
-    return idx;
-#else
     return __builtin_ctz(a);
-#endif
 }
 
 /* WARNING: undefined if a = 0 */
 static inline int ctz64(uint64_t a)
 {
-#ifdef _MSC_VER
-  unsigned long where;
-  // Search from LSB to MSB for first set bit.
-  // Returns zero if no set bit is found.
-#if INTPTR_MAX >= INT64_MAX // 64-bit
-  if (_BitScanForward64(&where, a))
-    return (int)(where);
-#else
-  // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls.
-  // Scan the Low Word.
-  if (_BitScanForward(&where, (uint32_t)(a)))
-    return (int)(where);
-  // Scan the High Word.
-  if (_BitScanForward(&where, (uint32_t)(a >> 32)))
-    return (int)(where + 32); // Create a bit offset from the LSB.
-#endif
-  return 64;
-#else
   return __builtin_ctzll(a);
-#endif
 }
 
 #ifdef _MSC_VER

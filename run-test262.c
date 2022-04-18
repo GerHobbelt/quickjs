@@ -1874,6 +1874,39 @@ static int run_test262_harness_test(const char *filename, BOOL is_module)
     return ret_code;
 }
 
+static void run_core_unit_tests(void)
+{
+	QJS_ASSERT(clz32(1) == 31);
+	QJS_ASSERT(clz32(1 << 8) == 31 - 8);
+	QJS_ASSERT(clz32(1ULL << 31) == 0);
+	QJS_ASSERT(clz32(0xA5) == 31 - 7);
+	QJS_ASSERT(clz32(0xFF0) == 31 - 11);
+
+	QJS_ASSERT(clz64(1) == 63);
+	QJS_ASSERT(clz64(1 << 8) == 63 - 8);
+	QJS_ASSERT(clz64(1ULL << 31) == 63 - 31);
+	QJS_ASSERT(clz64(1ULL << 32) == 63 - 32);
+	QJS_ASSERT(clz64(1ULL << 48) == 63 - 48);
+	QJS_ASSERT(clz64(1ULL << 63) == 0);
+	QJS_ASSERT(clz64(0xA5) == 63 - 7);
+	QJS_ASSERT(clz64(0xFF0) == 63 - 11);
+
+	QJS_ASSERT(ctz32(1) == 0);
+	QJS_ASSERT(ctz32(1 << 8) == 8);
+	QJS_ASSERT(ctz32(1ULL << 31) == 31);
+	QJS_ASSERT(ctz32(0xA5) == 0);
+	QJS_ASSERT(ctz32(0xFF0) == 4);
+
+	QJS_ASSERT(ctz64(1) == 0);
+	QJS_ASSERT(ctz64(1 << 8) == 8);
+	QJS_ASSERT(ctz64(1ULL << 31) == 31);
+	QJS_ASSERT(ctz64(1ULL << 32) == 32);
+	QJS_ASSERT(ctz64(1ULL << 48) == 48);
+	QJS_ASSERT(ctz64(1ULL << 63) == 63);
+	QJS_ASSERT(ctz64(0xA5) == 0);
+	QJS_ASSERT(ctz64(0xFF0) == 4);
+}
+
 static clock_t last_clock;
 
 static void show_progress(int force) {
@@ -2025,6 +2058,8 @@ int main(int argc, const char** argv)
 		help();
 		return EXIT_FAILURE;
 	}
+
+	run_core_unit_tests();
 
     if (is_test262_harness) {
         return run_test262_harness_test(argv[optind], is_module);
