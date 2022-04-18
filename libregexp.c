@@ -31,6 +31,12 @@
 #include "cutils.h"
 #include "libregexp.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+#define __js_printf_like(f, a)   __attribute__((format(printf, f, a)))
+#else
+#define __js_printf_like(a, b)
+#endif
+
 /*
   TODO:
 
@@ -427,7 +433,7 @@ static void re_emit_op_u16(REParseState *s, int op, uint32_t val)
     dbuf_put_u16(&s->byte_code, val);
 }
 
-static int __attribute__((format(printf, 2, 3))) re_parse_error(REParseState *s, const char *fmt, ...)
+static int __js_printf_like(2, 3) re_parse_error(REParseState *s, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);

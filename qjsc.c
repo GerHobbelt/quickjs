@@ -36,7 +36,9 @@
 
 #include "cutils.h"
 #include "quickjs-libc.h"
+#if defined(_WIN32)
 #include "win/getopt.h"
+#endif
 
 #include "monolithic_examples.h"
 

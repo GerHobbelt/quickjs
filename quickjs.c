@@ -34,8 +34,13 @@
 #endif
 
 #ifdef _MSC_VER
-#pragma function (ceil)
-#pragma function (floor)
+
+#include "sys_time.h"
+
+typedef intptr_t ssize_t;
+
+//#pragma function (ceil)
+//#pragma function (floor)
 
 #include <WinSock2.h>
 
@@ -252,7 +257,17 @@ typedef enum JSErrorEnum {
 #define JS_STACK_SIZE_MAX 65534
 #define JS_STRING_LEN_MAX ((1 << 30) - 1)
 
+#if defined(__GNUC__) || defined(__clang__)
+#define JS_INF (1.0 / 0.0)
+#else
+#define JS_INF HUGE_VAL
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
 #define __exception __attribute__((warn_unused_result))
+#else
+#define __exception
+#endif
 
 typedef struct JSShape JSShape;
 typedef struct JSString JSString;
@@ -10118,6 +10133,16 @@ JSClassID JS_GetClassID(JSValueConst obj)
 }
 
 /* return NULL if not an object of class class_id */
+void *JS_GetRawOpaque(JSValueConst obj)
+{
+	JSObject *p;
+	if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+		return NULL;
+	p = JS_VALUE_GET_OBJ(obj);
+	return p->u.opaque;
+}
+
+/* return NULL if not an object of class class_id */
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id)
 {
     JSObject *p;
@@ -10574,7 +10599,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
             } else
 #endif
             {
-                double d = INFINITY;
+                double d = JS_INF;
                 if (is_neg)
                     d = -d;
                 val = JS_NewFloat64(ctx, d);
@@ -42279,7 +42304,7 @@ static JSValue js_math_min_max(JSContext *ctx, JSValueConst this_val,
     uint32_t tag;
 
     if (unlikely(argc == 0)) {
-        return __JS_NewFloat64(ctx, is_max ? -INFINITY : INFINITY);
+        return __JS_NewFloat64(ctx, is_max ? -JS_INF : JS_INF);
     }
 
     tag = JS_VALUE_GET_TAG(argv[0]);

@@ -1,9 +1,7 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.11.0)
 project(quickjs)
 
-if(NOT DEFINED CONFIG_BIGNUM)
-  set(CONFIG_BIGNUM 1)
-endif()
+option(USE_BIGNUM "use bignum" ON)
 
 include(CTest)
 set(QUICKJS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})

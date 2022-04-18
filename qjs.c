@@ -34,14 +34,11 @@
 #include <malloc/malloc.h>
 #include <unistd.h>
 #elif defined(__FreeBSD__)
-#include <malloc_np.h>
+#include <malloc_np.h> // for malloc_usable_size
 #include <unistd.h>
 #elif defined(__linux__)
 #include <malloc.h>
 #include <unistd.h>
-#endif
-#if defined(__FreeBSD__)
-#include <malloc_np.h> // for malloc_usable_size
 #endif
 
 #include "cutils.h"

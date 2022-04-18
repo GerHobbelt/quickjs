@@ -40,11 +40,35 @@
 #include <direct.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/utime.h>
 #include "win/dirent.h"
+
+#include "sys_time.h"
+
+#define PATH_MAX MAX_PATH
+
+typedef intptr_t ssize_t;
+
 #define popen _popen
 #define pclose _pclose
+
+// https://stackoverflow.com/questions/11238918/s-isreg-macro-undefined
+// Windows does not define the S_ISREG and S_ISDIR macros in stat.h, so we do.
+// We have to define _CRT_INTERNAL_NONSTDC_NAMES 1 before #including sys/stat.h
+// in order for Microsoft's stat.h to define names like S_IFMT, S_IFREG, and
+// S_IFDIR, rather than just defining  _S_IFMT, _S_IFREG, and _S_IFDIR as it
+// normally does.
+#define _CRT_INTERNAL_NONSTDC_NAMES 1
+#include <sys/stat.h>
+
+#if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
+#define S_ISREG(m) (((m)&S_IFMT) == S_IFREG)
+#endif
+
+#if !defined(S_ISDIR) && defined(S_IFMT) && defined(S_IFDIR)
+#define S_ISDIR(m) (((m)&S_IFMT) == S_IFDIR)
+#endif
+
 #else
 #include <dirent.h>
 #include <unistd.h>
@@ -2396,6 +2420,8 @@ static JSValue js_os_mkdir(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, ret);
 }
 
+#if !defined(_WIN32)
+
 /* return [array, errorcode] */
 static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
@@ -2439,6 +2465,53 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
  done:
     return make_obj_error(ctx, obj, err);
 }
+
+#else
+
+/* return [array, errorcode] */
+static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    const char *path;
+    //DIR *f;
+    //struct dirent *d;
+    HANDLE f;
+    WIN32_FIND_DATA d;
+    JSValue obj;
+    int err;
+    uint32_t len;
+    char buf[MAX_PATH + 10];
+    
+    path = JS_ToCString(ctx, argv[0]);
+    if (!path)
+        return JS_EXCEPTION;
+    obj = JS_NewArray(ctx);
+    if (JS_IsException(obj)) {
+        JS_FreeCString(ctx, path);
+        return JS_EXCEPTION;
+    }
+    sprintf(buf, "%s\\*.*", path);
+    f = FindFirstFile(buf, &d);
+    JS_FreeCString(ctx, path);
+    if (f == INVALID_HANDLE_VALUE) {
+        err = GetLastError();
+        goto done;
+    }
+    else {
+        err = 0;
+    }
+    len = 0;
+    do {
+        JS_DefinePropertyValueUint32(ctx, obj, len++,
+                                     JS_NewString(ctx, d.cFileName),
+                                     JS_PROP_C_W_E);
+    } while (FindNextFile(f, &d));
+    FindClose(f);
+ done:
+    return make_obj_error(ctx, obj, err);
+}
+
+#endif
 
 #if !defined(_WIN32)
 static int64_t timespec_to_ms(const struct timespec *tv)
@@ -3446,7 +3519,6 @@ static JSValue js_worker_postMessage(JSContext *ctx, JSValueConst this_val,
     qjs_free(ctx, data);
     qjs_free(ctx, sab_tab);
     return JS_EXCEPTION;
-
 }
 
 static JSValue js_worker_set_onmessage(JSContext *ctx, JSValueConst this_val,
@@ -3533,6 +3605,10 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     OS_FLAG(O_CREAT),
     OS_FLAG(O_EXCL),
     OS_FLAG(O_TRUNC),
+#if defined(_WIN32)
+    OS_FLAG(O_BINARY),
+    OS_FLAG(O_TEXT),
+#endif
     JS_CFUNC_DEF("close", 1, js_os_close ),
     JS_CFUNC_DEF("seek", 3, js_os_seek ),
     JS_CFUNC_MAGIC_DEF("read", 4, js_os_read_write, 0 ),
@@ -3573,10 +3649,14 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_DEF("readdir", 1, js_os_readdir ),
     /* st_mode constants */
     OS_FLAG(S_IFMT),
+#if !defined(_WIN32)
     OS_FLAG(S_IFIFO),
+#endif
     OS_FLAG(S_IFCHR),
     OS_FLAG(S_IFDIR),
+#if !defined(_WIN32)
     OS_FLAG(S_IFBLK),
+#endif
     OS_FLAG(S_IFREG),
 #if !defined(_WIN32)
     OS_FLAG(S_IFSOCK),
@@ -3595,9 +3675,9 @@ static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_DEF("exec", 1, js_os_exec ),
     JS_CFUNC_DEF("waitpid", 2, js_os_waitpid ),
     OS_FLAG(WNOHANG),
+    JS_CFUNC_DEF("pipe", 0, js_os_pipe ),
     JS_CFUNC_DEF("kill", 2, js_os_kill ),
 #endif
-    JS_CFUNC_DEF("pipe", 0, js_os_pipe ),
     JS_CFUNC_DEF("dup", 1, js_os_dup ),
     JS_CFUNC_DEF("dup2", 2, js_os_dup2 ),
 };

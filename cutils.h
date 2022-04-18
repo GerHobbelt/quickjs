@@ -56,6 +56,7 @@
 #define force_inline __forceinline
 #define no_inline __declspec(noinline)
 #define __maybe_unused
+#define __js_printf_like(a, b)
 #define __attribute__(x)
 #define __attribute(x)
 typedef intptr_t ssize_t;
@@ -65,6 +66,7 @@ typedef intptr_t ssize_t;
 #define force_inline inline __attribute__((always_inline))
 #define no_inline __attribute__((noinline))
 #define __maybe_unused __attribute__((unused))
+#define __js_printf_like(f, a)   __attribute__((format(printf, f, a)))
 #endif
 
 #define xglue(x, y) x ## y
@@ -479,8 +481,7 @@ static inline int dbuf_put_u64(DynBuf *s, uint64_t val)
 {
     return dbuf_put(s, (uint8_t *)&val, 8);
 }
-int __attribute__((format(printf, 2, 3))) dbuf_printf(DynBuf *s,
-                                                      const char *fmt, ...);
+int __js_printf_like(2, 3) dbuf_printf(DynBuf* s, const char* fmt, ...);
 void dbuf_free(DynBuf *s);
 static inline BOOL dbuf_error(DynBuf *s) {
     return s->error;
