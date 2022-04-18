@@ -33,6 +33,39 @@
 #include <malloc_np.h> // for malloc_usable_size
 #endif
 
+#ifdef _MSC_VER
+#pragma function (ceil)
+#pragma function (floor)
+
+#include <WinSock2.h>
+
+// From: https://stackoverflow.com/a/26085827
+int gettimeofday(struct timeval * tp, struct timezone * tzp)
+{
+	static const uint64_t EPOCH = ((uint64_t)116444736000000000ULL);
+
+	SYSTEMTIME  system_time;
+	FILETIME    file_time;
+	uint64_t    time;
+
+	GetSystemTime(&system_time);
+	SystemTimeToFileTime(&system_time, &file_time);
+	time = ((uint64_t)file_time.dwLowDateTime);
+	time += ((uint64_t)file_time.dwHighDateTime) << 32;
+
+	tp->tv_sec = (long)((time - EPOCH) / 10000000L);
+	tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
+
+	return 0;
+}
+
+#else
+#include <sys/time.h>
+#ifndef INFINITY
+#define INFINITY 1.0 / 0.0
+#endif
+#endif
+
 #include "cutils.h"
 #include "list.h"
 #include "quickjs.h"
@@ -61,6 +94,17 @@
 #if !defined(CONFIG_PRINTF_RNDN) && !defined(CONFIG_PRINTF_RNDNA)
 /* define it if printf uses the RNDN rounding mode instead of RNDNA */
 #define CONFIG_PRINTF_RNDN
+#endif
+
+/* define to include Atomics.* operations which depend on the OS
+   threads */
+#if !defined(EMSCRIPTEN)
+//#define CONFIG_ATOMICS
+#endif
+
+#if !defined(EMSCRIPTEN)
+/* enable stack limitation */
+#define CONFIG_STACK_CHECK
 #endif
 
 // make sure the compiler barfs a hairball when any of these is used in the code below:
@@ -9970,6 +10014,15 @@ BOOL JS_IsFunction(JSContext *ctx, JSValueConst val)
     }
 }
 
+BOOL JS_IsPromise(JSContext* ctx, JSValueConst val)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(val) != JS_TAG_OBJECT)
+        return FALSE;
+    p = JS_VALUE_GET_OBJ(val);
+    return p->class_id == JS_CLASS_PROMISE;
+}
+
 BOOL JS_IsCFunction(JSContext *ctx, JSValueConst val, JSCFunction *func, int magic)
 {
     JSObject *p;
@@ -10054,13 +10107,25 @@ void JS_SetOpaque(JSValue obj, void *opaque)
 }
 
 /* return NULL if not an object of class class_id */
+JSClassID JS_GetClassID(JSValueConst obj)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+        return NULL;
+    p = JS_VALUE_GET_OBJ(obj);
+	QJS_ASSERT(p != 0);
+	return p->class_id;
+}
+
+/* return NULL if not an object of class class_id */
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id)
 {
     JSObject *p;
     if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
         return NULL;
     p = JS_VALUE_GET_OBJ(obj);
-    if (p->class_id != class_id)
+	QJS_ASSERT(p != 0);
+	if (p->class_id != class_id)
         return NULL;
     return p->u.opaque;
 }
@@ -20469,7 +20534,7 @@ static void free_token(JSParseState *s, JSToken *token)
 }
 
 #if defined(DUMP_ENABLED)
-static void __attribute((unused)) dump_token(JSParseState *s,
+static void __maybe_unused dump_token(JSParseState *s,
                                              const JSToken *token)
 {
     switch(token->val) {
@@ -54485,6 +54550,39 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
 #endif
 }
 
+#pragma mark QJSExport
+
+int QJS_CLASS_MAP = JS_CLASS_MAP;
+int QJS_ATOM_next = JS_ATOM_next;
+
+JSValue QJS_GetIterator(JSContext *ctx, JSValueConst obj, BOOL is_async) {
+    return JS_GetIterator(ctx, obj, is_async);
+}
+
+JSValue QJS_IteratorNext(JSContext *ctx, JSValueConst enum_obj, JSValueConst method, int argc, JSValueConst *argv,
+                         BOOL *pdone){
+    return JS_IteratorNext(ctx, enum_obj, method, argc, argv, pdone);
+}
+
+int QJS_IteratorClose(JSContext *ctx, JSValueConst enum_obj, BOOL is_exception_pending) {
+    return JS_IteratorClose(ctx, enum_obj, is_exception_pending);
+}
+
+JSValue qjs_proxy_constructor(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv) {
+    return js_proxy_constructor(ctx, this_val, argc, argv);
+}
+
+JSValue qjs_proxy_target(JSContext *ctx, JSValue proxy) {
+    JSProxyData *s = JS_GetOpaque(proxy, JS_CLASS_PROXY);
+    if (s) {
+        return s->target;
+    }
+    
+    return JS_UNDEFINED;
+    
+}
+
 /************* WeakRef ***********/
 
 JSValue JS_NewWeakRef(JSContext* ctx, JSValueConst v)
@@ -54525,16 +54623,6 @@ JSValue JS_GetWeakRef(JSContext* ctx, JSValueConst w)
     } else {
         return JS_DupValue(ctx, w);
     }
-}
-
-JSClassID JS_GetClassID(JSValue v) {
-    JSObject *p;
-
-    if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
-        return 0;
-    p = JS_VALUE_GET_OBJ(v);
-    QJS_ASSERT(p != 0);
-    return p->class_id;
 }
 
 JSDebuggerLocation js_debugger_current_location(JSContext *ctx, const uint8_t *cur_pc) {

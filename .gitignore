@@ -7,7 +7,6 @@ bin
 *.exe
 qjsc
 qjs-debug
-examples/
 libquickjs.a
 libquickjs.bn.a
 libquickjs.bn.lto.a
@@ -20,5 +19,7 @@ run-test262-bn
 .obj/
 test262o/
 /microbench-new.txt
-/test262_report.txt
 tmp_file.txt
+
+# cmake build directory
+/b/

@@ -28,6 +28,7 @@ add_library(quickjs STATIC
   ${QUICKJS_SOURCE_DIR}/libregexp.c
   ${QUICKJS_SOURCE_DIR}/libunicode.c
   ${QUICKJS_SOURCE_DIR}/quickjs.c
+  ${QUICKJS_SOURCE_DIR}/quickjs_dump_flags.c
   ${QUICKJS_SOURCE_DIR}/quickjs-find-module.c
   ${QUICKJS_SOURCE_DIR}/quickjs-libc.c
   ${QUICKJS_SOURCE_DIR}/quickjs-port.c

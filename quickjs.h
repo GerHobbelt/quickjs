@@ -45,6 +45,11 @@
 #endif
 #endif
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#define printf(...) __android_log_print(ANDROID_LOG_INFO, "qjs", __VA_ARGS__)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -79,6 +84,10 @@ typedef uint32_t JSAtom;
 
 #ifndef JS_PTR64
 #define JS_NAN_BOXING
+#endif
+
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
+typedef size_t ssize_t;
 #endif
 
 #ifdef _MSC_VER
@@ -340,8 +349,23 @@ typedef struct JSValue {
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+#ifdef _MSC_VER
+static inline JSValue JS_MKVAL(int tag, int32_t val) {
+    JSValue v;
+    v.u.int32 = val;
+    v.tag = tag;
+    return v;
+}
+static inline JSValue JS_MKPTR(int tag, void *val) {
+    JSValue v;
+    v.u.ptr = val;
+    v.tag = tag;
+    return v;
+}
+#else
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
 #define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
+#endif
 
 #define JS_TAG_IS_FLOAT64(tag) ((unsigned)(tag) == JS_TAG_FLOAT64)
 
@@ -875,6 +899,7 @@ JSValue JS_NewObjectProto(JSContext *ctx, JSValueConst proto);
 JSValue JS_NewObject(JSContext *ctx);
 
 JS_BOOL JS_IsFunction(JSContext* ctx, JSValueConst val);
+JS_BOOL JS_IsPromise(JSContext* ctx, JSValueConst val);
 JS_BOOL JS_IsConstructor(JSContext* ctx, JSValueConst val);
 JS_BOOL JS_SetConstructorBit(JSContext *ctx, JSValueConst func_obj, JS_BOOL val);
 
@@ -963,6 +988,7 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
                             int flags);
 void JS_SetOpaque(JSValue obj, void *opaque);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
+JSClassID JS_GetClassID(JSValueConst obj);
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
 void *JS_GetAnyOpaque(JSValueConst obj, JSClassID *class_id);
 
