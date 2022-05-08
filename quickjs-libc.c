@@ -2481,7 +2481,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
     //DIR *f;
     //struct dirent *d;
     HANDLE f;
-    WIN32_FIND_DATA d;
+    WIN32_FIND_DATAA d;
     JSValue obj;
     int err;
     uint32_t len;
@@ -2496,7 +2496,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
     sprintf(buf, "%s\\*.*", path);
-    f = FindFirstFile(buf, &d);
+    f = FindFirstFileA(buf, &d);
     JS_FreeCString(ctx, path);
     if (f == INVALID_HANDLE_VALUE) {
         err = GetLastError();
@@ -2510,7 +2510,7 @@ static JSValue js_os_readdir(JSContext *ctx, JSValueConst this_val,
         JS_DefinePropertyValueUint32(ctx, obj, len++,
                                      JS_NewString(ctx, d.cFileName),
                                      JS_PROP_C_W_E);
-    } while (FindNextFile(f, &d));
+    } while (FindNextFileA(f, &d));
     FindClose(f);
  done:
     return make_obj_error(ctx, obj, err);
