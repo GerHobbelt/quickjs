@@ -13,10 +13,10 @@
 extern "C" {
 #endif // __cplusplus
 
-    int getopt(int argc, char* const argv[],
+    int getopt(int argc, const char* const argv[],
             const char* optstring);
 
-    extern char *optarg;
+    extern const char *optarg;
     extern int optind, opterr, optopt;
 
 #define no_argument 0
@@ -30,14 +30,15 @@ extern "C" {
         int val;
     };
 
-    int getopt_long(int argc, char* const argv[],
+    int getopt_long(int argc, const char* const argv[],
             const char* optstring,
             const struct option* longopts, int* longindex);
 /****************************************************************************
-    int getopt_long_only(int argc, char* const argv[],
+    int getopt_long_only(int argc, const char* const argv[],
             const char* optstring,
             const struct option* longopts, int* longindex);
 ****************************************************************************/
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus

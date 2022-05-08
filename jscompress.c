@@ -26,13 +26,21 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <getopt.h>
+
 #include <stdarg.h>
 #include <string.h>
 #include <inttypes.h>
 #ifndef _WIN32
 #include <unistd.h>
+#endif
+
+#if !defined(_MSC_VER) && !defined(BUILD_MONOLITHIC)
+#include <getopt.h>
 #else
+#include "../../jpeginfo/getopt.h"
+
+#include "../../jpeginfo/getopt.c"
+#include "../../jpeginfo/getopt1.c"
 #endif
 
 #include "cutils.h"
