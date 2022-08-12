@@ -52,7 +52,9 @@
 #include <sys/utime.h>
 #include "win/dirent.h"
 
+#ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
+#endif
 
 typedef intptr_t ssize_t;
 
