@@ -575,7 +575,8 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
            because the corresponding module source code is not
            necessarily present */
         if (use_realpath) {
-            if (qjs_realpath(module_name, buf + strlen(buf)) != 0) {
+			size_t sl = strlen(buf);
+            if (qjs_realpath(module_name, buf + sl, sizeof(buf) - sl) != 0) {
                 JS_ThrowTypeError(ctx, "realpath failure");
                 JS_FreeCString(ctx, module_name);
                 return -1;
@@ -2693,7 +2694,7 @@ static JSValue js_os_realpath(JSContext *ctx, JSValueConst this_val,
     path = JS_ToCString(ctx, argv[0]);
     if (!path)
         return JS_EXCEPTION;
-    err = qjs_realpath(path, buf);
+    err = qjs_realpath(path, buf, sizeof(buf));
     JS_FreeCString(ctx, path);
     return make_string_error(ctx, buf, err);
 }

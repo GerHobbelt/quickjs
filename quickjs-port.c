@@ -371,13 +371,13 @@ done:
 #endif
 }
 
-int qjs_realpath(const char* from_path, char* buf)
+int qjs_realpath(const char* from_path, char* buf, size_t bufsiz)
 {
 #if defined(_WIN32)
     {
         char* lppPart= NULL;
         SetLastError(0);
-        GetFullPathNameA(from_path, sizeof(buf), buf, &lppPart);
+        GetFullPathNameA(from_path, bufsiz, buf, &lppPart);
         return GetLastError();
     }
 #else

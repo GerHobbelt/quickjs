@@ -121,7 +121,7 @@ void qjs_usleep(int64_t us);
 
 typedef int (*qjs_listdir_callback_t)(void* context, const char* path, int is_dir);
 int qjs_listdir(void* context, const char* path, int recurse, qjs_listdir_callback_t callback);
-int qjs_realpath(const char* from_path, char* buf);
+int qjs_realpath(const char* from_path, char* buf, size_t bufsiz);
 
 /* Memory relate functions */
 void *qjs_port_malloc(size_t __size);
