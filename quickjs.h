@@ -822,8 +822,20 @@ static inline void JS_FreeValue(JSContext *ctx, JSValue v)
 {
     if (JS_VALUE_HAS_REF_COUNT(v)) {
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+
+        assert(p);
+
         if (--p->ref_count <= 0) {
+
+
+            if(p->ref_count < 0)
+            {
+                printf("Double free\n");
+                assert(0);
+            }
+
             __JS_FreeValue(ctx, v);
+            v.u.ptr = 0;
         }
     }
 }
@@ -832,8 +844,12 @@ static inline void JS_FreeValueRT(JSRuntime *rt, JSValue v)
 {
     if (JS_VALUE_HAS_REF_COUNT(v)) {
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+
+        assert(p);
+
         if (--p->ref_count <= 0) {
             __JS_FreeValueRT(rt, v);
+            v.u.ptr = 0;
         }
     }
 }
@@ -1091,6 +1107,7 @@ JSValue JS_EvalFunction(JSContext *ctx, JSValue fun_obj);
 /* load the dependencies of the module 'obj'. Useful when JS_ReadObject()
    returns a module. */
 int JS_ResolveModule(JSContext *ctx, JSValueConst obj);
+void JS_FreeModules(JSContext* ctx);
 
 /* only exported for os.Worker() */
 JSAtom JS_GetScriptOrModuleName(JSContext *ctx, int n_stack_levels);

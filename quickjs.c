@@ -2321,6 +2321,11 @@ static void js_free_modules(JSContext *ctx, JSFreeModuleEnum flag)
     }
 }
 
+void JS_FreeModules(JSContext* ctx)
+{
+    js_free_modules(ctx, JS_FREE_MODULE_ALL);
+}
+
 JSContext *JS_DupContext(JSContext *ctx)
 {
     ctx->header.ref_count++;
@@ -27969,7 +27974,7 @@ static void js_resolve_export_throw_error(JSContext *ctx,
         break;
     default:
     case JS_RESOLVE_RES_NOT_FOUND:
-        JS_ThrowSyntaxError(ctx, "Could not find export '%s' in module '%s'",
+        JS_ThrowSyntaxError(ctx, "export '%s' in module '%s' is not found",
                             JS_AtomGetStr(ctx, buf1, sizeof(buf1), export_name),
                             JS_AtomGetStr(ctx, buf2, sizeof(buf2), m->module_name));
         break;
