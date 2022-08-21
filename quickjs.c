@@ -6809,10 +6809,14 @@ JSValue JS_NewError(JSContext *ctx)
 static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
                               const char *fmt, va_list ap, BOOL add_backtrace)
 {
-    char buf[256];
-    JSValue obj, ret;
+    int old_memory_limit = ctx->rt->malloc_state.malloc_limit;
+    ctx->rt->malloc_state.malloc_limit = -1;
 
-    vsnprintf(buf, sizeof(buf), fmt, ap);
+	JSValue obj, ret;
+    int length = vsnprintf(0, 0, fmt, ap);
+    char* buf = js_malloc(ctx, length);
+    vsnprintf(buf, length, fmt, ap);
+
     obj = JS_NewObjectProtoClass(ctx, ctx->native_error_proto[error_num],
                                  JS_CLASS_ERROR);
     if (unlikely(JS_IsException(obj))) {
@@ -6826,7 +6830,13 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
     if (add_backtrace) {
         build_backtrace(ctx, obj, NULL, 0, 0);
     }
+
+    js_free(ctx, buf);
+
     ret = JS_Throw(ctx, obj);
+
+    ctx->rt->malloc_state.malloc_limit = old_memory_limit;
+
     return ret;
 }
 
