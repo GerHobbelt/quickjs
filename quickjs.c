@@ -6814,8 +6814,9 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
 
 	JSValue obj, ret;
     int length = vsnprintf(0, 0, fmt, ap);
-    char* buf = js_malloc(ctx, length);
-    vsnprintf(buf, length, fmt, ap);
+    char* buf = js_malloc(ctx, length + 1);
+    memset(buf, 0, length + 1);
+    vsnprintf(buf, length + 1, fmt, ap);
 
     obj = JS_NewObjectProtoClass(ctx, ctx->native_error_proto[error_num],
                                  JS_CLASS_ERROR);
