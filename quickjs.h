@@ -817,25 +817,61 @@ JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fm
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
 JSValue JS_ThrowOutOfMemory(JSContext *ctx);
 
+
+
+#ifndef no_return
+#if defined(__GNUC__) || defined(__clang__)
+#define no_return __attribute__ ((noreturn))
+#elif defined(_MSC_VER)
+#define no_return __declspec(noreturn)
+#else
+#define no_return
+#endif
+#endif
+
+void qjs_assert(const char* msg, const char* file, int line);
+
+#ifdef QJS_NO_ASSERT
+
+#define QJS_ASSERT(expression)	((void)0)
+
+static no_return inline void QJS_ABORT(void)
+{
+	qjs_assert("Aborting: Should never get here!", __FILE__, __LINE__);
+}
+
+#else
+
+#define QJS_ASSERT(expression) (void)(                                      \
+            (!!(expression)) ||                                             \
+            (qjs_assert(#expression, __FILE__, (unsigned)(__LINE__)), 0)	\
+        )
+
+static no_return inline void QJS_ABORT(void)
+{
+	QJS_ASSERT(!"Should never get here!");
+}
+
+#endif
+
+
 void __JS_FreeValue(JSContext *ctx, JSValue v);
 static inline void JS_FreeValue(JSContext *ctx, JSValue v)
 {
     if (JS_VALUE_HAS_REF_COUNT(v)) {
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
 
-        assert(p);
+		QJS_ASSERT(p);
 
         if (--p->ref_count <= 0) {
 
 
             if(p->ref_count < 0)
             {
-                printf("Double free\n");
-                assert(0);
+                QJS_ASSERT(!"Double free - should never get here");
             }
 
             __JS_FreeValue(ctx, v);
-            v.u.ptr = 0;
         }
     }
 }
@@ -845,11 +881,10 @@ static inline void JS_FreeValueRT(JSRuntime *rt, JSValue v)
     if (JS_VALUE_HAS_REF_COUNT(v)) {
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
 
-        assert(p);
+		QJS_ASSERT(p);
 
         if (--p->ref_count <= 0) {
             __JS_FreeValueRT(rt, v);
-            v.u.ptr = 0;
         }
     }
 }

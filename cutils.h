@@ -100,31 +100,6 @@ enum {
 #endif
 #endif
 
-void qjs_assert(const char* msg, const char* file, int line);
-
-#ifdef QJS_NO_ASSERT
-
-#define QJS_ASSERT(expression)	((void)0)
-
-static no_return inline void QJS_ABORT(void)
-{
-	qjs_assert("Aborting: Should never get here!", __FILE__, __LINE__);
-}
-
-#else
-
-#define QJS_ASSERT(expression) (void)(                                      \
-            (!!(expression)) ||                                             \
-            (qjs_assert(#expression, __FILE__, (unsigned)(__LINE__)), 0)	\
-        )
-
-static no_return inline void QJS_ABORT(void)
-{
-	QJS_ASSERT(!"Should never get here!");
-}
-
-#endif
-
 void pstrcpy(char *buf, int buf_size, const char *str);
 char *pstrcat(char *buf, int buf_size, const char *s);
 int strstart(const char *str, const char *val, const char **ptr);
