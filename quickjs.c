@@ -6819,7 +6819,7 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
 
 	JSValue obj, ret;
     int length = vsnprintf(0, 0, fmt, ap);
-    char* buf = js_malloc(ctx, length + 1);
+    char* buf = qjs_malloc(ctx, length + 1);
     memset(buf, 0, length + 1);
     vsnprintf(buf, length + 1, fmt, ap);
 
@@ -6837,7 +6837,7 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
         build_backtrace(ctx, obj, NULL, 0, 0);
     }
 
-    js_free(ctx, buf);
+    qjs_free(ctx, buf);
 
     ret = JS_Throw(ctx, obj);
 
