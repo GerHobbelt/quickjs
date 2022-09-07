@@ -211,7 +211,7 @@ static int js_module_dummy_init(JSContext *ctx, JSModuleDef *m)
 {
     /* should never be called when compiling JS code */
     QJS_ABORT();
-	return -1;
+    return -1;
 }
 
 static void find_unique_cname(char *cname, size_t cname_size)
@@ -354,7 +354,7 @@ static const char main_c_template2[] =
 
 static int help(void)
 {
-	printf("QuickJS Compiler version " QUICKJS_CONFIG_VERSION "\n"
+    printf("QuickJS Compiler version " QUICKJS_CONFIG_VERSION "\n"
            "usage: " PROG_NAME " [options] [files]\n"
            "\n"
            "options are:\n"
@@ -369,8 +369,8 @@ static int help(void)
            "-x          byte swapped output\n"
            "-p prefix   set the prefix of the generated C names\n"
            "-S n        set the maximum stack size to 'n' bytes (default=%d)\n"
-		   "-s          save intermediate output to temp file\n",
-		JS_DEFAULT_STACK_SIZE);
+           "-s          save intermediate output to temp file\n",
+        JS_DEFAULT_STACK_SIZE);
 #ifdef CONFIG_LTO
     {
         int i;
@@ -387,25 +387,25 @@ static int help(void)
     }
 #endif
 
-	printf(""
-		"-y flags    dump info to output channel. (default: stderr)\n"
-		"\n"
-		"Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
-		"The flags can be negated by prefixing with '~' or '!',\n"
-		"e.g. 'all,!atoms,!bytecode':\n"
-		"These flags are supported:\n"
-		"    stderr / to-stderr      (dump to stderr)\n"
-		"    stdout / to-stdout      (dump to stdout instead of stderr)\n"
-		"    none                    (disable/reset ALL dump flags)\n");
+    printf(""
+        "-y flags    dump info to output channel. (default: stderr)\n"
+        "\n"
+        "Dump flags are separated by comma ',', colon ':', semicolon ';' or pipe '|'.\n"
+        "The flags can be negated by prefixing with '~' or '!',\n"
+        "e.g. 'all,!atoms,!bytecode':\n"
+        "These flags are supported:\n"
+        "    stderr / to-stderr      (dump to stderr)\n"
+        "    stdout / to-stdout      (dump to stdout instead of stderr)\n"
+        "    none                    (disable/reset ALL dump flags)\n");
 
-	const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
-	while (kwd->keyword)
-	{
-		printf("    %s\n", kwd->keyword);
-		kwd++;
- 	}
+    const struct qjs_dump_flags_keyword* kwd = qjs_dump_flags_keyword_list;
+    while (kwd->keyword)
+    {
+        printf("    %s\n", kwd->keyword);
+        kwd++;
+    }
 
-	return EXIT_FAILURE;
+    return EXIT_FAILURE;
 }
 
 #if defined(CONFIG_CC) && !defined(_WIN32)
@@ -556,7 +556,7 @@ int main(int argc, const char** argv)
     stack_size = 0;
     memset(&dynamic_module_list, 0, sizeof(dynamic_module_list));
 
-	qjs_clear_dump_flags();
+    qjs_clear_dump_flags();
 
     /* add system modules */
     namelist_add(&cmodule_list, "std", "std", 0);
@@ -647,15 +647,15 @@ int main(int argc, const char** argv)
         case 'S':
             stack_size = (size_t)strtod(optarg, NULL);
             break;
-		case 'y':
-		{
-			FILE* dump_out = stderr;
-			enum qjs_dump_flags flags = qjs_parse_dump_flags(optarg, &qjs_parse_dump_flags_default_cli_callback, &dump_out);
-			qjs_set_dump_flags(flags);
-			qjs_set_dump_output_channel(dump_out);
-			break;
-		}
-		default:
+        case 'y':
+        {
+            FILE* dump_out = stderr;
+            enum qjs_dump_flags flags = qjs_parse_dump_flags(optarg, &qjs_parse_dump_flags_default_cli_callback, &dump_out);
+            qjs_set_dump_flags(flags);
+            qjs_set_dump_output_channel(dump_out);
+            break;
+        }
+        default:
             break;
         }
     }
@@ -687,8 +687,8 @@ int main(int argc, const char** argv)
     fo = fopen(cfilename, "w");
     if (!fo) {
         perror(cfilename);
-		return EXIT_FAILURE;
-	}
+        return EXIT_FAILURE;
+    }
     outfile = fo;
     JS_Initialize();
     rt = JS_NewRuntime();
@@ -729,8 +729,8 @@ int main(int argc, const char** argv)
         if (!jsc_module_loader(ctx, dynamic_module_list.array[i].name, NULL)) {
             fprintf(stderr, "Could not load dynamic module '%s'\n",
                     dynamic_module_list.array[i].name);
-			return EXIT_FAILURE;
-		}
+            return EXIT_FAILURE;
+        }
     }
 
     if (output_type != OUTPUT_C) {
