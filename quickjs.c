@@ -219,6 +219,9 @@ enum {
     JS_CLASS_INIT_COUNT, /* last entry for predefined classes */
 };
 
+// warning C4132: 'typed_array_size_log2': const object should be initialized
+#pragma warning(disable: 4132)
+
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT  (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
 static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];     // forward reference

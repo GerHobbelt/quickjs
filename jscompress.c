@@ -24,12 +24,13 @@
  */
 #include "quickjs-port.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-
 #include <stdarg.h>
 #include <string.h>
 #include <inttypes.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+
 #ifndef _WIN32
 #include <unistd.h>
 #endif
