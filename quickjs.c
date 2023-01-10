@@ -48316,6 +48316,19 @@ has_val:
     return rv;
 }
 
+JSValue JS_NewDate(JSContext *ctx, double time)
+{
+    JSValue date = js_create_from_ctor(ctx, JS_UNDEFINED, JS_CLASS_DATE);
+    if (!JS_IsException(date))
+        JS_SetThisTimeValue(ctx, date, time);
+    return date;
+}
+
+int JS_ToDate(JSContext *ctx, double *pres, JSValueConst val)
+{
+    return JS_ThisTimeValue(ctx, pres, val);
+}
+
 static JSValue js_Date_UTC(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
