@@ -6,6 +6,9 @@
  * Released under the MIT license
  * https://github.com/takamin/win-c/blob/master/LICENSE
  */
+
+#ifndef BUILD_MONOLITHIC
+
 #include <stdio.h>
 #include <string.h>
 #include "getopt.h"
@@ -221,3 +224,5 @@ int getopt_long_only(int argc, char* const argv[],
     return -1;
 }
 ********************************************************/
+
+#endif
