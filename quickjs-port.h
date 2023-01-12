@@ -30,7 +30,7 @@
 #define CONFIG_ATOMICS 1
 #endif
 
-#ifdef HAVE_QUICKJS_CONFIG_H
+#ifndef HAVE_CONFIG_H
 #include "quickjs-config.h"
 #else
 #include "config.h"

@@ -1,6 +1,6 @@
 #if defined(WIN32) || defined(WIN64)
 
-#ifdef HAVE_QUICKJS_CONFIG_H
+#ifndef HAVE_CONFIG_H
 #include "quickjs-config.h"
 #else
 #include "config.h"

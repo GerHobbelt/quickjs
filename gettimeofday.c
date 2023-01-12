@@ -1,6 +1,6 @@
 // https://github.com/Alexpux/mingw-w64/blob/master/mingw-w64-crt/misc/gettimeofday.c
 
-#ifdef HAVE_QUICKJS_CONFIG_H
+#ifndef HAVE_CONFIG_H
 #include "quickjs-config.h"
 #else
 #include "config.h"

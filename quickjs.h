@@ -25,7 +25,7 @@
 #ifndef QUICKJS_H
 #define QUICKJS_H
 
-#ifdef HAVE_QUICKJS_CONFIG_H
+#ifndef HAVE_CONFIG_H
 #include "quickjs-config.h"
 #else
 #include "config.h"
