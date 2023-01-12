@@ -28,6 +28,8 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include <math.h>  // included to fix weird (= inexplicable) MSVC2022 warning: C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\ucrt\corecrt_math.h(496,80): warning C4028: formal parameter 1 different from declaration
+
 #include <stdlib.h>
 #include <stdio.h>
 
