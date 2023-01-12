@@ -68,7 +68,11 @@ try_eval_module(
 
 }
 
-int main(int argc, char** argv)
+#if defined(BUILD_MONOLITHIC)
+#define main		quickjs_sample_app_main
+#endif
+
+int main(int argc, const char** argv)
 {
     std::cout << " [INFO] Started Ok" << std::endl; 
     

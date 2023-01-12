@@ -588,7 +588,7 @@ struct function
     template <typename Functor>
     static function * create(JSRuntime * rt, Functor&& f)
     {
-        auto fptr = reinterpret_cast<function *>(js_malloc_rt(rt, sizeof(function) + sizeof(Functor)));
+        auto fptr = reinterpret_cast<function *>(qjs_malloc_rt(rt, sizeof(function) + sizeof(Functor)));
         if(!fptr)
             throw std::bad_alloc{};
         new(fptr) function;
@@ -632,7 +632,7 @@ struct js_traits<detail::function>
                     assert(fptr);
                     if(fptr->destroyer)
                         fptr->destroyer(fptr);
-                    js_free_rt(rt, fptr);
+                    qjs_free_rt(rt, fptr);
                 },
                 nullptr, // mark
                 // call
@@ -1218,7 +1218,7 @@ public:
     Value evalFile(const char * filename, unsigned eval_flags = 0)
     {
         size_t buf_len;
-        auto deleter = [this](void * p) { js_free(ctx, p); };
+        auto deleter = [this](void * p) { qjs_free(ctx, p); };
         auto buf = std::unique_ptr<uint8_t, decltype(deleter)>{js_load_file(ctx, &buf_len, filename), deleter};
         if(!buf)
             throw std::runtime_error{std::string{"evalFile: can't read file: "} + filename};
