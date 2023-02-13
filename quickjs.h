@@ -863,9 +863,8 @@ static inline void JS_FreeValue(JSContext *ctx, JSValue v)
 
 		QJS_ASSERT(p);
 
-        if (--p->ref_count <= 0) {
-
-
+        if (--p->ref_count <= 0)
+		{
             if(p->ref_count < 0)
             {
                 QJS_ASSERT(!"Double free - should never get here");

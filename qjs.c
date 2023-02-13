@@ -483,6 +483,7 @@ int main(int argc, const char** argv)
     if (load_jscalc)
         bignum_ext = 1;
 #endif
+
     JS_Initialize();
     if (trace_memory) {
         js_trace_malloc_init(&trace_data);
@@ -518,8 +519,9 @@ int main(int argc, const char** argv)
     if (!empty_run) {
 #ifdef CONFIG_BIGNUM
         if (load_jscalc) {
-            js_std_eval_binary(ctx, qjsc_qjscalc, qjsc_qjscalc_size, 0);
-        }
+			if (js_std_eval_binary(ctx, qjsc_qjscalc, qjsc_qjscalc_size, 0))
+				goto fail;
+		}
 #endif
         js_std_add_helpers(ctx, argc - optind, argv + optind);
 
@@ -529,8 +531,9 @@ int main(int argc, const char** argv)
                 "import * as os from 'os';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n";
-            eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE);
-        }
+			if (eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE))
+				goto fail;
+		}
 
         for(i = 0; i < include_count; i++) {
             if (eval_file(ctx, include_list[i], module))
@@ -557,8 +560,9 @@ int main(int argc, const char** argv)
                 goto fail;
         }
         if (interactive) {
-            js_std_eval_binary(ctx, qjsc_repl, qjsc_repl_size, 0);
-        }
+            if (js_std_eval_binary(ctx, qjsc_repl, qjsc_repl_size, 0))
+				goto fail;
+		}
         js_std_loop(ctx);
     }
 
@@ -595,7 +599,9 @@ int main(int argc, const char** argv)
                best[1] + best[2] + best[3] + best[4],
                best[1], best[2], best[3], best[4]);
     }
-    return EXIT_SUCCESS;
+
+	JS_Finalize();
+	return EXIT_SUCCESS;
 
  fail:
     js_std_free_handlers(rt);
