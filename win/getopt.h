@@ -64,7 +64,7 @@
 #if defined(BUILD_MONOLITHIC)
 
 #define FZ_DATA
-#include "../../../../include/mupdf/fitz/getopt.h"
+#include "mupdf/fitz/getopt.h"
 
 #define getopt fz_getopt
 #define optarg fz_optarg
