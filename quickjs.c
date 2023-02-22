@@ -27824,6 +27824,11 @@ static JSValue js_get_module_ns(JSContext *ctx, JSModuleDef *m)
     return JS_DupValue(ctx, m->module_ns);
 }
 
+JSValue JS_GetModuleNamespace(JSContext *ctx, JSModuleDef *m)
+{
+    return js_get_module_ns(ctx, m);
+}
+
 /* Load all the required modules for module 'm' */
 static int js_resolve_module(JSContext *ctx, JSModuleDef *m)
 {
