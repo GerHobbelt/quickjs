@@ -1,0 +1,16 @@
+.obj
+examples
+hello.c
+libquickjs.a
+libquickjs.lto.a
+qjs
+qjsc
+qjscalc
+qjscalc.c
+repl.c
+run-test262
+test_fib.c
+
+# ChowJS files
+full.bin
+atoms.dat
