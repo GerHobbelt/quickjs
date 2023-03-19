@@ -48,7 +48,7 @@ prefix=/usr/local
 # use address sanitizer
 #CONFIG_ASAN=y
 # include the code for BigInt/BigFloat/BigDecimal and math mode
-CONFIG_BIGNUM=y
+# CONFIG_BIGNUM=y
 
 OBJDIR=.obj
 
