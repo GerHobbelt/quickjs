@@ -66,12 +66,12 @@ typedef uint32_t JSAtom;
 
 enum {
     /* all tags with a reference count are negative */
-    JS_TAG_FIRST       = -11, /* first negative tag */
-    JS_TAG_BIG_DECIMAL = -11,
-    JS_TAG_BIG_INT     = -10,
-    JS_TAG_BIG_FLOAT   = -9,
-    JS_TAG_SYMBOL      = -8,
-    JS_TAG_STRING      = -7,
+    JS_TAG_FIRST       = -8, /* first negative tag */
+    JS_TAG_BIG_DECIMAL = -8,
+    JS_TAG_BIG_INT     = -7,
+    JS_TAG_BIG_FLOAT   = -6,
+    JS_TAG_SYMBOL      = -5,
+    JS_TAG_STRING      = -4,
     JS_TAG_MODULE      = -3, /* used internally */
     JS_TAG_FUNCTION_BYTECODE = -2, /* used internally */
     JS_TAG_OBJECT      = -1,
@@ -194,6 +194,77 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     
 #else /* !JS_NAN_BOXING */
 
+typedef uint64_t JSValue;
+#define JSValueConst JSValue
+
+// JSValue is encoded using NaN boxing.
+// All numbers are offset by this NaN offset:
+//   64        56   52   48        40        32        24        16         8         0
+//   0b_1111_1111_1111_1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000
+// TagInt32 encoding:
+//     |0000 0000 0000| tag|0000 0000 0000 0000|            int[31:0]                  |
+// TagPtr encoding:
+//     |0000 0000 0000| tag|                   ptr[47:0]                               |
+// double is encoded as (bitcast_uint64(value) - NaN_offset)
+
+#define JS_NAN_BOXING_OFFSET ((uint64_t)0xfff8 << 48)
+#define JS_VALUE_GET_TAG(v) ((int32_t)((int64_t)v >> 48))
+#define JS_VALUE_GET_INT(v) ((int32_t)(v & 0xffffffff))
+#define JS_VALUE_GET_BOOL(v) JS_VALUE_GET_INT(v)
+#define JS_VALUE_GET_PTR(v) ((void *)(((uint64_t)v) << 16 >> 16))
+
+#define JS_MKVAL(tag, val) (((uint64_t)(tag) << 48) | (uint32_t)(val))
+#define JS_MKPTR(tag, ptr) (((uint64_t)(tag) << 48) | ((uintptr_t)(ptr) & (((uint64_t)1 << 48) - 1)))
+
+#define JS_NAN JS_MKVAL(JS_TAG_FLOAT64, 0)
+
+static inline double JS_VALUE_GET_FLOAT64(JSValue v)
+{
+    union {
+        JSValue v;
+        double d;
+    } u;
+    u.v = v;
+    u.v += JS_NAN_BOXING_OFFSET;
+    return u.d;
+}
+
+static inline JSValue __JS_NewFloat64(JSContext *ctx, double d)
+{
+    union {
+        double  d;
+        uint64_t u64;
+    } u;
+    JSValue v;
+    u.d = d;
+    /* normalize NaN */
+    if (js_unlikely((u.u64 & 0x7fffffffffffffff) > 0x7ff0000000000000))
+        v = JS_NAN;
+    else
+        v = u.u64 - JS_NAN_BOXING_OFFSET;
+    return v;
+}
+
+#define JS_TAG_IS_FLOAT64(tag) ((unsigned)((tag) - JS_TAG_FIRST) >= (JS_TAG_FLOAT64 - JS_TAG_FIRST))
+
+/* same as JS_VALUE_GET_TAG, but return JS_TAG_FLOAT64 with NaN boxing */
+static inline int JS_VALUE_GET_NORM_TAG(JSValue v)
+{
+    uint32_t tag;
+    tag = JS_VALUE_GET_TAG(v);
+    if (JS_TAG_IS_FLOAT64(tag))
+        return JS_TAG_FLOAT64;
+    else
+        return tag;
+}
+
+static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
+{
+    return v == JS_NAN;
+}
+ 
+#if false
+
 typedef union JSValueUnion {
     int32_t int32;
     double float64;
@@ -241,7 +312,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     u.d = v.u.float64;
     return (u.u64 & 0x7fffffffffffffff) > 0x7ff0000000000000;
 }
-
+#endif // !JS_EXPERIMENT_BOX64
 #endif /* !JS_NAN_BOXING */
 
 #define JS_VALUE_IS_BOTH_INT(v1, v2) ((JS_VALUE_GET_TAG(v1) | JS_VALUE_GET_TAG(v2)) == 0)
