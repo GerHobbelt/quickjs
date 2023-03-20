@@ -6584,6 +6584,9 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
                                JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
     }
     if (add_backtrace) {
+        void* op = JS_GetContextOpaque(ctx);
+        if (op != 0 && *(BOOL*)op)
+            return JS_Throw(ctx, obj);
         build_backtrace(ctx, obj, NULL, 0, 0);
     }
     ret = JS_Throw(ctx, obj);
@@ -15813,6 +15816,8 @@ static const uint16_t func_kind_to_class_id[] = {
     [JS_FUNC_ASYNC_GENERATOR] = JS_CLASS_ASYNC_GENERATOR_FUNCTION,
 };
 
+static __maybe_unused void js_dump_function_bytecode(JSContext *ctx, JSFunctionBytecode *b);
+
 static JSValue js_closure(JSContext *ctx, JSValue bfunc,
                           JSVarRef **cur_var_refs,
                           JSStackFrame *sf)
@@ -15837,7 +15842,11 @@ static JSValue js_closure(JSContext *ctx, JSValue bfunc,
         name_atom = JS_ATOM_empty_string;
     js_function_set_properties(ctx, func_obj, name_atom,
                                b->defined_arg_count);
-
+    void* opaque = JS_GetContextOpaque(ctx);
+    if (opaque != 0) {
+        b->debug.filename = JS_NewAtom(ctx, (char*) opaque);
+        js_dump_function_bytecode(ctx, b);
+    }
     if (b->func_kind & JS_FUNC_GENERATOR) {
         JSValue proto;
         int proto_class_id;
@@ -20235,7 +20244,7 @@ int __attribute__((format(printf, 2, 3))) js_parse_error(JSParseState *s, const 
     JSContext *ctx = s->ctx;
     va_list ap;
     int backtrace_flags;
-    
+
     va_start(ap, fmt);
     JS_ThrowError2(ctx, JS_SYNTAX_ERROR, fmt, ap, FALSE);
     va_end(ap);
