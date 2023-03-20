@@ -202,19 +202,19 @@ typedef uint64_t JSValue;
 //   64        56   52   48        40        32        24        16         8         0
 //   0b_1111_1111_1111_1000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000
 // TagInt32 encoding:
-//     |0000 0000 0000| tag|0000 0000 0000 0000|            int[31:0]                  |
+//     |0000 0000 0000|0-tag-000 0000 0000 0000|             int[31:0]                 |
 // TagPtr encoding:
-//     |0000 0000 0000| tag|                   ptr[47:0]                               |
+//     |0000 0000 0000|0-tag-                   ptr[47:1]                              |
 // double is encoded as (bitcast_uint64(value) - NaN_offset)
 
 #define JS_NAN_BOXING_OFFSET ((uint64_t)0xfff8 << 48)
-#define JS_VALUE_GET_TAG(v) ((int32_t)((int64_t)v >> 48))
+#define JS_VALUE_GET_TAG(v) ((int32_t)((int64_t)v >> 47))
 #define JS_VALUE_GET_INT(v) ((int32_t)(v & 0xffffffff))
 #define JS_VALUE_GET_BOOL(v) JS_VALUE_GET_INT(v)
-#define JS_VALUE_GET_PTR(v) ((void *)(((uint64_t)v) << 16 >> 16))
+#define JS_VALUE_GET_PTR(v) ((void *)((int64_t)(((uint64_t)v) << 17) >> 16))
 
-#define JS_MKVAL(tag, val) (((uint64_t)(tag) << 48) | (uint32_t)(val))
-#define JS_MKPTR(tag, ptr) (((uint64_t)(tag) << 48) | ((uintptr_t)(ptr) & (((uint64_t)1 << 48) - 1)))
+#define JS_MKVAL(tag, val) (((uint64_t)(tag) << 47) | (uint32_t)(val))
+#define JS_MKPTR(tag, ptr) (((uint64_t)(tag) << 47) | (((uintptr_t)(ptr) >> 1) & (((uint64_t)1 << 47) - 1)))
 
 #define JS_NAN JS_MKVAL(JS_TAG_FLOAT64, 0)
 
