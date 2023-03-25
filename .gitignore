@@ -5,6 +5,7 @@ libquickjs.a
 libquickjs.lto.a
 qjs
 qjsc
+qjsd
 qjscalc
 qjscalc.c
 repl.c
