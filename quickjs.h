@@ -712,6 +712,7 @@ JSValue JS_NewObjectProtoClass(JSContext *ctx, JSValueConst proto, JSClassID cla
 JSValue JS_NewObjectClass(JSContext *ctx, int class_id);
 JSValue JS_NewObjectProto(JSContext *ctx, JSValueConst proto);
 JSValue JS_NewObject(JSContext *ctx);
+JSValue JS_NewObjectClassInline(JSContext *ctx, int class_id, size_t extra_space);
 
 JS_BOOL JS_IsFunction(JSContext* ctx, JSValueConst val);
 JS_BOOL JS_IsConstructor(JSContext* ctx, JSValueConst val);
@@ -801,6 +802,7 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
 void JS_SetOpaque(JSValue obj, void *opaque);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
+int JS_GetClassID(JSValueConst obj);
 
 /* 'buf' must be zero terminated i.e. buf[buf_len] = '\0'. */
 JSValue JS_ParseJSON(JSContext *ctx, const char *buf, size_t buf_len,

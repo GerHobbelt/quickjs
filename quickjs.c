@@ -4724,12 +4724,22 @@ static __maybe_unused void JS_DumpShapes(JSRuntime *rt)
     printf("}\n");
 }
 
-static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID class_id)
+typedef struct JSInlineObject
+{
+   JSObject o;
+   char extra[];
+} JSInlineObject;
+
+static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID class_id, size_t extra_space)
 {
     JSObject *p;
 
     js_trigger_gc(ctx->rt, sizeof(JSObject));
-    p = js_malloc(ctx, sizeof(JSObject));
+    if (extra_space) {
+        p = js_malloc(ctx, sizeof(JSInlineObject) + sizeof(char [extra_space]));
+    } else {
+        p = js_malloc(ctx, sizeof(JSObject));
+    }
     if (unlikely(!p))
         goto fail;
     p->class_id = class_id;
@@ -4745,6 +4755,9 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     p->u.opaque = NULL;
     p->shape = sh;
     p->prop = js_malloc(ctx, sizeof(JSProperty) * sh->prop_size);
+    if (extra_space) {
+        p->u.opaque = ((JSInlineObject*)p)->extra;
+    }
     if (unlikely(!p->prop)) {
         js_free(ctx, p);
     fail:
@@ -4853,7 +4866,25 @@ JSValue JS_NewObjectProtoClass(JSContext *ctx, JSValueConst proto_val,
         if (!sh)
             return JS_EXCEPTION;
     }
-    return JS_NewObjectFromShape(ctx, sh, class_id);
+    return JS_NewObjectFromShape(ctx, sh, class_id, 0);
+}
+
+/* WARNING: proto must be an object or JS_NULL */
+JSValue JS_NewObjectClassInline(JSContext *ctx, int class_id, size_t extra_space)
+{
+    JSShape *sh;
+    JSObject *proto;
+
+    proto = get_proto_obj(ctx->class_proto[class_id]);
+    sh = find_hashed_shape_proto(ctx->rt, proto);
+    if (likely(sh)) {
+        sh = js_dup_shape(sh);
+    } else {
+        sh = js_new_shape(ctx, proto);
+        if (!sh)
+            return JS_EXCEPTION;
+    }
+    return JS_NewObjectFromShape(ctx, sh, class_id, extra_space);
 }
 
 #if 0
@@ -4922,7 +4953,7 @@ JSValue JS_NewObjectProto(JSContext *ctx, JSValueConst proto)
 JSValue JS_NewArray(JSContext *ctx)
 {
     return JS_NewObjectFromShape(ctx, js_dup_shape(ctx->array_shape),
-                                 JS_CLASS_ARRAY);
+                                 JS_CLASS_ARRAY, 0);
 }
 
 JSValue JS_NewObject(JSContext *ctx)
@@ -9824,6 +9855,14 @@ void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id)
         JS_ThrowTypeErrorInvalidClass(ctx, class_id);
     }
     return p;
+}
+
+int JS_GetClassID(JSValueConst obj) {
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+        return 0;
+    p = JS_VALUE_GET_OBJ(obj);
+    return p->class_id;
 }
 
 #define HINT_STRING  0
@@ -16235,7 +16274,6 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
     #if TRACY_ENABLE
     const char *name = get_func_name(caller_ctx, func_obj);
-        printf("%s\n", name)
     TracyCZone(__ctx, name ? 1 : 0);
     if (name) {
         TracyCZoneName(__ctx, name, strlen(name));
@@ -48242,7 +48280,7 @@ static JSValue get_date_string(JSContext *ctx, JSValueConst this_val,
             break;
         case 3:
             pos += snprintf(buf + pos, sizeof(buf) - pos,
-                            "%02d:%02d:%02d %cM", (h + 1) % 12 - 1, m, s,
+                            "%02d:%02d:%02d %cM", h % 12 + (h % 12 ? 0 : 12), m, s,
                             (h < 12) ? 'A' : 'P');
             break;
         }
