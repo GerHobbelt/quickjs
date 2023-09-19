@@ -36,6 +36,8 @@ target_compile_definitions(
   PUBLIC
     CONFIG_BIGNUM
     CONFIG_VERSION="${quickjs_version}"
+  PRIVATE
+    $<$<CONFIG:Debug>:DUMP_LEAKS>
 )
 
 add_library(quickjs_shared SHARED $<TARGET_OBJECTS:quickjs>)
