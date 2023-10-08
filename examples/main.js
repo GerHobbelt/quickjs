@@ -23,7 +23,7 @@ async function main(){ try{
   //   sum+=i;
   // console.log(sum);
   const fs = await import('uv');
-  let fp=fs.openFile('/home/zia_s/Documents/Projects/quickjs/main/scripts/main.js','rw',(err)=>{
+  let fp=fs.openFile('/scripts/main.js','rw',(err)=>{
     if(!err){
       fp.read(-1,10,(err,data)=>{
         console.log("read: ",err,data);
