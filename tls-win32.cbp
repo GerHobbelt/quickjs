@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="tls" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Option show_notes="0">
+			<notes>
+				<![CDATA[A Test environment to debug.]]>
+			</notes>
+		</Option>
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/tls" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Option parameters="./main.js" />
+				<Compiler>
+					<Add option="-Og" />
+					<Add option="-g" />
+					<Add option="-DUSING_UV_SHARED" />
+					<Add directory="include" />
+				</Compiler>
+				<Linker>
+					<Add library="bin/libuv/libuv.a" />
+					<Add library="bin/libquickjs/libquickjs.a" />
+				</Linker>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/tls" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Option parameters="./main.js" />
+				<Compiler>
+					<Add option="-flto" />
+					<Add option="-O3" />
+					<Add option="-fPIC" />
+					<Add option="-march=native" />
+					<Add option="-g0" />
+					<Add option="-DUSING_UV_SHARED" />
+					<Add directory="include" />
+				</Compiler>
+				<Linker>
+					<Add option="-O3" />
+					<Add option="-flto" />
+					<Add option="-s" />
+					<Add library="bin/libuv/libuv.a" />
+					<Add library="bin/libquickjs/libquickjs.a" />
+				</Linker>
+			</Target>
+			<Target title="libuv">
+				<Option output="uv" imp_lib="$(TARGET_OUTPUT_DIR)bin/libuv/$(TARGET_OUTPUT_BASENAME).a" def_file="$(TARGET_OUTPUT_DIR)bin/libuv/$(TARGET_OUTPUT_BASENAME).def" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/libuv/" />
+				<Option type="3" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
+				<Compiler>
+					<Add option="-flto" />
+					<Add option="-O3" />
+					<Add option="-std=c11" />
+					<Add option="-fPIC" />
+					<Add option="-march=native" />
+					<Add option="-g0" />
+					<Add option="-DBUILDING_UV_SHARED" />
+				</Compiler>
+				<Linker>
+					<Add option="-O3" />
+					<Add option="-flto" />
+					<Add option="-s" />
+					<Add library="advapi32" />
+					<Add library="iphlpapi" />
+					<Add library="ws2_32" />
+					<Add library="user32" />
+					<Add library="userenv" />
+				</Linker>
+			</Target>
+			<Target title="libquickjs">
+				<Option output="quickjs" imp_lib="$(TARGET_OUTPUT_DIR)bin/libquickjs/$(TARGET_OUTPUT_BASENAME).a" def_file="$(TARGET_OUTPUT_DIR)bin/libquickjs/$(TARGET_OUTPUT_BASENAME).def" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/libquickjs/" />
+				<Option type="3" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
+				<Compiler>
+					<Add option="-O3" />
+					<Add option="-fPIC" />
+					<Add option="-march=native" />
+					<Add option="-g0" />
+					<Add option="-Wno-unused-parameter" />
+					<Add option="-DUSING_UV_SHARED" />
+					<Add option="-DJS_SHARED_LIBRARY" />
+					<Add option="-DDUMP_LEAKS" />
+				</Compiler>
+				<Linker>
+					<Add option="-O3" />
+					<Add option="-s" />
+					<Add library="bin/libuv/libuv.a" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wshadow" />
+			<Add option="-Wmain" />
+			<Add option="-Wfatal-errors" />
+			<Add option="-Wextra" />
+			<Add option="-Wall" />
+			<Add option="-m64" />
+			<Add option="-fexceptions" />
+			<Add option='-DCONFIG_VERSION=&quot;NEW&quot;' />
+			<Add option="-DCONFIG_BIGNUM" />
+			<Add directory="include" />
+		</Compiler>
+		<Linker>
+			<Add option="-m64" />
+		</Linker>
+		<Unit filename="include/Log.hpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/dynamic_queue.hpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/exception.hpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/quickjs/config.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/cutils.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/libbf.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/libregexp-opcode.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/libregexp.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/libunicode-table.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/libunicode.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/list.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/quickjs-atom.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/quickjs-libc.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/quickjs-opcode.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/quickjs/quickjs.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/serverWrapper.hpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="include/span.hpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/string_view.hpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/uv.h" />
+		<Unit filename="include/uv/aix.h" />
+		<Unit filename="include/uv/bsd.h" />
+		<Unit filename="include/uv/darwin.h" />
+		<Unit filename="include/uv/errno.h" />
+		<Unit filename="include/uv/linux.h" />
+		<Unit filename="include/uv/os390.h" />
+		<Unit filename="include/uv/posix.h" />
+		<Unit filename="include/uv/stdint-msvc2008.h" />
+		<Unit filename="include/uv/sunos.h" />
+		<Unit filename="include/uv/threadpool.h" />
+		<Unit filename="include/uv/tree.h" />
+		<Unit filename="include/uv/unix.h" />
+		<Unit filename="include/uv/version.h" />
+		<Unit filename="include/uv/win.h" />
+		<Unit filename="src/main.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/quickjs/cutils.c">
+			<Option compilerVar="CC" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/quickjs/libbf.c">
+			<Option compilerVar="CC" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/quickjs/libregexp.c">
+			<Option compilerVar="CC" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/quickjs/libunicode.c">
+			<Option compilerVar="CC" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/quickjs/quickjs-libc.c">
+			<Option compilerVar="CC" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/quickjs/quickjs.c">
+			<Option compilerVar="CC" />
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/serverWrapper.cpp">
+			<Option target="libquickjs" />
+		</Unit>
+		<Unit filename="src/uv/fs-poll.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/idna.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/inet.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/strscpy.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/strtok.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/threadpool.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/timer.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/unix/atomic-ops.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/unix/internal.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/unix/linux-syscalls.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/unix/spinlock.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/uv-common.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/uv-data-getter-setters.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/version.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/async.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/atomicops-inl.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/core.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/detect-wakeup.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/dl.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/error.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/fs-event.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/fs-fd-hash-inl.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/fs.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/handle-inl.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/handle.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/internal.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/loop-watcher.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/pipe.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/poll.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/process-stdio.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/process.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/req-inl.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/signal.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/snprintf.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/stream-inl.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/stream.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/tcp.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/thread.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/udp.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/util.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/winapi.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/winapi.h">
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/winsock.c">
+			<Option compilerVar="CC" />
+			<Option target="libuv" />
+		</Unit>
+		<Unit filename="src/uv/win/winsock.h">
+			<Option target="libuv" />
+		</Unit>
+		<Extensions>
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

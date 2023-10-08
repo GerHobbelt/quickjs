@@ -1,0 +1,255 @@
+all: main
+
+
+
+
+
+SRC_DIR=
+HDR_DIR=
+G_HDR_DIR=../../include/
+OBJ_DIR=../../obj/uv/
+# ifeq '$(findstring ;,$(PATH))' ';'
+# 	OS := WINNT
+# else
+# 	OS := $(shell uname 2>/dev/null || echo Unknown)
+# 	OS := $(patsubst CYGWIN%,Cygwin,$(OS))
+# 	OS := $(patsubst MSYS%,MSYS,$(OS))
+# 	OS := $(patsubst MINGW%,MSYS,$(OS))
+# endif
+
+OS:=WINNT
+
+
+libuv_la_LIBS=
+libuv_la_CFLAGS = -I"$(G_HDR_DIR)" -I"./"
+libuv_la_HEADERS = \
+	$(G_HDR_DIR)uv/errno.h \
+	$(G_HDR_DIR)uv/threadpool.h \
+	$(G_HDR_DIR)uv/version.h \
+	$(SRC_DIR)idna.h \
+	$(SRC_DIR)queue.h \
+	$(SRC_DIR)strscpy.h \
+	$(SRC_DIR)uv-common.h \
+	$(SRC_DIR)strtok.h
+libuv_la_SOURCES = \
+	$(SRC_DIR)fs-poll.c \
+	$(SRC_DIR)idna.c \
+	$(SRC_DIR)inet.c \
+	$(SRC_DIR)strscpy.c \
+	$(SRC_DIR)threadpool.c \
+	$(SRC_DIR)timer.c \
+	$(SRC_DIR)uv-data-getter-setters.c \
+	$(SRC_DIR)uv-common.c \
+	$(SRC_DIR)version.c \
+	$(SRC_DIR)strtok.c
+#$(SRC_DIR)random.c
+
+
+
+
+
+ifeq ($(OS),WINNT)
+libuv_la_LIBS += -lpsapi \
+				-luser32 \
+				-ladvapi32 \
+				-liphlpapi \
+				-luserenv \
+				-lws2_32
+libuv_la_CFLAGS += \
+	-I$(SRC_DIR)win \
+	-DWIN32_LEAN_AND_MEAN \
+	-D_WIN32_WINNT=0x0602
+libuv_la_HEADERS += \
+	$(G_HDR_DIR)uv/win.h \
+	$(G_HDR_DIR)uv/tree.h \
+	$(SRC_DIR)win/atomicops-inl.h \
+	$(SRC_DIR)win/handle-inl.h \
+	$(SRC_DIR)win/internal.h \
+	$(SRC_DIR)win/req-inl.h \
+	$(SRC_DIR)win/stream-inl.h \
+	$(SRC_DIR)win/winapi.h \
+	$(SRC_DIR)win/winsock.h
+libuv_la_SOURCES += \
+	$(SRC_DIR)win/async.c
+	$(SRC_DIR)win/core.c \
+	$(SRC_DIR)win/detect-wakeup.c \
+	$(SRC_DIR)win/dl.c \
+	$(SRC_DIR)win/error.c \
+	$(SRC_DIR)win/fs-event.c \
+	$(SRC_DIR)win/fs.c \
+	$(SRC_DIR)win/handle.c \
+	$(SRC_DIR)win/loop-watcher.c \
+	$(SRC_DIR)win/pipe.c \
+	$(SRC_DIR)win/poll.c \
+	$(SRC_DIR)win/process-stdio.c \
+	$(SRC_DIR)win/process.c \
+	$(SRC_DIR)win/signal.c \
+	$(SRC_DIR)win/stream.c \
+	$(SRC_DIR)win/tcp.c \
+	$(SRC_DIR)win/thread.c \
+	$(SRC_DIR)win/udp.c \
+	$(SRC_DIR)win/util.c \
+	$(SRC_DIR)win/winapi.c \
+	$(SRC_DIR)win/winsock.c
+
+else  # WINNT
+
+libuv_la_LIBS+= -lpthread -pthread
+libuv_la_CFLAGS += -I$(SRC_DIR)unix
+libuv_la_HEADERS += \
+	$(G_HDR_DIR)uv/unix.h \
+	$(SRC_DIR)unix/atomic-ops.h \
+	$(SRC_DIR)unix/internal.h \
+	$(SRC_DIR)unix/spinlock.h
+libuv_la_SOURCES += \
+	$(SRC_DIR)unix/async.c \
+	$(SRC_DIR)unix/core.c \
+	$(SRC_DIR)unix/dl.c \
+	$(SRC_DIR)unix/fs.c \
+	$(SRC_DIR)unix/loop-watcher.c \
+	$(SRC_DIR)unix/loop.c \
+	$(SRC_DIR)unix/pipe.c \
+	$(SRC_DIR)unix/poll.c \
+	$(SRC_DIR)unix/process.c \
+	$(SRC_DIR)unix/signal.c \
+	$(SRC_DIR)unix/stream.c \
+	$(SRC_DIR)unix/tcp.c \
+	$(SRC_DIR)unix/thread.c \
+	$(SRC_DIR)unix/udp.c
+
+endif  # WINNT
+
+
+
+
+
+
+
+
+ifeq ($(OS),ANDROID)
+
+libuv_la_LIBS += -ldl
+libuv_la_CFLAGS += -D_GNU_SOURCE
+libuv_la_SOURCES += $(SRC_DIR)unix/pthread-fixes.c
+
+endif
+ifeq ($(OS),FREEBSD)
+
+libuv_la_HEADERS += $(G_HDR_DIR)uv/bsd.h
+libuv_la_SOURCES += \
+	$(SRC_DIR)unix/bsd-ifaddrs.c \
+	$(SRC_DIR)unix/bsd-proctitle.c \
+	$(SRC_DIR)unix/freebsd.c \
+	$(SRC_DIR)unix/kqueue.c \
+	$(SRC_DIR)unix/posix-hrtime.c
+#$(SRC_DIR)unix/random-getrandom.c
+
+endif
+ifeq ($(OS),NETBSD)
+
+libuv_la_LIBS += -kvm
+libuv_la_HEADERS += $(G_HDR_DIR)uv/bsd.h
+libuv_la_SOURCES += $(SRC_DIR)unix/bsd-ifaddrs.c \
+	$(SRC_DIR)unix/bsd-proctitle.c \
+	$(SRC_DIR)unix/kqueue.c \
+	$(SRC_DIR)unix/netbsd.c \
+	$(SRC_DIR)unix/posix-hrtime.c
+
+
+endif
+ifeq ($(OS),OPENBSD)
+
+libuv_la_LIBS += -lutil
+libuv_la_HEADERS += $(G_HDR_DIR)uv/bsd.h
+libuv_la_SOURCES += $(SRC_DIR)unix/bsd-ifaddrs.c \
+	$(SRC_DIR)unix/bsd-proctitle.c \
+	$(SRC_DIR)unix/kqueue.c \
+	$(SRC_DIR)unix/openbsd.c \
+	$(SRC_DIR)unix/posix-hrtime.c
+#$(SRC_DIR)unix/random-getentropy.c
+
+endif
+ifeq ($(OS),LINUX)
+
+libuv_la_CFLAGS += -D_GNU_SOURCE
+# -D_POSIX_C_SOURCE=200112
+libuv_la_LIBS += -lutil -ldl -lrt
+libuv_la_HEADERS += $(G_HDR_DIR)uv/linux.h \
+	$(HDR_DIR)unix/linux-syscalls.h
+libuv_la_SOURCES += $(SRC_DIR)unix/linux-core.c \
+	$(SRC_DIR)unix/linux-inotify.c \
+	$(SRC_DIR)unix/linux-syscalls.c \
+	$(SRC_DIR)unix/procfs-exepath.c \
+	$(SRC_DIR)unix/proctitle.c \
+	$(SRC_DIR)unix/epoll.c
+#$(SRC_DIR)unix/random-sysctl-linux.c
+#$(SRC_DIR)unix/random-getrandom.c
+
+endif
+
+
+# whitespace-separated subst: see text functions for more info
+#  $(patsubst pattern,replacement,var)
+#  AKA  $(var:pattern=replacement)
+libuv_la_OBJS := $(libuv_la_SOURCES:$(SRC_DIR)%.c=$(OBJ_DIR)%.o)
+
+
+
+
+
+
+
+# -s -static -static-libstdc++ -static-libgcc
+OFLAGS=-m64
+#-pedantic -Werror -Wextra 
+ERRORS=-W -Wall -Wfatal-errors
+#DEBUG=-O0 -g
+CCFLAGS= $(ERRORS) $(DEBUG)
+CPPFLAGS=$(CCFLAGS) -std=c++17 -fno-rtti -fno-exceptions
+ASMFLAGS=$(ERRORS) -O3 -g0 -std=c++14 -fno-rtti -fno-exceptions -fverbose-asm
+# -lm -lGL -lX11 -ldl -lrt -lutil -lpthread -pthread
+LIBS=
+VERBOSE=TRUE
+
+
+# Hide or not the calls depending of VERBOSE
+ifeq ($(VERBOSE),TRUE)
+	HIDE =  
+else
+	HIDE = @
+endif
+
+
+# obj/%.o: src/%.c
+# 	g++ $(CCFLAGS) -c -o $@ $<
+
+# obj/%.o: src/%.cpp header/%.hpp
+# 	g++ $(CPPFLAGS) -c -o $@ $<
+
+
+
+
+
+
+$(libuv_la_OBJS): $(OBJ_DIR)%.o: $(SRC_DIR)%.c $(libuv_la_HEADERS)
+	$(HIDE)gcc $(CCFLAGS) -Werror -Wextra  $(libuv_la_CFLAGS) -c -o $@ $<
+
+
+
+# disable compileing the entitre library again
+# just because of adding a line of comment in uv.h
+
+main: $(libuv_la_OBJS)
+objects:
+	@echo $(libuv_la_OBJS)
+flags:
+	@echo $(libuv_la_LIBS) $(libuv_la_CFLAGS)
+
+#g++ $(OFLAGS) -o $@ $^ $(libuv_la_OBJS) $(libuv_la_LIBS) $(LIBS)
+
+clean:
+	$(HIDE)rm -f $(OBJ_DIR)**/*.o
+	$(HIDE)rm -f $(OBJ_DIR)*.o
+os:
+	echo $(OS)
+	
