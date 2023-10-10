@@ -49,6 +49,14 @@ set_target_properties(
   WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
+if(UNIX)
+  target_link_libraries(
+    quickjs_shared
+    PRIVATE
+      m
+  )
+endif()
+
 add_library(quickjs_static STATIC $<TARGET_OBJECTS:quickjs>)
 
 set_target_properties(
@@ -57,5 +65,13 @@ set_target_properties(
   OUTPUT_NAME quickjs
   PREFIX lib
 )
+
+if(UNIX)
+  target_link_libraries(
+    quickjs_static
+    PRIVATE
+      m
+  )
+endif()
 
 install(TARGETS quickjs_shared quickjs_static)
