@@ -97,3 +97,8 @@ function main1() {
     }
 }
 //main1();
+let a=["5","4"];
+let b=["5","4"]
+let c = a==b;
+console.log(c);
+
