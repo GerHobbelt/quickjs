@@ -6267,6 +6267,18 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
     }
 }
 
+void JS_DumpObjects(JSRuntime *rt) {
+    struct list_head *el;
+    JSGCObjectHeader *p;
+    printf("JSObjects: {\n");
+    JS_DumpObjectHeader(rt);
+    list_for_each(el, &rt->gc_obj_list) {
+        p = list_entry(el, JSGCObjectHeader, link);
+        JS_DumpGCObject(rt, p);
+    }
+    printf("}\n");
+}
+
 /* NOTE: you must free it! */
 JSValue JS_GetGlobalObject(JSContext *ctx)
 {
@@ -6728,6 +6740,22 @@ static JSValue JS_ThrowTypeErrorNotAnObject(JSContext *ctx)
 static JSValue JS_ThrowTypeErrorNotASymbol(JSContext *ctx)
 {
     return JS_ThrowTypeError(ctx, "not a symbol");
+}
+
+static JSValue JS_ThrowTypeErrorNotAFunction(JSContext *ctx, JSAtom name)
+{
+    char buf[ATOM_GET_STR_BUF_SIZE];
+    return JS_ThrowTypeError(ctx, "'%s' is not a function",
+                             JS_AtomGetStr(ctx, buf, sizeof(buf), name));
+}
+
+static JSValue JS_ThrowTypeErrorNotAFunction2(JSContext *ctx, JSAtom first, JSAtom second)
+{
+    char buf1[ATOM_GET_STR_BUF_SIZE];
+    char buf2[ATOM_GET_STR_BUF_SIZE];
+    return JS_ThrowTypeError(ctx, "'%s.%s' is not a function",
+                            JS_AtomGetStr(ctx, buf1, sizeof(buf1), first),
+                            JS_AtomGetStr(ctx, buf2, sizeof(buf2), second));
 }
 
 static JSValue JS_ThrowReferenceErrorNotDefined(JSContext *ctx, JSAtom name)
@@ -16770,7 +16798,82 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             has_call_argc:
                 call_argv = sp - call_argc;
                 sf->cur_pc = pc;
-                ret_val = JS_CallInternal(ctx, call_argv[-1], JS_UNDEFINED,
+                JSValue func = call_argv[-1];
+                // When the call is not a function, an exception is thrown and its name.
+                if (!JS_IsFunction(ctx, func)) {
+                    // Currently, only call0 is handled.
+                    if(opcode == OP_call0) {
+                        if(pc[-2] == OP_set_loc0) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_set_loc1) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count + 1].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_set_loc2) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count + 2].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_set_loc3) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count + 3].var_name);
+                            goto exception;
+                        } else if(pc[-3] == OP_set_loc8) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[pc[-2]].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_loc0) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_loc1) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count + 1].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_loc2) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count + 2].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_loc3) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[b->arg_count + 3].var_name);
+                            goto exception;
+                        } else if(pc[-4] == OP_get_arg) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[pc[-3]].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_arg0) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[0].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_arg1) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[1].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_arg2) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[2].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_arg3) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->vardefs[3].var_name);
+                            goto exception;
+                        } else if(pc[-6] == OP_get_var){
+                            pc -= 5;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        } else if(pc[-4] == OP_get_var_ref) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->closure_var[pc[-3]].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_var_ref0) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->closure_var[0].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_var_ref1) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->closure_var[1].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_var_ref2) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->closure_var[2].var_name);
+                            goto exception;
+                        } else if(pc[-2] == OP_get_var_ref3) {
+                            JS_ThrowTypeErrorNotAFunction(ctx, b->closure_var[3].var_name);
+                            goto exception;
+                        }
+                    } else if(opcode == OP_call1) {
+                        if(pc[-3] == OP_fclosure8 && pc[-8] == OP_get_var) {
+                            pc -= 7;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        }
+                    }
+                }
+                ret_val = JS_CallInternal(ctx, func, JS_UNDEFINED,
                                           JS_UNDEFINED, call_argc, call_argv, 0);
                 if (unlikely(JS_IsException(ret_val)))
                     goto exception;
@@ -16806,7 +16909,53 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 pc += 2;
                 call_argv = sp - call_argc;
                 sf->cur_pc = pc;
-                ret_val = JS_CallInternal(ctx, call_argv[-1], call_argv[-2],
+                JSValue func = call_argv[-1];
+                // When the call is not a function, an exception is thrown and its name.
+                if(!JS_IsFunction(ctx, func)) {
+                    // Currently, only call_method is handled.
+                    if(opcode == OP_call_method) {
+                        if(pc[-5] == OP_push_const8 && pc[-10] == OP_get_field2) {
+                            pc -= 9;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        } else if(pc[-8] == OP_get_field2) {
+                            pc -= 7;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        } else if(pc[-4] == OP_push_0 && pc[-9] == OP_get_field2) {
+                            pc -= 8;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        } else if(pc[-4] == OP_push_1) {
+                            if(pc[-9] == OP_get_field2) {
+                                pc -= 8;
+                                JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                                goto exception;
+                            } else if(pc[-5] == OP_push_0 && pc[-10] == OP_get_field2 && pc[-15] == OP_push_atom_value) {
+                                const uint8_t *first = pc - 14;
+                                const uint8_t *second = pc - 9;
+                                JS_ThrowTypeErrorNotAFunction2(ctx, get_u32(first), get_u32(second));
+                                goto exception;
+                            }
+                        } else if(pc[-8] == OP_push_atom_value && pc[-13] == OP_get_field2) {
+                            pc -= 12;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        } else if(pc[-5] == OP_fclosure8 && pc[-10] == OP_get_field2) {
+                            pc -= 9;
+                            JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
+                            goto exception;
+                        } else if(pc[-6] == OP_call0) {
+                            if(pc[-11] == OP_get_var && pc[-16] == OP_get_field2 && pc[-21] == OP_get_var) {
+                                const uint8_t *first = pc - 20;
+                                const uint8_t *second = pc - 15;
+                                JS_ThrowTypeErrorNotAFunction2(ctx, get_u32(first), get_u32(second));
+                                goto exception;
+                            }
+                        }
+                    }
+                }
+                ret_val = JS_CallInternal(ctx, func, call_argv[-2],
                                           JS_UNDEFINED, call_argc, call_argv, 0);
                 if (unlikely(JS_IsException(ret_val)))
                     goto exception;
@@ -31092,7 +31241,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
     next: ;
     }
 
-    line_num = 0; /* avoid warning */
+    line_num = s->line_num; /* init with function start line num */
     for (pos = 0; pos < bc_len; pos = pos_next) {
         op = bc_buf[pos];
         len = opcode_info[op].size;
@@ -31228,9 +31377,18 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
                 /* remove dead code */
                 int line = -1;
                 dbuf_put(&bc_out, bc_buf + pos, len);
-                pos = skip_dead_code(s, bc_buf, bc_len, pos + len, &line);
+                if(pos + len < bc_len)
+                    /* have dead code, remove it */
+                    pos = skip_dead_code(s, bc_buf, bc_len, pos + len, &line);
+                else {
+                    /* already arrive the function end */
+                    pos += len;
+                    line = line_num + 1; /* line_num is inited with function start line, line_num + 1 goes outside */
+                }
+
                 pos_next = pos;
-                if (pos < bc_len && line >= 0 && line_num != line) {
+                /* use <= to allow save the function next line num */
+                if (pos <= bc_len && line >= 0 && line_num != line) {
                     line_num = line;
                     s->line_number_size++;
                     dbuf_putc(&bc_out, OP_line_num);
@@ -33463,7 +33621,15 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                     }
                 }
             } else {
-                js_parse_error(s, "missing formal parameter");
+                // Make a judgment here.
+                // There may be parsing errors in js_parse_skip_parens_token,
+                // to avoid the exceptions here covering the actual errors.
+                JSValue error = JS_GetException(ctx);
+                if (!JS_IsNull(error) && JS_IsError(ctx, error)) {
+                    JS_Throw(ctx, error);
+                } else {
+                    js_parse_error(s, "missing formal parameter");
+                }
                 goto fail;
             }
             if (rest && s->token.val != ')') {
@@ -36503,6 +36669,17 @@ static JSValue js_global_isFinite(JSContext *ctx, JSValueConst this_val,
     return JS_NewBool(ctx, res);
 }
 
+static JSValue js_promise_get_state(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv) {
+    if (argc == 0) {
+        return JS_NULL;
+    }
+
+    JSValueConst promise;
+    promise = argv[0];
+    return JS_GetPromiseState(ctx, promise);
+}
+
 /* Object class */
 
 static JSValue JS_ToObject(JSContext *ctx, JSValueConst val)
@@ -38700,6 +38877,33 @@ static int JS_isConcatSpreadable(JSContext *ctx, JSValueConst obj)
     return JS_IsArray(ctx, obj);
 }
 
+// Support Array.prototype.at, like: [1, 2].at(0);
+static JSValue js_array_at(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv) {
+    if(argc > 0 && !JS_IsUndefined(argv[0])) {
+        int64_t len, i;
+        if (js_get_length64(ctx, &len, this_val)) {
+            return JS_EXCEPTION;
+        }
+
+        JS_ToInt64(ctx, &i, argv[0]);
+        if (i < 0) {
+            if (i < -len) {
+                return JS_UNDEFINED;
+            }
+
+            i = i + len;
+        } else {
+            if (i >= len) {
+                return JS_UNDEFINED;
+            }
+        }
+        return JS_GetPropertyUint32(ctx, this_val, i);
+    }
+
+    return JS_EXCEPTION;
+}
+
 static JSValue js_array_concat(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
@@ -40108,6 +40312,7 @@ static const JSCFunctionListEntry js_iterator_proto_funcs[] = {
 };
 
 static const JSCFunctionListEntry js_array_proto_funcs[] = {
+    JS_CFUNC_DEF("at", 1, js_array_at ),
     JS_CFUNC_DEF("concat", 1, js_array_concat ),
     JS_CFUNC_MAGIC_DEF("every", 1, js_array_every, special_every ),
     JS_CFUNC_MAGIC_DEF("some", 1, js_array_every, special_some ),
@@ -48388,6 +48593,8 @@ static const JSCFunctionListEntry js_global_funcs[] = {
     JS_CFUNC_DEF("parseFloat", 1, js_parseFloat ),
     JS_CFUNC_DEF("isNaN", 1, js_global_isNaN ),
     JS_CFUNC_DEF("isFinite", 1, js_global_isFinite ),
+    /* for print promise in console.log */
+    JS_CFUNC_DEF("getPromiseState", 1, js_promise_get_state),
 
     JS_CFUNC_MAGIC_DEF("decodeURI", 1, js_global_decodeURI, 0 ),
     JS_CFUNC_MAGIC_DEF("decodeURIComponent", 1, js_global_decodeURI, 1 ),
@@ -48630,7 +48837,7 @@ done:
    0: toUTCString: "Tue, 02 Jan 2018 23:04:46 GMT"
    1: toString: "Wed Jan 03 2018 00:05:22 GMT+0100 (CET)"
    2: toISOString: "2018-01-02T23:02:56.927Z"
-   3: toLocaleString: "1/2/2018, 11:40:40 PM"
+   3: toLocaleString: "2018/1/2 23:40:40"
    part: 1=date, 2=time 3=all
    XXX: should use a variant of strftime().
  */
@@ -48698,9 +48905,8 @@ static JSValue get_date_string(JSContext *ctx, JSValueConst this_val,
             break;
         case 3:
             pos += snprintf(buf + pos, sizeof(buf) - pos,
-                            "%02d/%02d/%0*d", mon + 1, d, 4 + (y < 0), y);
+                            "%0*d/%02d/%02d", 4 + (y < 0), y, mon + 1, d);
             if (part == 3) {
-                buf[pos++] = ',';
                 buf[pos++] = ' ';
             }
             break;
@@ -48732,8 +48938,7 @@ static JSValue get_date_string(JSContext *ctx, JSValueConst this_val,
             break;
         case 3:
             pos += snprintf(buf + pos, sizeof(buf) - pos,
-                            "%02d:%02d:%02d %cM", (h + 1) % 12 - 1, m, s,
-                            (h < 12) ? 'A' : 'P');
+                            "%02d:%02d:%02d", h, m, s);
             break;
         }
     }
@@ -54640,4 +54845,23 @@ void JS_AddIntrinsicTypedArrays(JSContext *ctx)
 #ifdef CONFIG_ATOMICS
     JS_AddIntrinsicAtomics(ctx);
 #endif
+}
+
+JSValue JS_GetPromiseState(JSContext *ctx, JSValueConst promise) {
+    JSPromiseData *s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
+    JSValue ret = JS_NewObject(ctx);
+    const char *c_state = "pending";
+    if (s->promise_state == JS_PROMISE_FULFILLED || s->promise_state == JS_PROMISE_REJECTED) {
+        JS_DefinePropertyValueStr(ctx, ret, "result", JS_DupValue(ctx, s->promise_result), JS_PROP_C_W_E);
+        if (s->promise_state == JS_PROMISE_FULFILLED) {
+            c_state = "fulfilled";
+        } else {
+            c_state = "rejected";
+        }
+    } else {
+        JS_DefinePropertyValueStr(ctx, ret, "result", JS_NULL, JS_PROP_C_W_E);
+    }
+    JSValue p_state = JS_NewString(ctx, c_state);
+    JS_DefinePropertyValueStr(ctx, ret, "state", p_state, JS_PROP_C_W_E);
+    return ret;
 }
