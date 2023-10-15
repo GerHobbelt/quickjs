@@ -1,6 +1,8 @@
 #include <iostream>
 #include <quickjspp.hpp>
 
+#include "monolithic_examples.h"
+
 
 class ChartXY
 {
@@ -58,7 +60,7 @@ try_eval_module(
       {
             //js_std_dump_error(ctx);
             auto exc = context.getException();
-            std::cerr << (exc.isError() ? "Error: " : "Throw: ") << (std::string)exc << std::endl;
+            std::cerr << (exc.isError() ? "Error: " : "Throw: ") << exc.toJSON() << std::endl;
             if((bool)exc["stack"])
                 std::cerr << (std::string)exc["stack"] << std::endl;
 
@@ -69,7 +71,7 @@ try_eval_module(
 }
 
 #if defined(BUILD_MONOLITHIC)
-#define main		quickjs_sample_app_main
+#define main		qjs_sample_app_main
 #endif
 
 int main(int argc, const char** argv)
@@ -131,7 +133,7 @@ int main(int argc, const char** argv)
     {
           //js_std_dump_error(ctx);
           auto exc = context.getException();
-          std::cerr << (exc.isError() ? "Error: " : "Throw: ") << (std::string)exc << std::endl;
+          std::cerr << (exc.isError() ? "Error: " : "Throw: ") << exc.toJSON() << std::endl;
           if((bool)exc["stack"])
               std::cerr << (std::string)exc["stack"] << std::endl;
 
