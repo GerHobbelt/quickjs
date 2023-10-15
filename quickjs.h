@@ -590,6 +590,8 @@ typedef struct JSMemoryUsage {
 void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s);
 void JS_DumpMemoryUsage(const JSMemoryUsage *s, JSRuntime *rt);
 
+void JS_DumpObjects(JSRuntime *rt);
+
 /* atom support */
 #define JS_ATOM_NULL 0
 
@@ -1081,6 +1083,9 @@ typedef void JSHostPromiseRejectionTracker(JSContext *ctx, JSValueConst promise,
                                            JSValueConst reason,
                                            JS_BOOL is_handled, void *opaque);
 void JS_SetHostPromiseRejectionTracker(JSRuntime *rt, JSHostPromiseRejectionTracker *cb, void *opaque);
+
+/* for print promise in console.log */
+JSValue JS_GetPromiseState(JSContext *ctx, JSValueConst promise);
 
 /* return != 0 if the JS code needs to be interrupted */
 typedef int JSInterruptHandler(JSRuntime *rt, void *opaque);
