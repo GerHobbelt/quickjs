@@ -635,7 +635,7 @@ main(int argc, char** argv) {
             "#include <inttypes.h>\n"
             "\n");
   }
-
+  
   for(i = optind; i < argc; i++) {
     const char* filename = argv[i];
     compile_file(ctx, fo, filename, cname, module);
