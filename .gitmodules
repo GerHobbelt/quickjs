@@ -26,3 +26,7 @@
 	path = qjs-net
 	url = git@github.com:rsenn/qjs-net.git
 	branch = main
+[submodule "libwebsockets"]
+	path = libwebsockets
+	url = https://github.com/warmcat/libwebsockets.git
+	branch = v4.3-stable
