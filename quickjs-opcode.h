@@ -23,6 +23,7 @@
  * THE SOFTWARE.
  */
 
+// clang-format off
 #ifdef FMT
 FMT(none)
 FMT(none_int)
