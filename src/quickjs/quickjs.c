@@ -6303,6 +6303,11 @@ void JS_AddPropertyToException(JSContext *ctx, const char *prop_name, JSValue va
     JS_DefinePropertyValueStr(ctx, exception, prop_name, value, JS_PROP_C_W_E);
 }
 
+JS_BOOL JS_HasException(JSContext *ctx)
+{
+    return !JS_IsNull(ctx->rt->current_exception);
+}
+
 static void dbuf_put_leb128(DynBuf *s, uint32_t v)
 {
     uint32_t a;
@@ -14755,6 +14760,11 @@ static BOOL js_strict_eq(JSContext *ctx, JSValue op1, JSValue op2)
     return js_strict_eq2(ctx, op1, op2, JS_EQ_STRICT);
 }
 
+BOOL JS_StrictEq(JSContext *ctx, JSValue op1, JSValue op2)
+{
+    return js_strict_eq(ctx, op1, op2);
+}
+
 static BOOL js_same_value(JSContext *ctx, JSValueConst op1, JSValueConst op2)
 {
     return js_strict_eq2(ctx,
@@ -14762,11 +14772,21 @@ static BOOL js_same_value(JSContext *ctx, JSValueConst op1, JSValueConst op2)
                          JS_EQ_SAME_VALUE);
 }
 
+BOOL JS_SameValue(JSContext *ctx, JSValueConst op1, JSValueConst op2)
+{
+    return js_same_value(ctx, op1, op2);
+}
+
 static BOOL js_same_value_zero(JSContext *ctx, JSValueConst op1, JSValueConst op2)
 {
     return js_strict_eq2(ctx,
                          JS_DupValue(ctx, op1), JS_DupValue(ctx, op2),
                          JS_EQ_SAME_VALUE_ZERO);
+}
+
+BOOL JS_SameValueZero(JSContext *ctx, JSValueConst op1, JSValueConst op2)
+{
+    return js_same_value_zero(ctx, op1, op2);
 }
 
 static no_inline int js_strict_eq_slow(JSContext *ctx, JSValue *sp,
@@ -27989,6 +28009,11 @@ static JSValue js_get_module_ns(JSContext *ctx, JSModuleDef *m)
         m->module_ns = val;
     }
     return JS_DupValue(ctx, m->module_ns);
+}
+
+JSValue JS_GetModuleNamespace(JSContext *ctx, JSModuleDef *m)
+{
+    return js_get_module_ns(ctx, m);
 }
 
 /* Load all the required modules for module 'm' */
@@ -46754,12 +46779,6 @@ static const JSCFunctionListEntry js_generator_proto_funcs[] = {
 
 /* Promise */
 
-typedef enum JSPromiseStateEnum {
-    JS_PROMISE_PENDING,
-    JS_PROMISE_FULFILLED,
-    JS_PROMISE_REJECTED,
-} JSPromiseStateEnum;
-
 typedef struct JSPromiseData {
     JSPromiseStateEnum promise_state;
     /* 0=fulfill, 1=reject, list of JSPromiseReactionData.link */
@@ -47197,6 +47216,19 @@ static JSValue js_new_promise_capability(JSContext *ctx,
 JSValue JS_NewPromiseCapability(JSContext *ctx, JSValue *resolving_funcs)
 {
     return js_new_promise_capability(ctx, resolving_funcs, JS_UNDEFINED);
+}
+
+JSPromiseStateEnum JS_GetPromiseState(JSContext *ctx, JSValueConst promise)
+{
+    JSPromiseData *s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
+    return s->promise_state;
+}
+
+JSValue JS_GetPromiseResult(JSContext *ctx, JSValueConst promise)
+{
+    JSPromiseData *s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
+    JS_DupValue(ctx, s->promise_result);
+    return s->promise_result;
 }
 
 static JSValue js_promise_resolve(JSContext *ctx, JSValueConst this_val,
@@ -48789,6 +48821,19 @@ has_val:
         rv = s;
     }
     return rv;
+}
+
+JSValue JS_NewDate(JSContext *ctx, double time)
+{
+    JSValue date = js_create_from_ctor(ctx, JS_UNDEFINED, JS_CLASS_DATE);
+    if (!JS_IsException(date))
+        JS_SetThisTimeValue(ctx, date, time);
+    return date;
+}
+
+int JS_ToDate(JSContext *ctx, double *pres, JSValueConst val)
+{
+    return JS_ThisTimeValue(ctx, pres, val);
 }
 
 static JSValue js_Date_UTC(JSContext *ctx, JSValueConst this_val,
