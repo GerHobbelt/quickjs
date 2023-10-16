@@ -127,6 +127,14 @@ declare interface FILE {
   setvbuf(mode: number, size: number): void;
 }
 
+/** An opaque object containing a C pointer. */
+declare interface UserPtr<T = any> {
+  [Symbol.toStringTag]: "UserPtr";
+
+  /** This property is not present at runtime; it's only here for type checking purposes. */
+  __t: T;
+}
+
 declare module "quickjs:std" {
   /**
    * Set the exit code that the process should exit with in the future, if it
@@ -231,7 +239,7 @@ declare module "quickjs:std" {
    * @param value - The value to check.
    * @returns Whether the value was a `FILE` or not.
    */
-  export function isFILE(value: any): boolean;
+  export function isFILE(value: any): value is FILE;
 
   /**
    * Open a file (wrapper to the libc `fopen()`).
@@ -473,6 +481,14 @@ declare module "quickjs:std" {
    * - octal (0o prefix) and hexadecimal (0x prefix) numbers
    */
   export function parseExtJSON(str: string): any;
+
+  /**
+   * Return a boolean indicating whether the provided value is a UserPtr object.
+   *
+   * @param value - The value to check.
+   * @returns Whether the value was a `UserPtr` or not.
+   */
+  export function isUserPtr(value: any): value is UserPtr;
 
   /**
    * A wrapper around the standard C [strftime](https://en.cppreference.com/w/c/chrono/strftime).

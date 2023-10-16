@@ -26,6 +26,11 @@ JSValue QJU_ForEachProperty_Read(JSContext *ctx, JSValue obj, QJUForEachProperty
 
 void QJU_FreeForEachPropertyState(JSContext *ctx, QJUForEachPropertyState *state);
 
+#define QJU_AssertArgLength(function_name, expected_arg_length) \
+  if (argc != expected_arg_length) { \
+    return JS_ThrowTypeError(ctx, "expected %d argument(s) to %s, but received %d", expected_arg_length, function_name, argc); \
+  }
+
 /* reads the contents of the file at `filename` into a buffer. */
 uint8_t *QJU_LoadFile(JSContext *ctx, size_t *pbuf_len, const char *filename);
 

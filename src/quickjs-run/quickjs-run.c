@@ -34,6 +34,7 @@ __static_yoink("blink_xnu_aarch64");
 #include <string.h>
 #include "quickjs-full-init.h"
 #include "quickjs-modulesys.h"
+#include "quickjs-libdl.h"
 #include "cutils.h"
 
 static JSContext *JS_NewCustomContext(JSRuntime *rt)

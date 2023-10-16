@@ -49,6 +49,7 @@ __static_yoink("blink_xnu_aarch64");
 #include "quickjs-utils.h"
 #include "quickjs-modulesys.h"
 #include "quickjs-full-init.h"
+#include "quickjs-libdl.h"
 
 extern const uint8_t qjsc_repl[];
 extern const uint32_t qjsc_repl_size;
@@ -76,6 +77,14 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     if (quickjs_full_init(ctx)) {
         exit(1);
     }
+#if 0
+    /* system modules */
+    js_init_module_std(ctx, "quickjs:std");
+    js_init_module_os(ctx, "quickjs:os");
+    js_init_module_bytecode(ctx, "quickjs:bytecode");
+    js_init_module_context(ctx, "quickjs:context");
+    js_init_module_dl(ctx, "quickjs:dl");
+#endif
     return ctx;
 }
 
