@@ -2750,7 +2750,9 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
     int len;
 
 #if 0
-    printf("__JS_NewAtom: ");  JS_DumpString(rt, str); printf("\n");
+    printf("__JS_NewAtom: ");  
+	JS_DumpString(rt, str); 
+	printf("\n");
 #endif
     if (atom_type < JS_ATOM_TYPE_SYMBOL) {
         /* str is not NULL */
@@ -8724,7 +8726,9 @@ int JS_SetPropertyInternal(JSContext *ctx, JSValueConst this_obj,
     JSPropertyDescriptor desc;
     int ret;
 #if 0
-    printf("JS_SetPropertyInternal: "); print_atom(ctx, prop); printf("\n");
+    printf("JS_SetPropertyInternal: "); 
+	print_atom(ctx, prop); 
+	printf("\n");
 #endif
     tag = JS_VALUE_GET_TAG(this_obj);
     if (unlikely(tag != JS_TAG_OBJECT)) {
