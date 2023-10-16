@@ -120,8 +120,8 @@ function log_one(text, n, ti) {
     ti = Math.round(ti * 100) / 100;
     log_data[text] = ti;
     if (typeof ref === "number") {
-        log_line(text, n, ti, ref, ti * 100 / ref);
-        total_score += ti * 100 / ref;
+        log_line(text, n, ti, ref, (ti * 100) / ref);
+        total_score += (ti * 100) / ref;
         total_scale += 100;
     } else {
         log_line(text, n, ti);
