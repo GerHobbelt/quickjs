@@ -57,6 +57,8 @@ extern JSModuleDef*
 
 int js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                         int flags);
+void js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
+                        const char* filename);
 void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
                                       JSValueConst reason,
                                       JS_BOOL is_handled, void *opaque);
