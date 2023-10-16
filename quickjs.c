@@ -35,6 +35,9 @@
 #include <time.h>
 #include <errno.h>
 #include <math.h>
+#if defined(HAVE_UNISTD_H)
+#include <unistd.h>
+#endif
 #if defined(__FreeBSD__)
 #include <malloc_np.h> // for malloc_usable_size
 #endif
@@ -241,7 +244,11 @@ typedef enum JSErrorEnum {
 } JSErrorEnum;
 
 #define JS_MAX_LOCAL_VARS 65536
+#ifdef CONFIG_STACK_SIZE_MAX
+#define JS_STACK_SIZE_MAX CONFIG_STACK_SIZE_MAX
+#else
 #define JS_STACK_SIZE_MAX 65534
+#endif
 #define JS_STRING_LEN_MAX ((1 << 30) - 1)
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -369,6 +376,22 @@ typedef struct JSRuntimeInternalThreadState {
     struct JSStackFrame *current_stack_frame;
     struct list_head job_list;
 } JSRuntimeInternalThreadState;
+
+typedef struct JSCallstackSnapshotEntry {
+    JSValue func;
+    void *frame;
+} JSCallstackSnapshotEntry;
+
+typedef struct JSInternalCallstackSnapshot {
+    int num_entries;
+    JSCallstackSnapshotEntry entries[32];
+} JSInternalCallstackSnapshot;
+
+typedef struct JSInternalCallstackIter {
+    const JSInternalCallstackSnapshot *snapshot;
+    JSContext *ctx;
+    int i;
+} JSInternalCallstackIter;
 
 struct JSClass {
     uint32_t class_id; /* 0 means free entry */
@@ -1067,6 +1090,9 @@ static int JS_InitAtoms(JSRuntime *rt);
 static JSAtom __JS_NewAtomInit(JSRuntime *rt, const char *str, int len,
                                int atom_type);
 static void JS_FreeAtomStruct(JSRuntime *rt, JSAtomStruct *p);
+static int find_line_num(JSContext *ctx, JSFunctionBytecode *b,
+                         uint32_t pc_value);
+static const char *get_func_name(JSContext *ctx, JSValueConst func);
 static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b);
 static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
                                   JSValueConst this_obj,
@@ -1077,7 +1103,7 @@ static JSValue js_call_bound_function(JSContext *ctx, JSValueConst func_obj,
 static JSValue JS_CallInternal(JSContext *ctx, JSValueConst func_obj,
                                JSValueConst this_obj, JSValueConst new_target,
                                int argc, JSValue *argv, int flags);
-static JSValue JS_CallConstructorInternal(JSContext *ctx,
+JSValue JS_CallConstructorInternal(JSContext *ctx,
                                           JSValueConst func_obj,
                                           JSValueConst new_target,
                                           int argc, JSValue *argv, int flags);
@@ -6536,6 +6562,113 @@ void JS_DumpObjects(JSRuntime *rt) {
 	qjs_dump_printf("}\n");
 }
 
+void JS_CaptureCallstack(JSRuntime *rt, const JSRuntimeThreadState *state,
+                         JSCallstackSnapshot *snapshot)
+{
+    const JSRuntimeInternalThreadState *ts =
+        (JSRuntimeInternalThreadState *)state;
+    JSInternalCallstackSnapshot *cs = (JSInternalCallstackSnapshot *)snapshot;
+    struct JSStackFrame *sf;
+    int i;
+
+    cs->num_entries = 0;
+    i = 0;
+    for (sf = (ts != NULL) ? ts->current_stack_frame : rt->current_stack_frame;
+         sf != NULL && i < countof(cs->entries);
+         sf = sf->prev_frame) {
+        JSCallstackSnapshotEntry *entry = &cs->entries[i];
+
+        entry->func = JS_DupValueRT(rt, sf->cur_func);
+        entry->frame = sf;
+
+        cs->num_entries++;
+        i++;
+    }
+}
+
+void JS_FreeCallstack(JSRuntime *rt, JSCallstackSnapshot *snapshot)
+{
+    JSInternalCallstackSnapshot *cs = (JSInternalCallstackSnapshot *)snapshot;
+    int i;
+
+    for (i = 0; i < cs->num_entries; i++)
+        JS_FreeValueRT(rt, cs->entries[i].func);
+}
+
+void JS_CallstackIterInit(JSCallstackIter *iter,
+                          const JSCallstackSnapshot *snapshot,
+                          JSContext *ctx)
+{
+    JSInternalCallstackIter *it = (JSInternalCallstackIter *)iter;
+
+    it->snapshot = (JSInternalCallstackSnapshot *)snapshot;
+    it->ctx = ctx;
+    it->i = it->snapshot->num_entries - 1;
+}
+
+JS_BOOL JS_CallstackIterNext(JSCallstackIter *iter, char **description,
+                             void **frame)
+{
+    JSInternalCallstackIter *it = (JSInternalCallstackIter *)iter;
+    JSContext *ctx = it->ctx;
+    const JSCallstackSnapshotEntry *entry;
+    DynBuf dbuf;
+
+    if (it->i < 0)
+        return 0;
+
+    entry = &it->snapshot->entries[it->i];
+    it->i--;
+
+    js_dbuf_init(ctx, &dbuf);
+
+    if (!JS_IsUndefined(entry->func)) {
+        const char *func_name_str;
+        JSObject *p;
+
+        func_name_str = get_func_name(ctx, entry->func);
+        if (func_name_str && func_name_str[0] != '\0')
+            dbuf_putstr(&dbuf, func_name_str);
+        else
+            dbuf_putstr(&dbuf, "<anonymous>");
+
+        p = JS_VALUE_GET_OBJ(entry->func);
+        if (js_class_has_bytecode(p->class_id)) {
+            JSFunctionBytecode *b;
+
+            b = p->u.func.function_bytecode;
+            if (b->has_debug) {
+                const char *atom_str;
+                int line_num;
+
+                atom_str = JS_AtomToCString(ctx, b->debug.filename);
+                dbuf_printf(&dbuf, " (%s",
+                            atom_str ? atom_str : "<null>");
+                JS_FreeCString(ctx, atom_str);
+
+                line_num = find_line_num(ctx, b, 0);
+                if (line_num != -1)
+                    dbuf_printf(&dbuf, ":%d", line_num);
+
+                dbuf_putc(&dbuf, ')');
+            }
+        } else {
+            dbuf_printf(&dbuf, " (native)");
+        }
+
+        JS_FreeCString(ctx, func_name_str);
+    } else {
+        dbuf_putstr(&dbuf, "<detached>");
+    }
+
+    dbuf_putc(&dbuf, '\0');
+
+    *description = (char *)dbuf.buf;
+    *frame = entry->frame;
+
+    return 1;
+}
+
 JSValue JS_GetGlobalObject(JSContext *ctx)
 {
     return JS_DupValue(ctx, ctx->global_obj);
@@ -6776,7 +6909,7 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
             prepare = JS_GetProperty(ctx, ctx->error_ctor,
                                      JS_ATOM_prepareStackTrace);
             if (!JS_IsUndefined(prepare)) {
-                JSValueConst args[] = {
+                JSValueConst args[2] = {
                     error_obj,
                     str,
                 };
@@ -11051,9 +11184,9 @@ static int JS_ToInt32SatFree(JSContext *ctx, int *pres, JSValue val)
             if (isnan(d)) {
                 ret = 0;
             } else {
-                if (d < INT32_MIN)
+                if (d < (double)INT32_MIN)
                     ret = INT32_MIN;
-                else if (d > INT32_MAX)
+                else if (d > (double)INT32_MAX)
                     ret = INT32_MAX;
                 else
                     ret = (int)d;
@@ -11125,9 +11258,9 @@ static int JS_ToInt64SatFree(JSContext *ctx, int64_t *pres, JSValue val)
             if (isnan(d)) {
                 *pres = 0;
             } else {
-                if (d < INT64_MIN)
+                if (d < (double)INT64_MIN)
                     *pres = INT64_MIN;
-                else if (d > INT64_MAX)
+                else if (d > (double)INT64_MAX)
                     *pres = INT64_MAX;
                 else
                     *pres = (int64_t)d;
@@ -11845,10 +11978,12 @@ static void js_dtoa1(char *buf, double d, int radix, int n_digits, int flags)
             strcpy(q, "Infinity");
         }
     } else if (flags == JS_DTOA_VAR_FORMAT) {
-        int64_t i64;
+        int64_t i64 = 0;
         char buf1[70], *ptr;
+	if (d > (double)MAX_SAFE_INTEGER || d < (double)-MAX_SAFE_INTEGER)
+            goto generic_conv;
         i64 = (int64_t)d;
-        if (d != i64 || i64 > MAX_SAFE_INTEGER || i64 < -MAX_SAFE_INTEGER)
+        if (d != i64)
             goto generic_conv;
         /* fast path for integers */
         ptr = i64toa(buf1 + sizeof(buf1), i64, radix);
@@ -16865,7 +17000,6 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
 
     prev_sf = rt->current_stack_frame;
     sf->prev_frame = prev_sf;
-    rt->current_stack_frame = sf;
     ctx = p->u.cfunc.realm; /* change the current realm */
 
 #ifdef CONFIG_BIGNUM
@@ -16892,6 +17026,8 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
         sf->arg_count = arg_count;
     }
     sf->arg_buf = (JSValue*)arg_buf;
+
+    rt->current_stack_frame = sf;
 
     func = p->u.cfunc.c_function;
     switch(cproto) {
@@ -31504,9 +31640,9 @@ typedef struct CodeContext {
     JSAtom atom;
 } CodeContext;
 
-#define M2(op1, op2)            ((op1) | ((op2) << 8))
-#define M3(op1, op2, op3)       ((op1) | ((op2) << 8) | ((op3) << 16))
-#define M4(op1, op2, op3, op4)  ((op1) | ((op2) << 8) | ((op3) << 16) | ((op4) << 24))
+#define M2(op1, op2)            (uint32_t)((op1) | ((op2) << 8))
+#define M3(op1, op2, op3)       (uint32_t)((op1) | ((op2 & 0xff) << 8) | ((op3 & 0xff) << 16))
+#define M4(op1, op2, op3, op4)  (uint32_t)((op1) | ((uint32_t)(op2 & 0xff) << 8) | ((uint32_t)(op3 & 0xff) << 16) | ((uint32_t)(op4 & 0xff) << 24))
 
 static BOOL code_match(CodeContext *s, int pos, ...)
 {
@@ -35242,6 +35378,31 @@ static void JS_WriteString(BCWriterState *s, JSString *p)
     }
 }
 
+static int JS_WriteRegExpByteSwapped(BCWriterState *s, JSValueConst obj)
+{
+    JSString *re_bytecode;
+    JSValue swapped_val;
+    JSString *swapped;
+
+    re_bytecode = JS_VALUE_GET_STRING(obj);
+
+    swapped_val = js_new_string8(s->ctx, re_bytecode->u.str8, re_bytecode->len);
+    if (JS_IsException(swapped_val))
+        goto fail;
+    swapped = JS_VALUE_GET_STRING(swapped_val);
+
+    lre_byte_swap(swapped->u.str8, swapped->len);
+
+    bc_put_u8(s, BC_TAG_STRING);
+    JS_WriteString(s, swapped);
+
+    JS_FreeValue(s->ctx, swapped_val);
+
+    return 0;
+ fail:
+    return -1;
+}
+
 #ifdef CONFIG_BIGNUM
 static int JS_WriteBigNum(BCWriterState *s, JSValueConst obj)
 {
@@ -35386,6 +35547,7 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
     JSFunctionBytecode *b = JS_VALUE_GET_PTR(obj);
     uint32_t flags;
     int idx, i;
+    uint8_t *idx_needs_regexp_bswap = NULL;
 
     bc_put_u8(s, BC_TAG_FUNCTION_BYTECODE);
     flags = idx = 0;
@@ -35456,12 +35618,63 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
         dbuf_put(&s->dbuf, b->debug.pc2line_buf, b->debug.pc2line_len);
     }
 
-    for(i = 0; i < b->cpool_count; i++) {
-        if (JS_WriteObjectRec(s, b->cpool[i]))
-            goto fail;
+    if (s->byte_swap) {
+        uint8_t *bc_buf = b->byte_code_buf;
+        int bc_len = b->byte_code_len;
+        int pos, op;
+        uint32_t prev_push_const_idx = 0;
+
+        pos = 0;
+        while (pos < bc_len) {
+            op = bc_buf[pos];
+
+            switch(op) {
+            case OP_push_const:
+                prev_push_const_idx = get_u32(bc_buf + pos + 1);
+                break;
+            case OP_push_const8:
+                prev_push_const_idx = get_u8(bc_buf + pos + 1);
+                break;
+            case OP_regexp:
+                if (!idx_needs_regexp_bswap) {
+                    idx_needs_regexp_bswap = qjs_malloc(s->ctx, b->cpool_count);
+                    if (!idx_needs_regexp_bswap)
+                        goto fail;
+                    memset(idx_needs_regexp_bswap, 0, b->cpool_count);
+                }
+                idx_needs_regexp_bswap[prev_push_const_idx] = TRUE;
+            default:
+                break;
+            }
+
+            pos += short_opcode_info(op).size;
+        }
+
+        if (!idx_needs_regexp_bswap)
+            goto no_bswap_needed;
+
+        for(i = 0; i < b->cpool_count; i++) {
+            if (idx_needs_regexp_bswap[i]) {
+                if (JS_WriteRegExpByteSwapped(s, b->cpool[i]))
+                    goto fail;
+            } else {
+                if (JS_WriteObjectRec(s, b->cpool[i]))
+                    goto fail;
+            }
+        }
+
+        qjs_free(s->ctx, idx_needs_regexp_bswap);
+    } else {
+ no_bswap_needed:
+        for(i = 0; i < b->cpool_count; i++) {
+            if (JS_WriteObjectRec(s, b->cpool[i]))
+                goto fail;
+        }
     }
+
     return 0;
  fail:
+    qjs_free(s->ctx, idx_needs_regexp_bswap);
     return -1;
 }
 
@@ -49385,7 +49598,7 @@ static JSValue js_date_constructor(JSContext *ctx, JSValueConst new_target,
     // Date(y, mon, d, h, m, s, ms)
     JSValue rv;
     int i, n;
-    double a, val;
+    double val;
 
     if (JS_IsUndefined(new_target)) {
         /* invoked as function */
@@ -49419,7 +49632,7 @@ static JSValue js_date_constructor(JSContext *ctx, JSValueConst new_target,
         }
         val = time_clip(val);
     } else {
-        double fields[] = { 0, 0, 1, 0, 0, 0, 0 };
+        double a, fields[] = { 0, 0, 1, 0, 0, 0, 0 };
         if (n > 7)
             n = 7;
         for(i = 0; i < n; i++) {
@@ -54999,7 +55212,7 @@ static JSValue js_atomics_wait(JSContext *ctx,
     }
     if (JS_ToFloat64(ctx, &d, argv[3]))
         return JS_EXCEPTION;
-    if (isnan(d) || d > INT64_MAX)
+    if (isnan(d) || d > (double)INT64_MAX)
         timeout = INT64_MAX;
     else if (d < 0)
         timeout = 0;

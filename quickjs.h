@@ -64,7 +64,7 @@ extern "C" {
 #else
 #define js_likely(x)     (x)
 #define js_unlikely(x)   (x)
-#define js_force_inline  __forceinline
+#define js_force_inline  inline
 #define __js_printf_like(a, b)
 #endif
 
@@ -477,6 +477,14 @@ typedef struct JSRuntimeThreadState {
     char data[64];
 } JSRuntimeThreadState;
 
+typedef struct JSCallstackSnapshot {
+    char data[1024];
+} JSCallstackSnapshot;
+
+typedef struct JSCallstackIter {
+    char data[32];
+} JSCallstackIter;
+
 typedef struct JSMallocState {
     size_t malloc_count;
     size_t malloc_size;
@@ -595,6 +603,15 @@ void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s);
 void JS_DumpMemoryUsage(const JSMemoryUsage *s, JSRuntime *rt);
 
 void JS_DumpObjects(JSRuntime *rt);
+
+void JS_CaptureCallstack(JSRuntime *rt, const JSRuntimeThreadState *state,
+                         JSCallstackSnapshot *snapshot);
+void JS_FreeCallstack(JSRuntime *rt, JSCallstackSnapshot *snapshot);
+void JS_CallstackIterInit(JSCallstackIter *iter,
+                          const JSCallstackSnapshot *snapshot,
+                          JSContext *ctx);
+JS_BOOL JS_CallstackIterNext(JSCallstackIter *iter, char **description,
+                             void **frame);
 
 /* atom support */
 #define JS_ATOM_NULL 0
@@ -733,7 +750,13 @@ static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
         uint64_t u;
     } u, t;
     u.d = d;
-    val = (int32_t)d;
+    if (d < (double)INT32_MIN) {
+        val = INT32_MIN;
+    } else if (d > (double)INT32_MAX) {
+        val = INT32_MAX;
+    } else {
+        val = (int32_t)d;
+    }
     t.d = val;
     /* -0 cannot be represented as integer, so we compare the bit
         representation */

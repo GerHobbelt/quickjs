@@ -2565,6 +2565,88 @@ const char *lre_get_groupnames(const uint8_t *bc_buf)
     return (const char *)(bc_buf + 7 + re_bytecode_len);
 }
 
+void lre_byte_swap(uint8_t *bc_buf, int bc_buf_len)
+{
+    uint8_t *pc = bc_buf;
+    uint8_t *end = bc_buf + bc_buf_len;
+    int len, opcode, n, i;
+
+    QJS_ASSERT(bc_buf_len > RE_HEADER_LEN);
+
+    pc += 3;
+
+    len = get_u32(pc);
+	QJS_ASSERT(len == bc_buf_len - RE_HEADER_LEN);
+    put_u32(pc, bswap32(len));
+    pc += 4;
+
+    while (pc < end) {
+        opcode = *pc++;
+		QJS_ASSERT(opcode < REOP_COUNT);
+
+        len = reopcode_info[opcode].size - 1;
+		QJS_ASSERT(pc + len <= bc_buf + bc_buf_len);
+
+        switch(opcode) {
+        case REOP_char:
+            put_u16(pc, bswap16(get_u16(pc)));
+            break;
+        case REOP_char32:
+        case REOP_goto:
+        case REOP_split_goto_first:
+        case REOP_split_next_first:
+        case REOP_loop:
+        case REOP_push_i32:
+        case REOP_lookahead:
+        case REOP_negative_lookahead:
+        case REOP_bne_char_pos:
+            put_u32(pc, bswap32(get_u32(pc)));
+            break;
+        case REOP_range:
+            n = get_u16(pc);
+            put_u16(pc, bswap16(n));
+            pc += 2;
+
+            for(i = 0; i < n * 2; i++) {
+                put_u16(pc, bswap16(get_u16(pc)));
+                pc += 2;
+            }
+
+            len = 0;
+
+            break;
+        case REOP_range32:
+            n = get_u16(pc);
+            put_u16(pc, bswap16(n));
+            pc += 2;
+
+            for(i = 0; i < n * 2; i++) {
+                put_u32(pc, bswap32(get_u32(pc)));
+                pc += 4;
+            }
+
+            len = 0;
+
+            break;
+        case REOP_simple_greedy_quant:
+            for(i = 0; i < 4; i++) {
+                put_u32(pc, bswap32(get_u32(pc)));
+                pc += 4;
+            }
+
+            len = 0;
+
+            break;
+        default:
+            break;
+        }
+
+        pc += len;
+    }
+
+	QJS_ASSERT(pc == end);
+}
+
 #ifdef TEST
 
 BOOL lre_check_stack_overflow(void *opaque, size_t alloca_size)

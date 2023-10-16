@@ -7,6 +7,8 @@ cc = meson.get_compiler('c')
 have_msvc = cc.get_id() == 'msvc'
 have_emscripten = cc.get_define('EMSCRIPTEN') != ''
 
+threads_dep = dependency('threads')
+dl_dep = cc.find_library('dl', required: false)
 m_dep = cc.find_library('m', required: false)
 
 headers = [
@@ -23,6 +25,18 @@ sources = [
 
 cdata = configuration_data()
 cdata.set_quoted('CONFIG_VERSION', meson.project_version())
+
+if host_machine.endian() == 'big'
+  cdata.set('WORDS_BIGENDIAN', 1)
+endif
+
+if cc.has_header('unistd.h')
+  cdata.set('HAVE_UNISTD_H', 1)
+endif
+
+if cc.has_function('malloc_usable_size')
+  cdata.set('HAVE_MALLOC_USABLE_SIZE', 1)
+endif
 
 if get_option('libc')
   headers += 'quickjs-libc.h'
@@ -65,10 +79,14 @@ configure_file(
   output: 'config.h',
   configuration: cdata,
 )
-add_project_arguments(have_msvc ? '/FI' : '-include', 'config.h', language: 'c')
+add_project_arguments(
+  have_msvc ? '/FI' : '-include', meson.current_build_dir() / 'config.h',
+  '-D_GNU_SOURCE=1',
+  language: 'c',
+)
 
 quickjs = library('quickjs', sources,
-  dependencies: m_dep,
+  dependencies: [threads_dep, dl_dep, m_dep],
   install: true,
 )
 quickjs_dep = declare_dependency(
@@ -77,10 +95,11 @@ quickjs_dep = declare_dependency(
 )
 
 pkg = import('pkgconfig')
-pkg.generate(
+pkg.generate(quickjs,
   name: 'quickjs',
   description: 'Small and embeddable JavaScript engine',
   url: 'https://bellard.org/quickjs/',
   subdirs: ['quickjs'],
-  libraries: [quickjs],
 )
+
+meson.override_dependency('quickjs', quickjs_dep)
