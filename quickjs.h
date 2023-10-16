@@ -38,9 +38,9 @@ extern "C" {
 #define js_force_inline       inline __attribute__((always_inline))
 #define __js_printf_like(f, a)   __attribute__((format(printf, f, a)))
 #else
-#define js_likely(x)     (x)
-#define js_unlikely(x)   (x)
-#define js_force_inline  inline
+#define js_likely(x)          (x)
+#define js_unlikely(x)        (x)
+#define js_force_inline       __forceinline
 #define __js_printf_like(a, b)
 #endif
 
@@ -215,8 +215,25 @@ typedef struct JSValue {
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+#ifndef __cplusplus
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
 #define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
+#else
+inline JSValue JS_MKVAL(int64_t tag, int32_t val)
+{
+    JSValue value;
+    value.u.int32 = val;
+    value.tag = tag;
+    return value;
+}
+inline JSValue JS_MKPTR(int64_t tag, void* p)
+{
+    JSValue value;
+    value.u.ptr = p;
+    value.tag = tag;
+    return value;
+}
+#endif
 
 #define JS_TAG_IS_FLOAT64(tag) ((unsigned)(tag) == JS_TAG_FLOAT64)
 
@@ -668,7 +685,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
-    return (JSValue)v;
+    return v;
 }
 
 static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
@@ -677,7 +694,7 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
         JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
         p->ref_count++;
     }
-    return (JSValue)v;
+    return v;
 }
 
 int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
@@ -801,6 +818,7 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
                             JSAtom prop, JSValue getter, JSValue setter,
                             int flags);
 void JS_SetOpaque(JSValue obj, void *opaque);
+void *JS_GetRawOpaque(JSValueConst obj);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
 
