@@ -191,7 +191,14 @@ JSProperty* add_property(JSContext* ctx, JSObject* p, JSAtom prop, int prop_flag
       p->shape = new_sh;
     }
   }
-  assert(p->shape->header.ref_count == 1);
+
+
+const char* keyaaa = JS_AtomToCString(ctx, prop);
+printf("add_property");
+printf(keyaaa);
+printf("\n\n");
+
+  // assert(p->shape->header.ref_count == 1);
   if (add_shape_property(ctx, &p->shape, p, prop, prop_flags))
     return NULL;
   return &p->prop[p->shape->prop_count - 1];

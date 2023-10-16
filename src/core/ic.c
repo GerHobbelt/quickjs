@@ -138,6 +138,10 @@ int free_ic(InlineCache *ic) {
 
 force_inline uint32_t add_ic_slot(InlineCache *ic, JSAtom atom, JSObject *object,
                      uint32_t prop_offset, JSObject* prototype) {
+const char* keyaaa = JS_AtomToCString(ic->ctx, atom);
+printf("keyaaa");
+printf(keyaaa);
+printf("\n\n");
   int32_t i;
   uint32_t h;
   InlineCacheHashSlot *ch;
