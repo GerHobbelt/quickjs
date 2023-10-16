@@ -1,3 +1,7 @@
+#if TRACY_ENABLE
+#include "../tracy/TracyC.h"
+#endif
+
 /*
  * QuickJS Javascript Engine
  *
@@ -766,9 +770,9 @@ typedef struct JSProperty {
     } u;
 } JSProperty;
 
-#define JS_PROP_INITIAL_SIZE 2
-#define JS_PROP_INITIAL_HASH_SIZE 4 /* must be a power of two */
-#define JS_ARRAY_INITIAL_SIZE 2
+#define JS_PROP_INITIAL_SIZE 4
+#define JS_PROP_INITIAL_HASH_SIZE 8 /* must be a power of two */
+#define JS_ARRAY_INITIAL_SIZE 4
 
 typedef struct JSShapeProperty {
     uint32_t hash_next : 26; /* 0 if last in list */
@@ -4670,12 +4674,22 @@ static __maybe_unused void JS_DumpShapes(JSRuntime *rt)
     printf("}\n");
 }
 
-static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID class_id)
+typedef struct JSInlineObject
+{
+   JSObject o;
+   char extra[];
+} JSInlineObject;
+
+static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID class_id, size_t extra_space)
 {
     JSObject *p;
 
     js_trigger_gc(ctx->rt, sizeof(JSObject));
-    p = js_malloc(ctx, sizeof(JSObject));
+    if (extra_space) {
+        p = js_malloc(ctx, sizeof(JSInlineObject) + sizeof(char [extra_space]));
+    } else {
+        p = js_malloc(ctx, sizeof(JSObject));
+    }
     if (unlikely(!p))
         goto fail;
     p->class_id = class_id;
@@ -4691,6 +4705,9 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     p->u.opaque = NULL;
     p->shape = sh;
     p->prop = js_malloc(ctx, sizeof(JSProperty) * sh->prop_size);
+    if (extra_space) {
+        p->u.opaque = ((JSInlineObject*)p)->extra;
+    }
     if (unlikely(!p->prop)) {
         js_free(ctx, p);
     fail:
@@ -4799,7 +4816,25 @@ JSValue JS_NewObjectProtoClass(JSContext *ctx, JSValueConst proto_val,
         if (!sh)
             return JS_EXCEPTION;
     }
-    return JS_NewObjectFromShape(ctx, sh, class_id);
+    return JS_NewObjectFromShape(ctx, sh, class_id, 0);
+}
+
+/* WARNING: proto must be an object or JS_NULL */
+JSValue JS_NewObjectClassInline(JSContext *ctx, int class_id, size_t extra_space)
+{
+    JSShape *sh;
+    JSObject *proto;
+
+    proto = get_proto_obj(ctx->class_proto[class_id]);
+    sh = find_hashed_shape_proto(ctx->rt, proto);
+    if (likely(sh)) {
+        sh = js_dup_shape(sh);
+    } else {
+        sh = js_new_shape(ctx, proto);
+        if (!sh)
+            return JS_EXCEPTION;
+    }
+    return JS_NewObjectFromShape(ctx, sh, class_id, extra_space);
 }
 
 #if 0
@@ -4868,7 +4903,7 @@ JSValue JS_NewObjectProto(JSContext *ctx, JSValueConst proto)
 JSValue JS_NewArray(JSContext *ctx)
 {
     return JS_NewObjectFromShape(ctx, js_dup_shape(ctx->array_shape),
-                                 JS_CLASS_ARRAY);
+                                 JS_CLASS_ARRAY, 0);
 }
 
 JSValue JS_NewObject(JSContext *ctx)
@@ -5745,6 +5780,10 @@ static void gc_free_cycles(JSRuntime *rt)
 
 void JS_RunGC(JSRuntime *rt)
 {
+    #if TRACY_ENABLE
+    TracyCZoneN(__ctx, "JS_RunGC", 1);
+    #endif
+
     /* decrement the reference of the children of each object. mark =
        1 after this pass. */
     gc_decref(rt);
@@ -5754,6 +5793,10 @@ void JS_RunGC(JSRuntime *rt)
 
     /* free the GC objects in a cycle */
     gc_free_cycles(rt);
+
+    #if TRACY_ENABLE
+    TracyCZoneEnd(__ctx);
+    #endif
 }
 
 /* Return false if not an object or if the object has already been
@@ -9826,7 +9869,7 @@ void *JS_GetOpaque(JSValueConst obj, JSClassID class_id)
     if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
         return NULL;
     p = JS_VALUE_GET_OBJ(obj);
-    if (p->class_id != class_id)
+    if (class_id && p->class_id != class_id)
         return NULL;
     return p->u.opaque;
 }
@@ -9838,6 +9881,14 @@ void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id)
         JS_ThrowTypeErrorInvalidClass(ctx, class_id);
     }
     return p;
+}
+
+int JS_GetClassID(JSValueConst obj) {
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+        return 0;
+    p = JS_VALUE_GET_OBJ(obj);
+    return p->class_id;
 }
 
 #define HINT_STRING  0
@@ -16179,13 +16230,21 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
     int arg_count, i;
     JSCFunctionEnum cproto;
 
+    #if TRACY_ENABLE
+    TracyCZoneN(__ctx, "js_call_c_function", 1);
+    #endif
+
     p = JS_VALUE_GET_OBJ(func_obj);
     cproto = p->u.cfunc.cproto;
     arg_count = p->u.cfunc.length;
 
     /* better to always check stack overflow */
-    if (js_check_stack_overflow(rt, sizeof(arg_buf[0]) * arg_count))
+    if (js_check_stack_overflow(rt, sizeof(arg_buf[0]) * arg_count)) {
+        #if TRACY_ENABLE
+        TracyCZoneEnd(__ctx);
+        #endif
         return JS_ThrowStackOverflow(ctx);
+    }
 
     prev_sf = rt->current_stack_frame;
     sf->prev_frame = prev_sf;
@@ -16302,6 +16361,9 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
     }
 
     rt->current_stack_frame = sf->prev_frame;
+    #if TRACY_ENABLE
+    TracyCZoneEnd(__ctx);
+    #endif
     return ret_val;
 }
 
@@ -16369,6 +16431,14 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
     JSVarRef **var_refs;
     size_t alloca_size;
 
+    #if TRACY_ENABLE
+    const char *name = get_func_name(caller_ctx, func_obj);
+    TracyCZone(__ctx, name ? 1 : 0);
+    if (name) {
+        TracyCZoneName(__ctx, name, strlen(name));
+    }
+    #endif
+
 #if !DIRECT_DISPATCH
 #define SWITCH(pc)      switch (opcode = *pc++)
 #define CASE(op)        case op
@@ -16391,8 +16461,15 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 #define BREAK           SWITCH(pc)
 #endif
 
-    if (js_poll_interrupts(caller_ctx))
+    if (js_poll_interrupts(caller_ctx)) {
+        #if TRACY_ENABLE
+        if (name) {
+            JS_FreeCString(caller_ctx, name);
+        }
+        TracyCZoneEnd(__ctx);
+        #endif
         return JS_EXCEPTION;
+    }
     if (unlikely(JS_VALUE_GET_TAG(func_obj) != JS_TAG_OBJECT)) {
         if (flags & JS_CALL_FLAG_GENERATOR) {
             JSAsyncFunctionState *s = JS_VALUE_GET_PTR(func_obj);
@@ -16425,8 +16502,20 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
         call_func = rt->class_array[p->class_id].call;
         if (!call_func) {
         not_a_function:
+            #if TRACY_ENABLE
+            if (name) {
+                JS_FreeCString(caller_ctx, name);
+            }
+            TracyCZoneEnd(__ctx);
+            #endif
             return JS_ThrowTypeError(caller_ctx, "attempting to call a non-function value");
         }
+        #if TRACY_ENABLE
+        if (name) {
+            JS_FreeCString(caller_ctx, name);
+        }
+        TracyCZoneEnd(__ctx);
+        #endif
         return call_func(caller_ctx, func_obj, this_obj, argc,
                          (JSValueConst *)argv, flags);
     }
@@ -16440,8 +16529,15 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
     alloca_size = sizeof(JSValue) * (arg_allocated_size + b->var_count +
                                      b->stack_size);
-    if (js_check_stack_overflow(rt, alloca_size))
+    if (js_check_stack_overflow(rt, alloca_size)) {
+        #if TRACY_ENABLE
+        if (name) {
+            JS_FreeCString(caller_ctx, name);
+        }
+        TracyCZoneEnd(__ctx);
+        #endif
         return JS_ThrowStackOverflow(caller_ctx);
+    }
 
     sf->js_mode = b->js_mode;
     arg_buf = argv;
@@ -18986,6 +19082,12 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
         }
     }
     rt->current_stack_frame = sf->prev_frame;
+    #if TRACY_ENABLE
+    if (name) {
+        JS_FreeCString(caller_ctx, name);
+    }
+    TracyCZoneEnd(__ctx);
+    #endif
     return ret_val;
 }
 
