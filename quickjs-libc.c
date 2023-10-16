@@ -3951,3 +3951,30 @@ js_std_eval_binary(JSContext* ctx, const uint8_t* buf, size_t buf_len, int load_
     JS_FreeValue(ctx, val);
   }
 }
+
+void js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
+                        const char* filename)
+{
+    void* o = malloc(strlen(filename)+1);
+    memset(o, 0, strlen(filename)+1);
+    memcpy(o, filename, strlen(filename));
+    JS_SetContextOpaque(ctx, o);
+    JSValue obj, val;
+    obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
+    if (JS_IsException(obj))
+        goto exception;
+    if (JS_VALUE_GET_TAG(obj) == JS_TAG_MODULE) {
+        if (JS_ResolveModule(ctx, obj) < 0) {
+            JS_FreeValue(ctx, obj);
+            goto exception;
+        }
+        js_module_set_import_meta(ctx, obj, FALSE, TRUE);
+    }
+    val = JS_EvalFunction(ctx, obj);
+    if (JS_IsException(val)) {
+        exception:
+        js_std_dump_error(ctx);
+        exit(1);
+    }
+    JS_FreeValue(ctx, val);
+}

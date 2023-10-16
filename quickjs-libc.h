@@ -46,8 +46,8 @@ JSModuleDef* js_module_loader(JSContext* ctx, const char* module_name, void* opa
 JSModuleDef* js_module_loader_path(JSContext* ctx, const char* module_name, void* opaque);
 
 void js_std_eval_binary(JSContext* ctx, const uint8_t* buf, size_t buf_len, int flags);
-void
-js_std_promise_rejection_tracker(JSContext* ctx, JSValueConst promise, JSValueConst reason, JS_BOOL is_handled, void* opaque);
+void js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len, const char* filename);
+void js_std_promise_rejection_tracker(JSContext* ctx, JSValueConst promise, JSValueConst reason, JS_BOOL is_handled, void* opaque);
 void js_std_set_worker_new_context_func(JSContext* (*func)(JSRuntime* rt));
 
 #ifdef __cplusplus

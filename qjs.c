@@ -87,6 +87,22 @@ eval_buf(JSContext* ctx, const void* buf, int buf_len, const char* filename, int
   return ret;
 }
 
+static void eval_bytecode_file(JSContext *ctx, const char *filename)
+{
+    uint8_t *buf;
+    size_t buf_len;
+
+    buf = js_load_file(ctx, &buf_len, filename);
+    if (!buf) {
+        perror(filename);
+        exit(1);
+    }
+
+    js_std_dump_binary(ctx, buf, buf_len, filename);
+    js_free(ctx, buf);
+}
+
+
 static int
 eval_file(JSContext* ctx, const char* filename, int module) {
   uint8_t* buf;
@@ -304,6 +320,7 @@ help(void) {
 #endif
          "-T  --trace        trace memory allocation\n"
          "-d  --dump         dump the memory usage stats\n"
+         "-b  --bytecode     load bytecode from file\n"
          "    --memory-limit n       limit the memory usage to 'n' bytes\n"
          "    --stack-size n         limit the stack size to 'n' bytes\n"
          "    --unhandled-rejection  dump unhandled promise rejections\n"
@@ -321,6 +338,7 @@ main(int argc, char** argv) {
   int interactive = 0;
   int dump_memory = 0;
   int trace_memory = 0;
+  int load_bytecode = 0;
   int empty_run = 0;
   int module = -1;
   int load_std = 0;
@@ -436,6 +454,11 @@ main(int argc, char** argv) {
         empty_run++;
         continue;
       }
+      if (opt == 'b' || !strcmp(longopt, "bytecode"))
+      {
+        load_bytecode++;
+        continue;
+      }
       if(!strcmp(longopt, "memory-limit")) {
         if(optind >= argc) {
           fprintf(stderr, "expecting memory limit");
@@ -527,8 +550,12 @@ main(int argc, char** argv) {
     } else {
       const char* filename;
       filename = argv[optind];
-      if(eval_file(ctx, filename, module))
-        goto fail;
+      if (load_bytecode) {
+        eval_bytecode_file(ctx, filename);
+      } else {
+        if (eval_file(ctx, filename, module))
+          goto fail;
+      }
     }
     if(interactive) {
       js_std_eval_binary(ctx, qjsc_repl, qjsc_repl_size, 0);
