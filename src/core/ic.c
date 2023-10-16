@@ -171,11 +171,13 @@ printf("\n\n");
     }
 
     i = (i + 1) % IC_CACHE_ITEM_CAPACITY;
-    if (unlikely(i == cr->index))
+    if (unlikely(i == cr->index)) {
+      cr->index = (cr->index + 1) % IC_CACHE_ITEM_CAPACITY;
       break;
+    }
   }
 
-  ci = cr->buffer + i;
+  ci = cr->buffer + cr->index;
   sh = ci->shape;
   if (ci->watchpoint_ref)
     // must be called before js_free_shape_null
