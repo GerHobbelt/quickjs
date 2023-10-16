@@ -30,12 +30,12 @@
 
 #define LRE_BOOL int /* for documentation purposes */
 
-#define LRE_FLAG_GLOBAL (1 << 0)
+#define LRE_FLAG_GLOBAL     (1 << 0)
 #define LRE_FLAG_IGNORECASE (1 << 1)
-#define LRE_FLAG_MULTILINE (1 << 2)
-#define LRE_FLAG_DOTALL (1 << 3)
-#define LRE_FLAG_UTF16 (1 << 4)
-#define LRE_FLAG_STICKY (1 << 5)
+#define LRE_FLAG_MULTILINE  (1 << 2)
+#define LRE_FLAG_DOTALL     (1 << 3)
+#define LRE_FLAG_UTF16      (1 << 4)
+#define LRE_FLAG_STICKY     (1 << 5)
 
 #define LRE_FLAG_NAMED_GROUPS \
   (1 << 7) /* named groups are present in the regexp */

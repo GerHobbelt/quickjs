@@ -204,7 +204,8 @@ static inline void *bf_malloc(bf_context_t *s, size_t size) {
 
 static inline void bf_free(bf_context_t *s, void *ptr) {
   /* must test ptr otherwise equivalent to malloc(0) */
-  if (ptr) bf_realloc(s, ptr, 0);
+  if (ptr) 
+    bf_realloc(s, ptr, 0);
 }
 
 void bf_init(bf_context_t *s, bf_t *r);
@@ -217,15 +218,25 @@ static inline void bf_delete(bf_t *r) {
   }
 }
 
-static inline void bf_neg(bf_t *r) { r->sign ^= 1; }
+static inline void bf_neg(bf_t *r) { 
+  r->sign ^= 1; 
+}
 
-static inline int bf_is_finite(const bf_t *a) { return (a->expn < BF_EXP_INF); }
+static inline int bf_is_finite(const bf_t *a) { 
+  return (a->expn < BF_EXP_INF); 
+}
 
-static inline int bf_is_nan(const bf_t *a) { return (a->expn == BF_EXP_NAN); }
+static inline int bf_is_nan(const bf_t *a) { 
+  return (a->expn == BF_EXP_NAN); 
+}
 
-static inline int bf_is_zero(const bf_t *a) { return (a->expn == BF_EXP_ZERO); }
+static inline int bf_is_zero(const bf_t *a) { 
+  return (a->expn == BF_EXP_ZERO); 
+}
 
-static inline void bf_memcpy(bf_t *r, const bf_t *a) { *r = *a; }
+static inline void bf_memcpy(bf_t *r, const bf_t *a) { 
+  *r = *a; 
+}
 
 int bf_set_ui(bf_t *r, uint64_t a);
 int bf_set_si(bf_t *r, int64_t a);
@@ -286,13 +297,13 @@ int bf_logic_and(bf_t *r, const bf_t *a, const bf_t *b);
 
 /* additional flags for bf_atof */
 /* do not accept hex radix prefix (0x or 0X) if radix = 0 or radix = 16 */
-#define BF_ATOF_NO_HEX (1 << 16)
+#define BF_ATOF_NO_HEX       (1 << 16)
 /* accept binary (0b or 0B) or octal (0o or 0O) radix prefix if radix = 0 */
-#define BF_ATOF_BIN_OCT (1 << 17)
+#define BF_ATOF_BIN_OCT      (1 << 17)
 /* Do not parse NaN or Inf */
-#define BF_ATOF_NO_NAN_INF (1 << 18)
+#define BF_ATOF_NO_NAN_INF   (1 << 18)
 /* return the exponent separately */
-#define BF_ATOF_EXPONENT (1 << 19)
+#define BF_ATOF_EXPONENT     (1 << 19)
 
 int bf_atof(bf_t *a, const char *str, const char **pnext, int radix,
             limb_t prec, bf_flags_t flags);
@@ -317,7 +328,7 @@ int bf_mul_pow_radix(bf_t *r, const bf_t *T, limb_t radix, slimb_t expn,
 #define BF_FTOA_FORMAT_FIXED (0 << 16)
 /* fractional format: prec digits after the decimal point rounded with
    (flags & BF_RND_MASK) */
-#define BF_FTOA_FORMAT_FRAC (1 << 16)
+#define BF_FTOA_FORMAT_FRAC  (1 << 16)
 /* free format:
 
    For binary radices with bf_ftoa() and for bfdec_ftoa(): use the minimum
@@ -338,13 +349,13 @@ int bf_mul_pow_radix(bf_t *r, const bf_t *T, limb_t radix, slimb_t expn,
 #define BF_FTOA_FORMAT_FREE_MIN (3 << 16)
 
 /* force exponential notation for fixed or free format */
-#define BF_FTOA_FORCE_EXP (1 << 20)
+#define BF_FTOA_FORCE_EXP    (1 << 20)
 /* add 0x prefix for base 16, 0o prefix for base 8 or 0b prefix for
    base 2 if non zero value */
-#define BF_FTOA_ADD_PREFIX (1 << 21)
+#define BF_FTOA_ADD_PREFIX   (1 << 21)
 /* return "Infinity" instead of "Inf" and add a "+" for positive
    exponents */
-#define BF_FTOA_JS_QUIRKS (1 << 22)
+#define BF_FTOA_JS_QUIRKS    (1 << 22)
 
 char *bf_ftoa(size_t *plen, const bf_t *a, int radix, limb_t prec,
               bf_flags_t flags);
@@ -395,9 +406,13 @@ int bf_acos(bf_t *r, const bf_t *a, limb_t prec, bf_flags_t flags);
 static inline void bfdec_init(bf_context_t *s, bfdec_t *r) {
   bf_init(s, (bf_t *)r);
 }
-static inline void bfdec_delete(bfdec_t *r) { bf_delete((bf_t *)r); }
+static inline void bfdec_delete(bfdec_t *r) { 
+  bf_delete((bf_t *)r); 
+}
 
-static inline void bfdec_neg(bfdec_t *r) { r->sign ^= 1; }
+static inline void bfdec_neg(bfdec_t *r) { 
+  r->sign ^= 1; 
+}
 
 static inline int bfdec_is_finite(const bfdec_t *a) {
   return (a->expn < BF_EXP_INF);
@@ -418,7 +433,9 @@ static inline void bfdec_memcpy(bfdec_t *r, const bfdec_t *a) {
 int bfdec_set_ui(bfdec_t *r, uint64_t a);
 int bfdec_set_si(bfdec_t *r, int64_t a);
 
-static inline void bfdec_set_nan(bfdec_t *r) { bf_set_nan((bf_t *)r); }
+static inline void bfdec_set_nan(bfdec_t *r) { 
+  bf_set_nan((bf_t *)r); 
+}
 static inline void bfdec_set_zero(bfdec_t *r, int is_neg) {
   bf_set_zero((bf_t *)r, is_neg);
 }
