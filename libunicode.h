@@ -73,6 +73,9 @@ static inline int cr_add_point(CharRange *cr, uint32_t v)
         if (cr_realloc(cr, cr->len + 1))
             return -1;
     }
+    if (!cr->points) {
+        return -1;
+    }
     cr->points[cr->len++] = v;
     return 0;
 }

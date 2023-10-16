@@ -76,6 +76,7 @@ typedef struct JSObject JSObject;
 typedef struct JSClass JSClass;
 typedef uint32_t JSClassID;
 typedef uint32_t JSAtom;
+typedef int BOOL;
 
 #if INTPTR_MAX >= INT64_MAX
 #define JS_PTR64
@@ -222,6 +223,9 @@ enum {
     JS_TAG_CATCH_OFFSET = 5,
     JS_TAG_EXCEPTION   = 6,
     JS_TAG_FLOAT64     = 7,
+    JS_TAG_EXT_OBJ     = 8,
+    JS_TAG_EXT_FUNC    = 9,
+    JS_TAG_EXT_INFC    = 10
     /* any larger tag is FLOAT64 if JS_NAN_BOXING */
 };
 
@@ -1294,8 +1298,34 @@ int JS_CountModuleExport(JSContext *ctx, const JSModuleDef *m);
 JSAtom JS_GetModuleExportName(JSContext *ctx, const JSModuleDef *m, int idx);
 JSValueConst JS_GetModuleExportValue(JSContext *ctx, const JSModuleDef *m, int idx);
 
+/* custom define functions, for call corresponding APIs */
+int set_array_length1(JSContext *ctx, JSObject *p, JSValue val,
+                      int flags);
+int JS_DefinePropertyDesc1(JSContext *ctx, JSValueConst obj, JSAtom prop,
+                           JSValueConst desc, int flags);
+int js_operator_typeof1(JSContext *ctx, JSValueConst op1);
+void JS_Dump1(JSRuntime *rt, JSValue *p);
+int JS_DumpWithBuffer(JSRuntime *rt, JSValue *p, void *buffer, uint32_t len);
+int JS_OrdinaryIsInstanceOf1(JSContext *ctx, JSValueConst val,
+                                   JSValueConst obj);
+								   
 #undef js_unlikely
 #undef js_force_inline
+
+
+extern const JSCFunctionListEntry js_map_proto_funcs[];
+extern const JSCFunctionListEntry js_set_proto_funcs[];
+
+uint32_t getClassIdFromObject(JSObject *obj);
+JSAtom find_atom(JSContext *ctx, const char *name);
+JSClassCall* getCallByClassId(JSRuntime *rt, uint32_t classId);
+JSValue JS_CallConstructorInternal(JSContext *ctx,
+                                   JSValueConst func_obj,
+                                   JSValueConst new_target,
+                                   int argc, JSValue *argv, 
+                                   int flags);
+JSValue JS_GetGlobalVar(JSContext *ctx, JSAtom prop,
+                               BOOL throw_ref_error); 
 
 #ifdef __cplusplus
 } /* extern "C" { */

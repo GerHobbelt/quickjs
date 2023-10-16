@@ -904,8 +904,8 @@ static int re_parse_char_class(REParseState *s, const uint8_t **pp)
             if ((int)c2 < 0)
                 goto fail;
             if (c2 >= CLASS_RANGE_BASE) {
-                cr_free(cr1);
                 if (s->is_utf16) {
+                    cr_free(cr1);
                     goto invalid_class_range;
                 }
                 /* Annex B: match '-' character */
@@ -1568,9 +1568,6 @@ static int re_parse_term(REParseState *s, BOOL is_backward_dir)
             if (*p == '?') {
                 p++;
                 greedy = FALSE;
-            }
-            if (last_atom_start < 0) {
-                return re_parse_error(s, "nothing to repeat");
             }
             if (greedy) {
                 int len, pos;

@@ -285,6 +285,11 @@ static __maybe_unused void cr_dump(CharRange *cr)
 
 static void *cr_default_realloc(void *opaque, void *ptr, size_t size)
 {
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+
     return realloc(ptr, size);
 }
 
@@ -298,7 +303,10 @@ void cr_init(CharRange *cr, void *mem_opaque, DynBufReallocFunc *realloc_func)
 
 void cr_free(CharRange *cr)
 {
-    cr->realloc_func(cr->mem_opaque, cr->points, 0);
+    if (cr->points) {
+        cr->realloc_func(cr->mem_opaque, cr->points, 0);
+        cr->points = NULL;
+    }
 }
 
 int cr_realloc(CharRange *cr, int size)
@@ -310,8 +318,10 @@ int cr_realloc(CharRange *cr, int size)
         new_size = max_int(size, cr->size * 3 / 2);
         new_buf = cr->realloc_func(cr->mem_opaque, cr->points,
                                    new_size * sizeof(cr->points[0]));
-        if (!new_buf)
+        if (!new_buf) {
+            cr->points = NULL;
             return -1;
+        }
         cr->points = new_buf;
         cr->size = new_size;
     }
@@ -404,6 +414,9 @@ int cr_op(CharRange *cr, const uint32_t *a_pt, int a_len,
             if (cr_add_point(cr, v))
                 return -1;
         }
+    }
+    if (!cr->points) {
+        return -1;
     }
     cr_compress(cr);
     return 0;
@@ -1320,11 +1333,13 @@ static int unicode_prop_ops(CharRange *cr, ...)
         }
     }
  done:
+    va_end(ap);
     QJS_ASSERT(stack_len == 1);
     ret = cr_copy(cr, &stack[0]);
     cr_free(&stack[0]);
     return ret;
  fail:
+    va_end(ap);
     for(i = 0; i < stack_len; i++)
         cr_free(&stack[i]);
     return -1;
