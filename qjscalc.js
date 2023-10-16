@@ -110,7 +110,8 @@ var Integer, Float, Fraction, Complex, Mod, Polynomial, PolyMod, RationalFunctio
       if((b >> i) & 1) r *= a;
     }
     if(is_neg) {
-      if(typeof r.inverse != 'function') throw 'negative powers are not supported for this type';
+      if(typeof r.inverse != 'function') 
+        throw 'negative powers are not supported for this type';
       r = r.inverse();
     }
     return r;

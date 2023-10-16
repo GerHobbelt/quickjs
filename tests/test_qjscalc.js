@@ -32,7 +32,9 @@ function assertThrows(err, func)
 }
 
 // load more elaborate version of assert if available
-try { __loadScript("test_assert.js"); } catch(e) {}
+try { 
+  __loadScript("test_assert.js"); 
+} catch(e) {}
 
 /*----------------*/
 
