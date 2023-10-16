@@ -84,6 +84,10 @@ enum {
     JS_TAG_CATCH_OFFSET = 5,
     JS_TAG_EXCEPTION   = 6,
     JS_TAG_FLOAT64     = 7,
+    JS_TAG_EXT_OBJ     = 8,
+    JS_TAG_EXT_FUNC    = 9,
+    JS_TAG_EXT_INFC    = 10,
+    JS_TAG_EXT_ARRAY   = 11
     /* any larger tag is FLOAT64 if JS_NAN_BOXING */
 };
 
@@ -126,7 +130,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 {
     return 0;
 }
-    
+
 #elif defined(JS_NAN_BOXING)
 
 typedef uint64_t JSValue;
@@ -191,7 +195,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     tag = JS_VALUE_GET_TAG(v);
     return tag == (JS_NAN >> 32);
 }
-    
+
 #else /* !JS_NAN_BOXING */
 
 typedef union JSValueUnion {
@@ -977,7 +981,7 @@ static inline JSValue JS_NewCFunctionMagic(JSContext *ctx, JSCFunctionMagic *fun
 {
     return JS_NewCFunction2(ctx, (JSCFunction *)func, name, length, cproto, magic);
 }
-void JS_SetConstructor(JSContext *ctx, JSValueConst func_obj, 
+void JS_SetConstructor(JSContext *ctx, JSValueConst func_obj,
                        JSValueConst proto);
 
 /* C property definition */
@@ -1067,6 +1071,15 @@ typedef enum JSPromiseStateEnum {
 
 JSPromiseStateEnum JS_PromiseState(JSContext *ctx, JSValue promise);
 JSValue JS_PromiseResult(JSContext *ctx, JSValue promise);
+
+/* custom define functions, for call corresponding APIs */
+int JS_DefinePropertyDesc1(JSContext *ctx, JSValueConst obj, JSAtom prop,
+                           JSValueConst desc, int flags);
+int js_operator_typeof1(JSContext *ctx, JSValueConst op1);
+void JS_Dump1(JSRuntime *rt, JSValue *p);
+int JS_DumpWithBuffer(JSRuntime *rt, JSValue *p, void *buffer, uint32_t len);
+int JS_OrdinaryIsInstanceOf1(JSContext *ctx, JSValueConst val,
+                                   JSValueConst obj);
 
 #undef js_unlikely
 #undef js_force_inline
