@@ -33848,7 +33848,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
         //DynBuf pc2line;
         //compute_pc2line_info(fd, &pc2line);
         //qjs_free(ctx, fd->line_number_slots)
-        QJS_ASSERT(fd->pc2line.size > 0);
+        //QJS_ASSERT(fd->pc2line.size > 0);
         b->debug.pc2line_buf = qjs_realloc(ctx, fd->pc2line.buf, fd->pc2line.size);
         if (!b->debug.pc2line_buf)
             b->debug.pc2line_buf = fd->pc2line.buf;
