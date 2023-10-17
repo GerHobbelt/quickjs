@@ -28,7 +28,7 @@
 #include <assert.h>
 #include <math.h>
 #include <getopt.h>
-#include <sys/time.h>
+#include <plf_nanotimer_c_api.h>
 #include <gmp.h>
 #include <mpfr.h>
 
@@ -1005,15 +1005,18 @@ void test_atof(limb_t prec, int duration_ms,
     slimb_t n_digits, prec1, i;
     char *str;
     bf_t r, r_ref;
-    int64_t ti, ti_ref, nb_limbs, start_time;
-    
+    int64_t ti, ti_ref, nb_limbs;
+    nanotimer_data_t track_time;
+
     mp_randinit(&rnd_state, seed);
 
     bf_init(&bf_ctx, &r);
     bf_init(&bf_ctx, &r_ref);
     ti = 0;
     ti_ref = 0;
-    start_time = get_clock_msec();
+
+    nanotimer_start(&track_time);
+
     test_loop = 1;
     it = 0;
     for(;;) {
@@ -1081,7 +1084,7 @@ void test_atof(limb_t prec, int duration_ms,
         free(str);
         it++;
         if ((it & (test_loop - 1)) == 0) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1104,14 +1107,17 @@ void test_ftoa(limb_t prec, int duration_ms,
     slimb_t n_digits, prec1, nb_limbs;
     char *r_str, *r_ref_str;
     bf_t a;
-    int64_t ti, ti_ref, start_time;
-    
+    int64_t ti, ti_ref;
+	nanotimer_data_t track_time;
+
     mp_randinit(&rnd_state, seed);
     bf_init(&bf_ctx, &a);
     ti_ref = 0;
     ti = 0;
-    start_time = get_clock_msec();
-    test_loop = 1;
+
+	nanotimer_start(&track_time);
+
+	test_loop = 1;
     it = 0;
     for(;;) {
         /* build a random string representing a number */
@@ -1191,7 +1197,7 @@ void test_ftoa(limb_t prec, int duration_ms,
         free(r_ref_str);
         it++;
         if ((it & (test_loop - 1)) == 0) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1211,15 +1217,17 @@ void test_can_round(limb_t prec, int duration_ms, bf_rnd_t rnd_mode, int seed)
     bf_t a, b, a_rounded, c;
     limb_t prec1, k;
     int res, it, i, res1, test_loop;
-    int64_t start_time;
+	nanotimer_data_t track_time;
     
     mp_randinit(&rnd_state, seed);
     bf_init(&bf_ctx, &a);
     bf_init(&bf_ctx, &a_rounded);
     bf_init(&bf_ctx, &b);
     bf_init(&bf_ctx, &c);
-    start_time = get_clock_msec();
-    test_loop = 1;
+
+	nanotimer_start(&track_time);
+
+	test_loop = 1;
     it = 0;
     for(;;) {
         prec1 = mp_random64(&rnd_state) % (3 * prec) + 2;
@@ -1253,7 +1261,7 @@ void test_can_round(limb_t prec, int duration_ms, bf_rnd_t rnd_mode, int seed)
         }
         it++;
         if ((it & (test_loop - 1)) == 0) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1271,8 +1279,8 @@ void test_mul_log2(int duration_ms, BOOL is_inv, BOOL is_ceil, int seed)
     int it, radix, err, test_loop;
     slimb_t a, v_max, r, r_ref, prec, d;
     mpfr_t a1, log2_radix[BF_RADIX_MAX - 1];
-    int64_t start_time;
-    
+	nanotimer_data_t track_time;
+	
     mp_randinit(&rnd_state, seed);
     prec = 256;
     mpfr_init2(a1, prec);
@@ -1287,7 +1295,9 @@ void test_mul_log2(int duration_ms, BOOL is_inv, BOOL is_ceil, int seed)
         v_max = BF_PREC_MAX;
     else
         v_max = BF_PREC_MAX / 6;
-    start_time = get_clock_msec();
+
+	nanotimer_start(&track_time);
+
     test_loop = 1;
     it = 0;
     for(;;) {
@@ -1321,7 +1331,7 @@ void test_mul_log2(int duration_ms, BOOL is_inv, BOOL is_ceil, int seed)
         }
         it++;
         if ((it & (test_loop - 1)) == 0) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1345,8 +1355,8 @@ void test_op_rm_dec(MPFTestOPEnum op, limb_t rprec, int duration_ms,
     BOOL res;
     bf_rnd_t rnd_mode1;
     bf_flags_t bf_flags;
-    int64_t start_time;
-    limb_t prec;
+	nanotimer_data_t track_time;
+	limb_t prec;
     
     bf_flags = rnd_mode | bf_set_exp_bits(exp_bits);
     
@@ -1361,8 +1371,10 @@ void test_op_rm_dec(MPFTestOPEnum op, limb_t rprec, int duration_ms,
 
     ti = 0;
     ti_ref = 0;
-    start_time = get_clock_msec();
-    test_loop = 1;
+
+	nanotimer_start(&track_time);
+
+	test_loop = 1;
     it = 0;
     for(;;) {
         if (rprec == 0) {
@@ -1466,7 +1478,7 @@ void test_op_rm_dec(MPFTestOPEnum op, limb_t rprec, int duration_ms,
 
         it++;
         if ((it & (test_loop - 1)) == 0) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1487,7 +1499,8 @@ void test_op_rm_dec(MPFTestOPEnum op, limb_t rprec, int duration_ms,
 static void test_mp_sqrtrem(limb_t rprec, int duration_ms, int seed)
 {
     int it, test_loop;
-    int64_t start_time, ti;
+	nanotimer_data_t track_time;
+	int64_t ti;
     limb_t *tabs, *tabr, *taba, *tabb, c;
     slimb_t n, i, n_max;
     mp_randstate_t rnd_state;
@@ -1502,8 +1515,10 @@ static void test_mp_sqrtrem(limb_t rprec, int duration_ms, int seed)
 
     test_loop = 1;
     it = 0;
-    start_time = get_clock_msec();
-    ti = 0;
+
+	nanotimer_start(&track_time);
+
+	ti = 0;
     for(;;) {
         n = (mp_random64(&rnd_state) % n_max) + 1;
 
@@ -1534,7 +1549,7 @@ static void test_mp_sqrtrem(limb_t rprec, int duration_ms, int seed)
 
         it++;
         if (it == test_loop) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1551,7 +1566,8 @@ static void test_mp_sqrtrem(limb_t rprec, int duration_ms, int seed)
 static void test_mp_recip(limb_t rprec, int duration_ms, int seed)
 {
     int it, test_loop, incr;
-    int64_t start_time, ti;
+	nanotimer_data_t track_time;
+	int64_t ti;
     limb_t *tabr, *taba, *tabb, *tabc;
     slimb_t n, n_max, i;
     mp_randstate_t rnd_state;
@@ -1566,8 +1582,10 @@ static void test_mp_recip(limb_t rprec, int duration_ms, int seed)
 
     test_loop = 1;
     it = 0;
-    start_time = get_clock_msec();
-    ti = 0;
+
+	nanotimer_start(&track_time);
+
+	ti = 0;
     for(;;) {
         n = (mp_random64(&rnd_state) % n_max) + 1;
 
@@ -1602,7 +1620,7 @@ static void test_mp_recip(limb_t rprec, int duration_ms, int seed)
 
         it++;
         if (it == test_loop) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }
@@ -1627,8 +1645,8 @@ void test_op_rm(MPFTestOPEnum op, limb_t rprec, int duration_ms,
     BOOL res, use_float64_ref;
     bf_rnd_t rnd_mode1;
     bf_flags_t bf_flags;
-    int64_t start_time;
-    limb_t prec;
+	nanotimer_data_t track_time;
+	limb_t prec;
     
     printf("%-20s %5d %3d %3s %5d", op_str[op], (int)rprec, exp_bits,
            rnd_str[rnd_mode], seed);
@@ -1683,8 +1701,10 @@ void test_op_rm(MPFTestOPEnum op, limb_t rprec, int duration_ms,
     ti = 0;
     ti_ref = 0;
     ti_dummy = 0;
-    start_time = get_clock_msec();
-    test_loop = 1;
+
+	nanotimer_start(&track_time);
+
+	test_loop = 1;
     it = 0;
     it_perf = 0;
     for(;;) {
@@ -1837,7 +1857,7 @@ void test_op_rm(MPFTestOPEnum op, limb_t rprec, int duration_ms,
 
         it++;
         if ((it & (test_loop - 1)) == 0) {
-            if ((get_clock_msec() - start_time) >= duration_ms)
+            if (nanotimer_get_elapsed_ms(&track_time) >= duration_ms)
                 break;
             test_loop *= 2;
         }

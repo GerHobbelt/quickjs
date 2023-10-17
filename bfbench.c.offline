@@ -27,7 +27,7 @@
 #include <math.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/time.h>
+#include <plf_nanotimer_c_api.h>
 #ifdef CONFIG_MPFR
 #include <mpfr.h>
 #endif
@@ -42,13 +42,6 @@ static bf_context_t bf_ctx;
 static void *my_bf_realloc(void *opaque, void *ptr, size_t size)
 {
     return realloc(ptr, size);
-}
-
-static int64_t get_clock_msec(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000LL + (tv.tv_usec / 1000);
 }
 
 /* we print at least 3 significant digits with at most 5 chars, except
@@ -130,7 +123,8 @@ static void bf_op_speed(double k_start1, double k_end1,
     int k, nb_its, it, dpl, fft_len_log2, nb_mods, k_end, k_start;
     bf_t A, B, C;
     limb_t n, i, prec;
-    int64_t start_time, ti, n_digits;
+	nanotimer_data_t track_time;
+	int64_t ti, n_digits;
     FILE *f;
     double tpl, K;
     char buf1[32], buf2[32];
@@ -185,8 +179,9 @@ static void bf_op_speed(double k_start1, double k_end1,
         }
         nb_its = 1;
         for(;;) {
-            start_time = get_clock_msec();
-            switch(op) {
+			nanotimer_start(&track_time);
+
+			switch(op) {
             case BF_OP_MUL:
                 for(it = 0; it < nb_its; it++) {
                     bf_mul(&C, &A, &B, prec, BF_RNDN);
@@ -205,7 +200,7 @@ static void bf_op_speed(double k_start1, double k_end1,
             default:
                 break;
             }
-            ti = get_clock_msec() - start_time;
+            ti = nanotimer_get_elapsed_ms(&track_time);
             if (ti >= 100)
                 break;
             nb_its *= 2;
@@ -234,7 +229,8 @@ static void mpfr_mul_speed(double k_start1, double k_end1,
     int k, nb_its, it, k_end, k_start;
     mpfr_t A, B, C;
     limb_t n, prec;
-    int64_t start_time, ti, n_digits;
+	nanotimer_data_t track_time;
+	int64_t ti, n_digits;
     FILE *f;
     double tpl, K;
     char buf1[32], buf2[32];
@@ -264,11 +260,12 @@ static void mpfr_mul_speed(double k_start1, double k_end1,
         mpfr_urandomb(B, rnd_state);
         nb_its = 1;
         for(;;) {
-            start_time = get_clock_msec();
-            for(it = 0; it < nb_its; it++) {
+			nanotimer_start(&track_time);
+
+			for(it = 0; it < nb_its; it++) {
                 mpfr_mul(C, A, B, MPFR_RNDZ);
             }
-            ti = get_clock_msec() - start_time;
+            ti = nanotimer_get_elapsed_ms(&track_time);
             if (ti >= 100)
                 break;
             nb_its *= 2;
@@ -337,7 +334,7 @@ int main(int argc, char **argv)
                "mpfr_bench [k_start] [k_end] [png_file] benchmark with MPFR\n"
 #endif
                );
-        exit(1);
+        return 1;
     }
     bf_context_init(&bf_ctx, my_bf_realloc, NULL);
     cmd = argv[1];

@@ -33,7 +33,8 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "quickjs.h"
+#include <plf_nanotimer_c_api.h>
+
 #include "cutils.h"
 
 void qjs_assert(const char* msg, const char* file, int line)
