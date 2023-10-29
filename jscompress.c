@@ -37,14 +37,8 @@
 #include <unistd.h>
 #endif
 
-#if !defined(_MSC_VER) && !defined(BUILD_MONOLITHIC)
+ // NOTE: on Win32 we get this from libgetopt (an external library)
 #include <getopt.h>
-#else
-#include "../../jpeginfo/getopt.h"
-
-#include "../../jpeginfo/getopt.c"
-#include "../../jpeginfo/getopt1.c"
-#endif
 
 #include "cutils.h"
 
