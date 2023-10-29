@@ -552,8 +552,8 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
     return m;
 }
 
-int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
-                              JS_BOOL use_realpath, JS_BOOL is_main)
+JS_BOOL js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
+                                  JS_BOOL use_realpath, JS_BOOL is_main)
 {
     JSModuleDef *m;
     char buf[PATH_MAX + 16];
@@ -568,7 +568,7 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
     module_name = JS_AtomToCString(ctx, module_name_atom);
     JS_FreeAtom(ctx, module_name_atom);
     if (!module_name)
-        return -1;
+        return QJSB_EXCEPTION;
     if (!strchr(module_name, ':')) {
         strcpy(buf, "file://");
         /* realpath() cannot be used with modules compiled with qjsc
@@ -579,7 +579,7 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
             if (qjs_realpath(module_name, buf + sl, sizeof(buf) - sl) != 0) {
                 JS_ThrowTypeError(ctx, "realpath failure");
                 JS_FreeCString(ctx, module_name);
-                return -1;
+                return QJSB_EXCEPTION;
             }
         } else
         {
@@ -600,7 +600,7 @@ int js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
                               JS_NewBool(ctx, is_main),
                               JS_PROP_C_W_E);
     JS_FreeValue(ctx, meta_obj);
-    return 0;
+    return QJSB_FALSE;
 }
 
 #if defined(_WIN32)
@@ -643,11 +643,13 @@ JSModuleDef *js_module_loader(JSContext *ctx,
         qjs_free(ctx, buf);
         if (JS_IsException(func_val))
             return NULL;
-        /* XXX: could propagate the exception */
-        js_module_set_import_meta(ctx, func_val, TRUE, FALSE);
+        /* propagate the exception */
+        JS_BOOL ret = js_module_set_import_meta(ctx, func_val, TRUE, FALSE);
         /* the module is already referenced, so we must free it */
         m = JS_VALUE_GET_PTR(func_val);
         JS_FreeValue(ctx, func_val);
+		if (ret < 0)
+			return NULL;
     }
     return m;
 }
@@ -3897,7 +3899,7 @@ void js_std_dump_error(JSContext *ctx)
 
 void js_std_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
                                       JSValueConst reason,
-                                      BOOL is_handled, void *opaque)
+                                      JS_BOOL is_handled, void *opaque)
 {
     if (!is_handled) {
         fprintf(stderr, "Possibly unhandled promise rejection: ");
@@ -3928,11 +3930,11 @@ void js_std_loop(JSContext *ctx)
     }
 }
 
-int js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
+JS_BOOL js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                         int load_only)
 {
     JSValue obj, val;
-	int rv = 0;
+	int rv = QJSB_FALSE;
     obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
     if (JS_IsException(obj))
         goto exception;
@@ -3953,21 +3955,21 @@ int js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
         exception:
             js_std_dump_error(ctx);
             //exit(1);
-			rv = -1;
+			rv = QJSB_EXCEPTION;
         }
         JS_FreeValue(ctx, val);
     }
 	return rv;
 }
 
-void js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
+JS_BOOL js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                         const char* filename)
 {
     void* o = malloc(strlen(filename)+1);
     memset(o, 0, strlen(filename)+1);
     memcpy(o, filename, strlen(filename));
     JS_SetContextOpaque(ctx, o);
-    JSValue obj, val;
+    JSValue obj, val = JS_FALSE;
     obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
     if (JS_IsException(obj))
         goto exception;
@@ -3976,13 +3978,17 @@ void js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
             JS_FreeValue(ctx, obj);
             goto exception;
         }
-        js_module_set_import_meta(ctx, obj, FALSE, TRUE);
+        if (js_module_set_import_meta(ctx, obj, FALSE, TRUE) < 0) {
+			JS_FreeValue(ctx, obj);
+			goto exception;
+		}
     }
     val = JS_EvalFunction(ctx, obj);
     if (JS_IsException(val)) {
-        exception:
+exception:
         js_std_dump_error(ctx);
-        exit(1);
+        return QJSB_EXCEPTION; //exit(1);
     }
     JS_FreeValue(ctx, val);
+	return QJSB_FALSE;
 }

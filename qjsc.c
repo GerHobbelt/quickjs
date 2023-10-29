@@ -293,7 +293,7 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
     return m;
 }
 
-static void compile_file(JSContext *ctx, FILE *fo,
+static int compile_file(JSContext *ctx, FILE *fo,
                          const char *filename,
                          const char *c_name1,
                          int module)
@@ -307,7 +307,7 @@ static void compile_file(JSContext *ctx, FILE *fo,
     buf = js_load_file(ctx, &buf_len, filename);
     if (!buf) {
         fprintf(stderr, "Could not load '%s'\n", filename);
-        exit(1);
+        return -1;
     }
     eval_flags = JS_EVAL_FLAG_COMPILE_ONLY;
     if (module < 0) {
@@ -321,7 +321,8 @@ static void compile_file(JSContext *ctx, FILE *fo,
     obj = JS_Eval(ctx, (const char *)buf, buf_len, filename, eval_flags);
     if (JS_IsException(obj)) {
         js_std_dump_error(ctx);
-        exit(1);
+		qjs_free(ctx, buf);
+		return -1;
     }
     qjs_free(ctx, buf);
     if (c_name1) {
@@ -331,6 +332,7 @@ static void compile_file(JSContext *ctx, FILE *fo,
     }
     output_object_code(ctx, fo, obj, c_name, FALSE);
     JS_FreeValue(ctx, obj);
+	return 0;
 }
 
 static const char main_c_template1[] =
@@ -721,7 +723,8 @@ int main(int argc, const char** argv)
 
     for(i = optind; i < argc; i++) {
         const char *filename = argv[i];
-        compile_file(ctx, fo, filename, cname, module);
+        if (compile_file(ctx, fo, filename, cname, module) < 0)
+			return EXIT_FAILURE;
         cname = NULL;
     }
 

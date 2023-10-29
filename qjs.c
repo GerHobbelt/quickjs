@@ -89,7 +89,7 @@ static int eval_buf(JSContext *ctx, const void *buf, int buf_len,
     return ret;
 }
 
-static void eval_bytecode_file(JSContext *ctx, const char *filename)
+static JS_BOOL eval_bytecode_file(JSContext *ctx, const char *filename)
 {
     uint8_t *buf;
     size_t buf_len;
@@ -97,11 +97,12 @@ static void eval_bytecode_file(JSContext *ctx, const char *filename)
     buf = js_load_file(ctx, &buf_len, filename);
     if (!buf) {
         perror(filename);
-        exit(1);
+        return -1;
     }
 
-    js_std_dump_binary(ctx, buf, buf_len, filename);
+    JS_BOOL ret = js_std_dump_binary(ctx, buf, buf_len, filename);
     qjs_free(ctx, buf);
+	return ret;
 }
 
 static int eval_file(JSContext *ctx, const char *filename, int module)
@@ -113,7 +114,7 @@ static int eval_file(JSContext *ctx, const char *filename, int module)
     buf = js_load_file(ctx, &buf_len, filename);
     if (!buf) {
         perror(filename);
-        exit(1);
+        return -1;
     }
 
     if (module < 0) {
@@ -553,12 +554,12 @@ int main(int argc, const char** argv)
                 "import * as os from 'os';\n"
                 "globalThis.std = std;\n"
                 "globalThis.os = os;\n";
-			if (eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE))
+			if (eval_buf(ctx, str, strlen(str), "<input>", JS_EVAL_TYPE_MODULE) < 0)
 				goto fail;
 		}
 
         for(i = 0; i < include_count; i++) {
-            if (eval_file(ctx, include_list[i], module))
+            if (eval_file(ctx, include_list[i], module) < 0)
                 goto fail;
         }
 
@@ -569,7 +570,7 @@ int main(int argc, const char** argv)
                 eval_flags = JS_EVAL_TYPE_GLOBAL;
             else
                 eval_flags = JS_EVAL_TYPE_MODULE;
-            if (eval_buf(ctx, expr, buf_len, "<cmdline>", eval_flags))
+            if (eval_buf(ctx, expr, buf_len, "<cmdline>", eval_flags) < 0)
                 goto fail;
         } else
         if (optind >= argc) {
@@ -579,9 +580,10 @@ int main(int argc, const char** argv)
             const char *filename;
             filename = argv[optind];
             if (load_bytecode) {
-                eval_bytecode_file(ctx, filename);
+                if (eval_bytecode_file(ctx, filename) < 0)
+					goto fail;
             } else {
-                if (eval_file(ctx, filename, module))
+                if (eval_file(ctx, filename, module) < 0)
                     goto fail;
             }
         }

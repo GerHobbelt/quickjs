@@ -68,7 +68,12 @@ extern "C" {
 #define __js_printf_like(a, b)
 #endif
 
-#define JS_BOOL int
+typedef int8_t JS_BOOL;
+enum {
+	QJSB_EXCEPTION = -1,
+	QJSB_FALSE = 0, 
+	QJSB_TRUE = 1
+};
 
 typedef struct JSRuntime JSRuntime;
 typedef struct JSContext JSContext;
@@ -530,7 +535,7 @@ void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque);
 typedef void JS_MarkFunc(JSRuntime *rt, JSGCObjectHeader *gp);
 void JS_MarkValue(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func);
 void JS_RunGC(JSRuntime *rt);
-JS_BOOL JS_IsLiveObject(JSRuntime *rt, JSValueConst obj);
+BOOL JS_IsLiveObject(JSRuntime *rt, JSValueConst obj);
 
 JSContext *JS_NewContext(JSRuntime *rt);
 void JS_FreeContext(JSContext *s);
@@ -567,7 +572,7 @@ void JS_AddIntrinsicBigDecimal(JSContext *ctx);
 /* enable operator overloading */
 void JS_AddIntrinsicOperators(JSContext *ctx);
 /* enable "use math" */
-void JS_EnableBignumExt(JSContext *ctx, JS_BOOL enable);
+void JS_EnableBignumExt(JSContext *ctx, BOOL enable);
 
 JSValue qjs_string_codePointRange(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv);
@@ -701,13 +706,13 @@ typedef struct JSClassDef {
 JSClassID JS_NewClassID(JSClassID *pclass_id);
 JSClassID JS_GetClassID(JSValueConst v);
 int JS_NewClass(JSRuntime *rt, JSClassID class_id, const JSClassDef *class_def);
-int JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
+BOOL JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
 
 /* value handling */
 
 static js_force_inline JSValue JS_NewBool(JSContext *ctx, JS_BOOL val)
 {
-    return JS_MKVAL(JS_TAG_BOOL, (val != 0));
+    return JS_MKVAL(JS_TAG_BOOL, !!val);
 }
 
 static js_force_inline JSValue JS_NewInt32(JSContext *ctx, int32_t val)
@@ -772,73 +777,73 @@ static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
     return v;
 }
 
-static inline JS_BOOL JS_IsNumber(JSValueConst v)
+static inline BOOL JS_IsNumber(JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
     return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag);
 }
 
-static inline JS_BOOL JS_IsBigInt(JSContext *ctx, JSValueConst v)
+static inline BOOL JS_IsBigInt(JSContext *ctx, JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
     return tag == JS_TAG_BIG_INT;
 }
 
-static inline JS_BOOL JS_IsBigFloat(JSValueConst v)
+static inline BOOL JS_IsBigFloat(JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
     return tag == JS_TAG_BIG_FLOAT;
 }
 
-static inline JS_BOOL JS_IsBigDecimal(JSValueConst v)
+static inline BOOL JS_IsBigDecimal(JSValueConst v)
 {
     int tag = JS_VALUE_GET_TAG(v);
     return tag == JS_TAG_BIG_DECIMAL;
 }
 
-static inline JS_BOOL JS_IsBool(JSValueConst v)
+static inline BOOL JS_IsBool(JSValueConst v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_BOOL;
 }
 
-static inline JS_BOOL JS_IsNull(JSValueConst v)
+static inline BOOL JS_IsNull(JSValueConst v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_NULL;
 }
 
-static inline JS_BOOL JS_IsUndefined(JSValueConst v)
+static inline BOOL JS_IsUndefined(JSValueConst v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
 }
 
-static inline JS_BOOL JS_IsException(JSValueConst v)
+static inline BOOL JS_IsException(JSValueConst v)
 {
     return js_unlikely(JS_VALUE_GET_TAG(v) == JS_TAG_EXCEPTION);
 }
 
-static inline JS_BOOL JS_IsUninitialized(JSValueConst v)
+static inline BOOL JS_IsUninitialized(JSValueConst v)
 {
     return js_unlikely(JS_VALUE_GET_TAG(v) == JS_TAG_UNINITIALIZED);
 }
 
-static inline JS_BOOL JS_IsString(JSValueConst v)
+static inline BOOL JS_IsString(JSValueConst v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_STRING;
 }
 
-static inline JS_BOOL JS_IsSymbol(JSValueConst v)
+static inline BOOL JS_IsSymbol(JSValueConst v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_SYMBOL;
 }
 
-static inline JS_BOOL JS_IsObject(JSValueConst v)
+static inline BOOL JS_IsObject(JSValueConst v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_OBJECT;
 }
 
 JSValue JS_Throw(JSContext *ctx, JSValue obj);
 JSValue JS_GetException(JSContext *ctx);
-JS_BOOL JS_IsError(JSContext *ctx, JSValueConst val);
+BOOL JS_IsError(JSContext *ctx, JSValueConst val);
 void JS_ResetUncatchableError(JSContext *ctx);
 JSValue JS_NewError(JSContext *ctx);
 JSValue JS_NewUncatchableError(JSContext *ctx);
@@ -970,11 +975,11 @@ JSValue JS_ToPropertyKey(JSContext *ctx, JSValueConst val);
 const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, JS_BOOL cesu8);
 static inline const char *JS_ToCStringLen(JSContext *ctx, size_t *plen, JSValueConst val1)
 {
-    return JS_ToCStringLen2(ctx, plen, val1, 0);
+    return JS_ToCStringLen2(ctx, plen, val1, QJSB_FALSE);
 }
 static inline const char *JS_ToCString(JSContext *ctx, JSValueConst val1)
 {
-    return JS_ToCStringLen2(ctx, NULL, val1, 0);
+    return JS_ToCStringLen2(ctx, NULL, val1, QJSB_FALSE);
 }
 void JS_FreeCString(JSContext *ctx, const char *ptr);
 
@@ -983,21 +988,22 @@ JSValue JS_NewObjectClass(JSContext *ctx, int class_id);
 JSValue JS_NewObjectProto(JSContext *ctx, JSValueConst proto);
 JSValue JS_NewObject(JSContext *ctx);
 
-JS_BOOL JS_IsFunction(JSContext* ctx, JSValueConst val);
-JS_BOOL JS_IsPromise(JSContext* ctx, JSValueConst val);
-JS_BOOL JS_IsConstructor(JSContext* ctx, JSValueConst val);
-JS_BOOL JS_SetConstructorBit(JSContext *ctx, JSValueConst func_obj, JS_BOOL val);
+BOOL JS_IsFunction(JSContext* ctx, JSValueConst val);
+BOOL JS_IsPromise(JSContext* ctx, JSValueConst val);
+BOOL JS_IsConstructor(JSContext* ctx, JSValueConst val);
+
+BOOL JS_SetConstructorBit(JSContext *ctx, JSValueConst func_obj, BOOL val);
 
 JSValue JS_NewArray(JSContext *ctx);
-int JS_IsArray(JSContext *ctx, JSValueConst val);
+BOOL JS_IsArray(JSContext *ctx, JSValueConst val);
 
 JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
                                JSAtom prop, JSValueConst receiver,
-                               JS_BOOL throw_ref_error);
+                               BOOL throw_ref_error);
 static js_force_inline JSValue JS_GetProperty(JSContext *ctx, JSValueConst this_obj,
                                               JSAtom prop)
 {
-    return JS_GetPropertyInternal(ctx, this_obj, prop, this_obj, 0);
+    return JS_GetPropertyInternal(ctx, this_obj, prop, this_obj, 0 /* FALSE */ );
 }
 JSValue JS_GetPropertyStr(JSContext *ctx, JSValueConst this_obj,
                           const char *prop);
@@ -1019,10 +1025,10 @@ int JS_SetPropertyInt64(JSContext *ctx, JSValueConst this_obj,
 int JS_SetPropertyStr(JSContext *ctx, JSValueConst this_obj,
                       const char *prop, JSValue val);
 int JS_HasProperty(JSContext *ctx, JSValueConst this_obj, JSAtom prop);
-int JS_IsExtensible(JSContext *ctx, JSValueConst obj);
+BOOL JS_IsExtensible(JSContext *ctx, JSValueConst obj);
 int JS_PreventExtensions(JSContext *ctx, JSValueConst obj);
 int JS_DeleteProperty(JSContext *ctx, JSValueConst obj, JSAtom prop, int flags);
-int JS_SetPrototype(JSContext *ctx, JSValueConst obj, JSValueConst proto_val);
+JS_BOOL JS_SetPrototype(JSContext *ctx, JSValueConst obj, JSValueConst proto_val);
 JSValue JS_GetPrototype(JSContext *ctx, JSValueConst val);
 
 #define JS_GPN_STRING_MASK  (1 << 0)
@@ -1049,7 +1055,7 @@ JSValue JS_CallConstructor(JSContext *ctx, JSValueConst func_obj,
 JSValue JS_CallConstructor2(JSContext *ctx, JSValueConst func_obj,
                             JSValueConst new_target,
                             int argc, JSValueConst *argv);
-JS_BOOL JS_DetectModule(const char *input, size_t input_len);
+BOOL JS_DetectModule(const char *input, size_t input_len);
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
 JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
                 const char *filename, int eval_flags);
@@ -1058,7 +1064,7 @@ JSValue JS_EvalThis(JSContext *ctx, JSValueConst this_obj,
                     const char *input, size_t input_len,
                     const char *filename, int eval_flags);
 JSValue JS_GetGlobalObject(JSContext *ctx);
-int JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj);
+JS_BOOL JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj);
 int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
                       JSAtom prop, JSValueConst val,
                       JSValueConst getter, JSValueConst setter, int flags);
@@ -1090,7 +1096,7 @@ JSValue JS_JSONStringify(JSContext *ctx, JSValueConst obj,
 typedef void JSFreeArrayBufferDataFunc(JSRuntime *rt, void *opaque, void *ptr);
 JSValue JS_NewArrayBuffer(JSContext *ctx, uint8_t *buf, size_t len,
                           JSFreeArrayBufferDataFunc *free_func, void *opaque,
-                          JS_BOOL is_shared);
+                          BOOL is_shared);
 JSValue JS_NewArrayBufferCopy(JSContext *ctx, const uint8_t *buf, size_t len);
 void JS_DetachArrayBuffer(JSContext *ctx, JSValueConst obj);
 uint8_t *JS_GetArrayBuffer(JSContext *ctx, size_t *psize, JSValueConst obj);
@@ -1122,7 +1128,7 @@ JSValue JS_GetPromiseState(JSContext *ctx, JSValueConst promise);
 typedef int JSInterruptHandler(JSRuntime *rt, void *opaque);
 void JS_SetInterruptHandler(JSRuntime *rt, JSInterruptHandler *cb, void *opaque);
 /* if can_block is TRUE, Atomics.wait() can be used */
-void JS_SetCanBlock(JSRuntime *rt, JS_BOOL can_block);
+void JS_SetCanBlock(JSRuntime *rt, BOOL can_block);
 /* set the [IsHTMLDDA] internal slot */
 void JS_SetIsHTMLDDA(JSContext *ctx, JSValueConst obj);
 
@@ -1150,7 +1156,7 @@ JSAtom JS_GetModuleName(JSContext *ctx, JSModuleDef *m);
 typedef JSValue JSJobFunc(JSContext *ctx, int argc, JSValueConst *argv);
 int JS_EnqueueJob(JSContext *ctx, JSJobFunc *job_func, int argc, JSValueConst *argv);
 
-JS_BOOL JS_IsJobPending(JSRuntime *rt);
+BOOL JS_IsJobPending(JSRuntime *rt);
 int JS_ExecutePendingJob(JSRuntime *rt, JSContext **pctx);
 
 /* Object Writer/Reader (currently only used to handle precompiled code) */
@@ -1333,7 +1339,7 @@ int JS_DefinePropertyDesc1(JSContext *ctx, JSValueConst obj, JSAtom prop,
 int js_operator_typeof1(JSContext *ctx, JSValueConst op1);
 void JS_Dump1(JSRuntime *rt, JSValue *p);
 int JS_DumpWithBuffer(JSRuntime *rt, JSValue *p, void *buffer, uint32_t len);
-int JS_OrdinaryIsInstanceOf1(JSContext *ctx, JSValueConst val,
+JS_BOOL JS_OrdinaryIsInstanceOf1(JSContext *ctx, JSValueConst val,
                                    JSValueConst obj);
 								   
 #undef js_unlikely

@@ -112,7 +112,7 @@ struct js_traits<bool>
 
     static JSValue wrap(JSContext * ctx, bool i) noexcept
     {
-        return JS_NewBool(ctx, i);
+        return JS_NewBool(ctx, static_cast<JS_BOOL>(i));
     }
 };
 
@@ -1116,7 +1116,7 @@ public:
             {
                 assert(js_traits<std::shared_ptr<B>>::QJSClassId && "base class is not registered");
                 auto base_proto = JS_GetClassProto(context.ctx, js_traits<std::shared_ptr<B>>::QJSClassId);
-                int err = JS_SetPrototype(context.ctx, prototype.v, base_proto);
+                JS_BOOL err = JS_SetPrototype(context.ctx, prototype.v, base_proto);
                 JS_FreeValue(context.ctx, base_proto);
                 if(err < 0)
                     throw exception{};
@@ -1304,7 +1304,7 @@ struct js_traits<std::function<R(Args...)>>
     static JSValue wrap(JSContext * ctx, Functor&& functor)
     {
         using detail::function;
-        assert(js_traits<function>::QJSClassId);
+        assert(js_traits<function>::QJSClassId != 0);
         auto obj = JS_NewObjectClass(ctx, js_traits<function>::QJSClassId);
         if(JS_IsException(obj))
             return JS_EXCEPTION;

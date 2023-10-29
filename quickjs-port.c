@@ -469,6 +469,7 @@ int qjs_thread_join(qjs_thread* thread)
     }
     return 1;
 }
+
 #else
 
 int qjs_thread_create(qjs_thread* thread, qjs_thread_method method, void* data, int detached)
@@ -549,6 +550,7 @@ int qjs_mutex_destroy(qjs_mutex* mutex)
 }
 
 #if defined(_WIN32)
+
 int qjs_condition_init(qjs_condition* cond)
 {
     cond->Ptr = 0;
@@ -631,4 +633,5 @@ int qjs_condition_destroy(qjs_condition* cond)
     int result = pthread_cond_destroy(cond);
     return result;
 }
+
 #endif

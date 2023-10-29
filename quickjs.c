@@ -741,14 +741,14 @@ typedef struct JSRegExp {
 typedef struct JSProxyData {
     JSValue target;
     JSValue handler;
-    uint8_t is_func;
-    uint8_t is_revoked;
+    /* BOOL */ uint8_t is_func;
+	/* BOOL */ uint8_t is_revoked;
 } JSProxyData;
 
 typedef struct JSArrayBuffer {
     int byte_length; /* 0 if detached */
-    uint8_t detached;
-    uint8_t shared; /* if shared, the array buffer cannot be detached */
+	/* BOOL */ uint8_t detached;
+	/* BOOL */ uint8_t shared; /* if shared, the array buffer cannot be detached */
     uint8_t *data; /* NULL if detached */
     struct list_head array_list;
     void *opaque;
@@ -1186,7 +1186,7 @@ static void js_operator_set_mark(JSRuntime *rt, JSValueConst val,
                                  JS_MarkFunc *mark_func);
 #endif
 static JSValue JS_ToStringFree(JSContext *ctx, JSValue val);
-static int JS_ToBoolFree(JSContext *ctx, JSValue val);
+static JS_BOOL JS_ToBoolFree(JSContext *ctx, JSValue val);
 static int JS_ToInt32Free(JSContext *ctx, int32_t *pres, JSValue val);
 static int JS_ToFloat64Free(JSContext *ctx, double *pres, JSValue val);
 static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val);
@@ -1251,7 +1251,7 @@ static bfdec_t *JS_ToBigDecimal(JSContext *ctx, JSValueConst val);
 JSValue JS_ThrowOutOfMemory(JSContext *ctx);
 static JSValue JS_ThrowTypeErrorRevokedProxy(JSContext *ctx);
 static JSValue js_proxy_getPrototypeOf(JSContext *ctx, JSValueConst obj);
-static int js_proxy_setPrototypeOf(JSContext *ctx, JSValueConst obj,
+static JS_BOOL js_proxy_setPrototypeOf(JSContext *ctx, JSValueConst obj,
                                    JSValueConst proto_val, BOOL throw_flag);
 static int js_proxy_isExtensible(JSContext *ctx, JSValueConst obj);
 static int js_proxy_preventExtensions(JSContext *ctx, JSValueConst obj);
@@ -4119,7 +4119,7 @@ JSValue JS_NewAtomString(JSContext *ctx, const char *str)
 /* return (NULL, 0) if exception. */
 /* return pointer into a JSString with a live ref_count */
 /* cesu8 determines if non-BMP1 codepoints are encoded as 1 or 2 utf-8 sequences */
-const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, BOOL cesu8)
+const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, JS_BOOL cesu8)
 {
     JSValue val;
     JSString *str, *str_new;
@@ -7212,7 +7212,7 @@ static inline __exception int js_poll_interrupts(JSContext *ctx)
 }
 
 /* return -1 (exception) or TRUE/FALSE */
-static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
+static JS_BOOL JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
                                    JSValueConst proto_val,
                                    BOOL throw_flag)
 {
@@ -7232,7 +7232,7 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
         if (JS_VALUE_GET_TAG(proto_val) != JS_TAG_NULL) {
         not_obj:
             JS_ThrowTypeErrorNotAnObject(ctx);
-            return -1;
+            return QJSB_EXCEPTION;
         }
         proto = NULL;
     } else {
@@ -7240,19 +7240,19 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
     }
 
     if (throw_flag && JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
-        return TRUE;
+        return QJSB_TRUE;
 
     if (unlikely(p->class_id == JS_CLASS_PROXY))
         return js_proxy_setPrototypeOf(ctx, obj, proto_val, throw_flag);
     sh = p->shape;
     if (sh->proto == proto)
-        return TRUE;
+        return QJSB_TRUE;
     if (!p->extensible) {
         if (throw_flag) {
             JS_ThrowTypeError(ctx, "object is not extensible");
-            return -1;
+            return QJSB_EXCEPTION;
         } else {
-            return FALSE;
+            return QJSB_FALSE;
         }
     }
     if (proto) {
@@ -7262,9 +7262,9 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
             if (p1 == p) {
                 if (throw_flag) {
                     JS_ThrowTypeError(ctx, "circular prototype chain");
-                    return -1;
+                    return QJSB_EXCEPTION;
                 } else {
-                    return FALSE;
+                    return QJSB_FALSE;
                 }
             }
             /* Note: for Proxy objects, proto is NULL */
@@ -7274,16 +7274,16 @@ static int JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
     }
 
     if (js_shape_prepare_update(ctx, p, NULL))
-        return -1;
+        return QJSB_EXCEPTION;
     sh = p->shape;
     if (sh->proto)
         JS_FreeValue(ctx, JS_MKPTR(JS_TAG_OBJECT, sh->proto));
     sh->proto = proto;
-    return TRUE;
+    return QJSB_TRUE;
 }
 
 /* return -1 (exception) or TRUE/FALSE */
-int JS_SetPrototype(JSContext *ctx, JSValueConst obj, JSValueConst proto_val)
+JS_BOOL JS_SetPrototype(JSContext *ctx, JSValueConst obj, JSValueConst proto_val)
 {
     return JS_SetPrototypeInternal(ctx, obj, proto_val, TRUE);
 }
@@ -7357,16 +7357,16 @@ static JSValue JS_GetPrototypeFree(JSContext *ctx, JSValue obj)
 }
 
 /* return TRUE, FALSE or (-1) in case of exception */
-static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
+static JS_BOOL JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
                                    JSValueConst obj)
 {
     JSValue obj_proto;
     JSObject *proto;
     const JSObject *p, *proto1;
-    BOOL ret;
+    JS_BOOL ret;
 
     if (!JS_IsFunction(ctx, obj))
-        return FALSE;
+        return QJSB_FALSE;
     p = JS_VALUE_GET_OBJ(obj);
     if (p->class_id == JS_CLASS_BOUND_FUNCTION) {
         JSBoundFunction *s = p->u.bound_function;
@@ -7375,12 +7375,12 @@ static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
 
     /* Only explicitly boxed values are instances of constructors */
     if (JS_VALUE_GET_TAG(val) != JS_TAG_OBJECT)
-        return FALSE;
+        return QJSB_FALSE;
     obj_proto = JS_GetProperty(ctx, obj, JS_ATOM_prototype);
     if (JS_VALUE_GET_TAG(obj_proto) != JS_TAG_OBJECT) {
         if (!JS_IsException(obj_proto))
             JS_ThrowTypeError(ctx, "operand 'prototype' property is not an object");
-        ret = -1;
+        ret = QJSB_EXCEPTION;
         goto done;
     }
     proto = JS_VALUE_GET_OBJ(obj_proto);
@@ -7395,33 +7395,33 @@ static int JS_OrdinaryIsInstanceOf(JSContext *ctx, JSValueConst val,
                 for(;;) {
                     obj1 = JS_GetPrototypeFree(ctx, obj1);
                     if (JS_IsException(obj1)) {
-                        ret = -1;
+                        ret = QJSB_EXCEPTION;
                         break;
                     }
                     if (JS_IsNull(obj1)) {
-                        ret = FALSE;
+                        ret = QJSB_FALSE;
                         break;
                     }
                     if (proto == JS_VALUE_GET_OBJ(obj1)) {
                         JS_FreeValue(ctx, obj1);
-                        ret = TRUE;
+                        ret = QJSB_TRUE;
                         break;
                     }
                     /* must check for timeout to avoid infinite loop */
                     if (js_poll_interrupts(ctx)) {
                         JS_FreeValue(ctx, obj1);
-                        ret = -1;
+                        ret = QJSB_EXCEPTION;
                         break;
                     }
                 }
             } else {
-                ret = FALSE;
+                ret = QJSB_FALSE;
             }
             break;
         }
         p = proto1;
         if (proto == p) {
-            ret = TRUE;
+            ret = QJSB_TRUE;
             break;
         }
     }
@@ -7431,7 +7431,7 @@ done:
 }
 
 /* return TRUE, FALSE or (-1) in case of exception */
-int JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj)
+JS_BOOL JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj)
 {
     JSValue method;
 
@@ -7439,7 +7439,7 @@ int JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj)
         goto fail;
     method = JS_GetProperty(ctx, obj, JS_ATOM_Symbol_hasInstance);
     if (JS_IsException(method))
-        return -1;
+        return QJSB_EXCEPTION;
     if (!JS_IsNull(method) && !JS_IsUndefined(method)) {
         JSValue ret;
         ret = JS_CallFree(ctx, method, obj, 1, &val);
@@ -7450,7 +7450,7 @@ int JS_IsInstanceOf(JSContext *ctx, JSValueConst val, JSValueConst obj)
     if (!JS_IsFunction(ctx, obj)) {
     fail:
         JS_ThrowTypeError(ctx, "invalid 'instanceof' right operand");
-        return -1;
+        return QJSB_EXCEPTION;
     }
     return JS_OrdinaryIsInstanceOf(ctx, val, obj);
 }
@@ -10442,21 +10442,21 @@ static inline BOOL JS_IsHTMLDDA(JSContext *ctx, JSValueConst obj)
     return p->is_HTMLDDA;
 }
 
-static int JS_ToBoolFree(JSContext *ctx, JSValue val)
+static JS_BOOL JS_ToBoolFree(JSContext *ctx, JSValue val)
 {
     uint32_t tag = JS_VALUE_GET_TAG(val);
     switch(tag) {
-    case JS_TAG_INT:
+	case JS_TAG_INT:
         return JS_VALUE_GET_INT(val) != 0;
     case JS_TAG_BOOL:
     case JS_TAG_NULL:
     case JS_TAG_UNDEFINED:
-        return JS_VALUE_GET_INT(val);
+        return JS_VALUE_GET_INT(val) != 0;
     case JS_TAG_EXCEPTION:
-        return -1;
+        return QJSB_EXCEPTION;
     case JS_TAG_STRING:
         {
-            BOOL ret = JS_VALUE_GET_STRING(val)->len != 0;
+            BOOL ret = (JS_VALUE_GET_STRING(val)->len != 0);
             JS_FreeValue(ctx, val);
             return ret;
         }
@@ -10466,7 +10466,7 @@ static int JS_ToBoolFree(JSContext *ctx, JSValue val)
         {
             JSBigFloat *p = JS_VALUE_GET_PTR(val);
             BOOL ret;
-            ret = p->num.expn != BF_EXP_ZERO && p->num.expn != BF_EXP_NAN;
+            ret = (p->num.expn != BF_EXP_ZERO && p->num.expn != BF_EXP_NAN);
             JS_FreeValue(ctx, val);
             return ret;
         }
@@ -10474,7 +10474,7 @@ static int JS_ToBoolFree(JSContext *ctx, JSValue val)
         {
             JSBigDecimal *p = JS_VALUE_GET_PTR(val);
             BOOL ret;
-            ret = p->num.expn != BF_EXP_ZERO && p->num.expn != BF_EXP_NAN;
+            ret = (p->num.expn != BF_EXP_ZERO && p->num.expn != BF_EXP_NAN);
             JS_FreeValue(ctx, val);
             return ret;
         }
@@ -13403,7 +13403,7 @@ static JSObject *find_binary_op(JSBinaryOperatorDef *def,
 
 /* return -1 if exception, 0 if no operator overloading, 1 if
    overloaded operator called */
-static __exception int js_call_binary_op_fallback(JSContext *ctx,
+static __exception JS_BOOL js_call_binary_op_fallback(JSContext *ctx,
                                                   JSValue *pret,
                                                   JSValueConst op1,
                                                   JSValueConst op2,
@@ -13418,14 +13418,14 @@ static __exception int js_call_binary_op_fallback(JSContext *ctx,
     JSValueConst args[2];
 
     if (!ctx->allow_operator_overloading)
-        return 0;
+        return QJSB_FALSE;
 
     opset2_obj = JS_UNDEFINED;
     opset1_obj = JS_GetProperty(ctx, op1, JS_ATOM_Symbol_operatorSet);
     if (JS_IsException(opset1_obj))
         goto exception;
     if (JS_IsUndefined(opset1_obj))
-        return 0;
+        return QJSB_FALSE;
     opset1 = JS_GetOpaque2(ctx, opset1_obj, JS_CLASS_OPERATOR_SET);
     if (!opset1)
         goto exception;
@@ -13435,7 +13435,7 @@ static __exception int js_call_binary_op_fallback(JSContext *ctx,
         goto exception;
     if (JS_IsUndefined(opset2_obj)) {
         JS_FreeValue(ctx, opset1_obj);
-        return 0;
+        return QJSB_FALSE;
     }
     opset2 = JS_GetOpaque2(ctx, opset2_obj, JS_CLASS_OPERATOR_SET);
     if (!opset2)
@@ -13444,7 +13444,7 @@ static __exception int js_call_binary_op_fallback(JSContext *ctx,
     if (opset1->is_primitive && opset2->is_primitive) {
         JS_FreeValue(ctx, opset1_obj);
         JS_FreeValue(ctx, opset2_obj);
-        return 0;
+        return QJSB_FALSE;
     }
 
     ovop = get_ovop_from_opcode(op);
@@ -13522,12 +13522,12 @@ static __exception int js_call_binary_op_fallback(JSContext *ctx,
     JS_FreeValue(ctx, opset1_obj);
     JS_FreeValue(ctx, opset2_obj);
     *pret = ret;
-    return 1;
+    return QJSB_TRUE;
  exception:
     JS_FreeValue(ctx, opset1_obj);
     JS_FreeValue(ctx, opset2_obj);
     *pret = JS_UNDEFINED;
-    return -1;
+    return QJSB_EXCEPTION;
 }
 
 /* try to call the operation on the operatorSet field of 'obj'. Only
@@ -14252,12 +14252,11 @@ static int js_binary_arith_bigdecimal(JSContext *ctx, OPCodeEnum op,
     return -1;
 }
 
-static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *sp,
+static no_inline __exception JS_BOOL js_binary_arith_slow(JSContext *ctx, JSValue *sp,
                                                       OPCodeEnum op)
 {
     JSValue op1, op2, res;
     uint32_t tag1, tag2;
-    int ret;
     double d1, d2;
 
     op1 = sp[-2];
@@ -14276,15 +14275,15 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
          (tag2 != JS_TAG_NULL && tag2 != JS_TAG_UNDEFINED)) ||
         (tag2 == JS_TAG_OBJECT &&
          (tag1 != JS_TAG_NULL && tag1 != JS_TAG_UNDEFINED))) {
-        ret = js_call_binary_op_fallback(ctx, &res, op1, op2, op, TRUE, 0);
-        if (ret != 0) {
+        JS_BOOL ret = js_call_binary_op_fallback(ctx, &res, op1, op2, op, TRUE, 0);
+        if (ret != QJSB_FALSE) {
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             if (ret < 0) {
                 goto exception;
             } else {
                 sp[-2] = res;
-                return 0;
+                return QJSB_FALSE;
             }
         }
     }
@@ -14318,7 +14317,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
                 goto handle_bigint;
             if (v == 0 && (v1 | v2) < 0) {
                 sp[-2] = __JS_NewFloat64(ctx, -0.0);
-                return 0;
+                return QJSB_FALSE;
             }
             break;
         case OP_div:
@@ -14342,7 +14341,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
         case OP_mod:
             if (v1 < 0 || v2 <= 0) {
                 sp[-2] = JS_NewFloat64(ctx, fmod(v1, v2));
-                return 0;
+                return QJSB_FALSE;
             } else {
                 v = (int64_t)v1 % (int64_t)v2;
             }
@@ -14350,7 +14349,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
         case OP_pow:
             if (!is_math_mode(ctx)) {
                 sp[-2] = JS_NewFloat64(ctx, js_pow(v1, v2));
-                return 0;
+                return QJSB_FALSE;
             } else {
                 goto handle_bigint;
             }
@@ -14409,18 +14408,17 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
         }
         sp[-2] = __JS_NewFloat64(ctx, dr);
     }
-    return 0;
+    return QJSB_FALSE;
  exception:
     sp[-2] = JS_UNDEFINED;
     sp[-1] = JS_UNDEFINED;
-    return -1;
+    return QJSB_EXCEPTION;
 }
 
 static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, op2, res;
     uint32_t tag1, tag2;
-    int ret;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -14444,9 +14442,9 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
             (tag2 == JS_TAG_OBJECT &&
              (tag1 != JS_TAG_NULL && tag1 != JS_TAG_UNDEFINED &&
               tag1 != JS_TAG_STRING))) {
-            ret = js_call_binary_op_fallback(ctx, &res, op1, op2, OP_add,
+            JS_BOOL ret = js_call_binary_op_fallback(ctx, &res, op1, op2, OP_add,
                                              FALSE, HINT_NONE);
-            if (ret != 0) {
+            if (ret != QJSB_FALSE) {
                 JS_FreeValue(ctx, op1);
                 JS_FreeValue(ctx, op2);
                 if (ret < 0) {
@@ -14535,7 +14533,6 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
                                                       OPCodeEnum op)
 {
     JSValue op1, op2, res;
-    int ret;
     uint32_t tag1, tag2;
     uint32_t v1, v2, r;
 
@@ -14549,8 +14546,8 @@ static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
          (tag2 != JS_TAG_NULL && tag2 != JS_TAG_UNDEFINED)) ||
         (tag2 == JS_TAG_OBJECT &&
          (tag1 != JS_TAG_NULL && tag1 != JS_TAG_UNDEFINED))) {
-        ret = js_call_binary_op_fallback(ctx, &res, op1, op2, op, TRUE, 0);
-        if (ret != 0) {
+        JS_BOOL ret = js_call_binary_op_fallback(ctx, &res, op1, op2, op, TRUE, 0);
+        if (ret != QJSB_FALSE) {
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             if (ret < 0) {
@@ -14721,7 +14718,7 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
                                         OPCodeEnum op)
 {
     JSValue op1, op2, ret;
-    int res;
+	JS_BOOL res;
     uint32_t tag1, tag2;
 
     op1 = sp[-2];
@@ -14735,7 +14732,7 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
          (tag1 != JS_TAG_NULL && tag1 != JS_TAG_UNDEFINED))) {
         res = js_call_binary_op_fallback(ctx, &ret, op1, op2, op,
                                          FALSE, HINT_NUMBER);
-        if (res != 0) {
+        if (res != QJSB_FALSE) {
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             if (res < 0) {
@@ -14864,7 +14861,8 @@ static no_inline int js_relational_slow(JSContext *ctx, JSValue *sp,
             }
         }
     }
- done:
+done:
+	QJS_ASSERT(res == QJSB_FALSE || res == QJSB_TRUE);
     sp[-2] = JS_NewBool(ctx, res);
     return 0;
  exception:
@@ -14930,7 +14928,7 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
             res = js_call_binary_op_fallback(ctx, &ret, op1, op2,
                                              is_neq ? OP_neq : OP_eq,
                                              FALSE, HINT_NONE);
-            if (res != 0) {
+            if (res != QJSB_FALSE) {
                 JS_FreeValue(ctx, op1);
                 JS_FreeValue(ctx, op2);
                 if (res < 0) {
@@ -14993,7 +14991,7 @@ static no_inline __exception int js_eq_slow(JSContext *ctx, JSValue *sp,
         res = js_call_binary_op_fallback(ctx, &ret, op1, op2,
                                          is_neq ? OP_neq : OP_eq,
                                          FALSE, HINT_NONE);
-        if (res != 0) {
+        if (res != QJSB_FALSE) {
             JS_FreeValue(ctx, op1);
             JS_FreeValue(ctx, op2);
             if (res < 0) {
@@ -15205,8 +15203,8 @@ static __exception int js_post_inc_slow(JSContext *ctx,
     return 0;
 }
 
-static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *sp,
-                                                      OPCodeEnum op)
+static no_inline __exception JS_BOOL js_binary_arith_slow(JSContext *ctx, JSValue *sp,
+                                                          OPCodeEnum op)
 {
     JSValue op1, op2;
     double d1, d2, r;
@@ -15240,11 +15238,11 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
         QJS_ABORT();
     }
     sp[-2] = JS_NewFloat64(ctx, r);
-    return 0;
+    return QJSB_FALSE;
  exception:
     sp[-2] = JS_UNDEFINED;
     sp[-1] = JS_UNDEFINED;
-    return -1;
+    return QJSB_EXCEPTION;
 }
 
 static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
@@ -15752,10 +15750,10 @@ static __exception int js_has_unscopable(JSContext *ctx, JSValueConst obj,
     return ret;
 }
 
-static __exception int js_operator_instanceof(JSContext *ctx, JSValue *sp)
+static __exception JS_BOOL js_operator_instanceof(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, op2;
-    BOOL ret;
+    JS_BOOL ret;
 
     op1 = sp[-2];
     op2 = sp[-1];
@@ -15765,7 +15763,7 @@ static __exception int js_operator_instanceof(JSContext *ctx, JSValue *sp)
     JS_FreeValue(ctx, op1);
     JS_FreeValue(ctx, op2);
     sp[-2] = JS_NewBool(ctx, ret);
-    return 0;
+    return QJSB_FALSE;
 }
 
 static __exception int js_operator_typeof(JSContext *ctx, JSValueConst op1)
@@ -18038,7 +18036,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 atom = get_u32(pc);
                 pc += 4;
 
-                val = JS_GetGlobalVar(ctx, atom, opcode - OP_get_var_undef);
+                val = JS_GetGlobalVar(ctx, atom, (opcode != OP_get_var_undef));
                 if (unlikely(JS_IsException(val)))
                     goto exception;
                 *sp++ = val;
@@ -20406,7 +20404,7 @@ static JSValue js_async_function_resolve_call(JSContext *ctx,
 {
     JSObject *p = JS_VALUE_GET_OBJ(func_obj);
     JSAsyncFunctionData *s = p->u.async_function_data;
-    BOOL is_reject = p->class_id - JS_CLASS_ASYNC_FUNCTION_RESOLVE;
+    BOOL is_reject = (p->class_id != JS_CLASS_ASYNC_FUNCTION_RESOLVE);
     JSValueConst arg;
 
     if (argc > 0)
@@ -20779,7 +20777,7 @@ static JSValue js_async_generator_resolve_function(JSContext *ctx,
                                                    int argc, JSValueConst *argv,
                                                    int magic, JSValue *func_data)
 {
-    BOOL is_reject = magic & 1;
+    BOOL is_reject = (magic & 1);
     JSAsyncGeneratorData *s = JS_GetOpaque(func_data[0], JS_CLASS_ASYNC_GENERATOR);
     JSValueConst arg = argv[0];
 
@@ -38874,7 +38872,7 @@ static JSValue js_function_constructor(JSContext *ctx, JSValueConst new_target,
                                        int argc, JSValueConst *argv, int magic)
 {
     JSFunctionKindEnum func_kind = magic;
-    int i, n, ret;
+    int i, n;
     JSValue s, proto, obj = JS_UNDEFINED;
     StringBuffer b_s, *b = &b_s;
 
@@ -38926,7 +38924,7 @@ static JSValue js_function_constructor(JSContext *ctx, JSValueConst new_target,
                 goto fail1;
             proto = JS_DupValue(ctx, realm->class_proto[func_kind_to_class_id[func_kind]]);
         }
-        ret = JS_SetPrototypeInternal(ctx, obj, proto, TRUE);
+        JS_BOOL ret = JS_SetPrototypeInternal(ctx, obj, proto, TRUE);
         JS_FreeValue(ctx, proto);
         if (ret < 0)
             goto fail1;
@@ -39187,8 +39185,7 @@ static JSValue js_function_toString(JSContext *ctx, JSValueConst this_val,
 static JSValue js_function_hasInstance(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv)
 {
-    int ret;
-    ret = JS_OrdinaryIsInstanceOf(ctx, argv[0], this_val);
+    JS_BOOL ret = JS_OrdinaryIsInstanceOf(ctx, argv[0], this_val);
     if (ret < 0)
         return JS_EXCEPTION;
     else
@@ -42226,7 +42223,9 @@ static JSValue js_string_replace(JSContext *ctx, JSValueConst this_val,
     JSValue str, search_str, replaceValue_str, repl_str;
     JSString *sp, *searchp;
     StringBuffer b_s, *b = &b_s;
-    int pos, functionalReplace, endOfLastMatch;
+    int pos;
+	JS_BOOL functionalReplace;
+	int endOfLastMatch;
     BOOL is_first;
 
     if (JS_IsUndefined(O) || JS_IsNull(O))
@@ -44499,7 +44498,8 @@ static JSValue js_regexp_Symbol_replace(JSContext *ctx, JSValueConst this_val,
     JSString *sp, *rp;
     StringBuffer b_s, *b = &b_s;
     ValueBuffer v_b, *results = &v_b;
-    int nextSourcePosition, n, j, functionalReplace, is_global, fullUnicode;
+    int nextSourcePosition, n, j;
+	JS_BOOL functionalReplace, is_global, fullUnicode;
     uint32_t nCaptures;
     int64_t position;
 
@@ -45747,8 +45747,7 @@ static JSValue js_reflect_set(JSContext *ctx, JSValueConst this_val,
 static JSValue js_reflect_setPrototypeOf(JSContext *ctx, JSValueConst this_val,
                                          int argc, JSValueConst *argv)
 {
-    int ret;
-    ret = JS_SetPrototypeInternal(ctx, argv[0], argv[1], FALSE);
+    JS_BOOL ret = JS_SetPrototypeInternal(ctx, argv[0], argv[1], FALSE);
     if (ret < 0)
         return JS_EXCEPTION;
     else
@@ -45880,7 +45879,7 @@ static JSValue js_proxy_getPrototypeOf(JSContext *ctx, JSValueConst obj)
     return ret;
 }
 
-static int js_proxy_setPrototypeOf(JSContext *ctx, JSValueConst obj,
+static JS_BOOL js_proxy_setPrototypeOf(JSContext *ctx, JSValueConst obj,
                                    JSValueConst proto_val, BOOL throw_flag)
 {
     JSProxyData *s;
@@ -45891,38 +45890,38 @@ static int js_proxy_setPrototypeOf(JSContext *ctx, JSValueConst obj,
 
     s = get_proxy_method(ctx, &method, obj, JS_ATOM_setPrototypeOf);
     if (!s)
-        return -1;
+        return QJSB_EXCEPTION;
     if (JS_IsUndefined(method))
         return JS_SetPrototypeInternal(ctx, s->target, proto_val, throw_flag);
     args[0] = s->target;
     args[1] = proto_val;
     ret = JS_CallFree(ctx, method, s->handler, 2, args);
     if (JS_IsException(ret))
-        return -1;
+        return QJSB_EXCEPTION;
     res = JS_ToBoolFree(ctx, ret);
     if (!res) {
         if (throw_flag) {
             JS_ThrowTypeError(ctx, "proxy: bad prototype");
-            return -1;
+            return QJSB_EXCEPTION;
         } else {
-            return FALSE;
+            return QJSB_FALSE;
         }
     }
     res2 = JS_IsExtensible(ctx, s->target);
     if (res2 < 0)
-        return -1;
+        return QJSB_EXCEPTION;
     if (!res2) {
         proto1 = JS_GetPrototype(ctx, s->target);
         if (JS_IsException(proto1))
-            return -1;
+            return QJSB_EXCEPTION;
         if (JS_VALUE_GET_OBJ(proto_val) != JS_VALUE_GET_OBJ(proto1)) {
             JS_FreeValue(ctx, proto1);
             JS_ThrowTypeError(ctx, "proxy: inconsistent prototype");
-            return -1;
+            return QJSB_EXCEPTION;
         }
         JS_FreeValue(ctx, proto1);
     }
-    return TRUE;
+    return QJSB_TRUE;
 }
 
 static int js_proxy_isExtensible(JSContext *ctx, JSValueConst obj)
@@ -55462,7 +55461,7 @@ int JS_DumpWithBuffer(JSRuntime *rt, JSValue *p, void *buffer, uint32_t len) {
     return JS_DumpValueShortWithBuffer(rt, *p, buf, len);	
 }	
 
-int JS_OrdinaryIsInstanceOf1(JSContext *ctx, JSValueConst val,	
+JS_BOOL JS_OrdinaryIsInstanceOf1(JSContext *ctx, JSValueConst val,	
                                    JSValueConst obj) {	
     return JS_OrdinaryIsInstanceOf(ctx, val, obj);	
 }	
