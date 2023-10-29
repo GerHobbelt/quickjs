@@ -37,6 +37,9 @@
 #include "cutils.h"
 #include "libregexp.h"
 
+#include "monolithic_examples.h"
+
+
 #if defined(__GNUC__) || defined(__clang__)
 #define __js_printf_like(f, a)   __attribute__((format(printf, f, a)))
 #else
@@ -2647,7 +2650,9 @@ void lre_byte_swap(uint8_t *bc_buf, int bc_buf_len)
 	QJS_ASSERT(pc == end);
 }
 
-#ifdef TEST
+#if defined( TEST ) || defined(BUILD_MONOLITHIC)
+
+#if defined( TEST ) 
 
 BOOL lre_check_stack_overflow(void *opaque, size_t alloca_size)
 {
@@ -2658,6 +2663,13 @@ void *lre_realloc(void *opaque, void *ptr, size_t size)
 {
     return realloc(ptr, size);
 }
+
+#endif   // TEST
+
+
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      qjs_regexp_test_main(cnt, arr)
+#endif
 
 int main(int argc, const char** argv)
 {
@@ -2670,13 +2682,13 @@ int main(int argc, const char** argv)
 
     if (argc < 3) {
         printf("usage: %s regexp input\n", argv[0]);
-        exit(1);
+        return 1;
     }
     bc = lre_compile(&len, error_msg, sizeof(error_msg), argv[1],
                      strlen(argv[1]), 0, NULL);
     if (!bc) {
         fprintf(stderr, "error: %s\n", error_msg);
-        exit(1);
+        return 1;
     }
 
     input = argv[2];
@@ -2699,4 +2711,5 @@ int main(int argc, const char** argv)
     }
     return 0;
 }
+
 #endif

@@ -5,38 +5,51 @@
 #include <stdlib.h>
 #include "quickjs-libc.h"
 
-void process_function(JSContext* ctx, JSValue func)
+#include "monolithic_examples.h"
+
+static int process_function(JSContext* ctx, JSValue func)
 {
     if (JS_IsException(func)) {
         js_std_dump_error(ctx);
-        exit(1);
+        return 1;
     }
+	return 0;
 }
 
-int main(int argc, char** argv)
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      qjsd_main(cnt, arr)
+#endif
+
+int main(int argc, const char** argv)
 {
-    JSRuntime* rt = JS_NewRuntime();
+	int rv = 0;
+	JS_Initialize();
+	JSRuntime* rt = JS_NewRuntime();
     JSContext* ctx = JS_NewContext(rt);
 
-    if (argc < 3) {
-        printf("Usage: ./qjsd <input.bin> <output.js>\n");
-        return 1;
+    if (argc != 2) {
+        printf("Usage: ./qjsd <input.bin>\n\nExecute compiled QuickJS function / binary code blob.\n");
+		rv = 1;
+        goto fail;
     }
 
     const char* input = argv[1];
-    const char* output = argv[2];
 
-    uint8_t *buf;
     size_t buf_len;
-
-    buf = js_load_file(ctx, &buf_len, input);
+	uint8_t *buf = js_load_file(ctx, &buf_len, input);
     if (!buf) {
         perror(input);
-        exit(1);
+		rv = 2;
+		goto fail;
     }
 
     JSValue obj = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
-    process_function(ctx, obj);
+    rv = process_function(ctx, obj);
 
-    return 0;
+fail:
+	JS_FreeContext(ctx);
+	JS_FreeRuntime(rt);
+	JS_Finalize();
+
+    return rv;
 }
