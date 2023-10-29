@@ -2971,7 +2971,7 @@ int main(int argc, const char** argv)
                "\n"
                "If no output_file is given, a self test is done using the current unicode library\n",
                argv[0]);
-        exit(1);
+        return 1;
     }
     unicode_db_path = argv[1];
     outfilename = NULL;
@@ -3030,7 +3030,7 @@ int main(int argc, const char** argv)
         normalization_test(filename);
 #else
         fprintf(stderr, "Tests are not compiled\n");
-        exit(1);
+        return 1;
 #endif
     } else
     {
@@ -3038,7 +3038,7 @@ int main(int argc, const char** argv)
 
         if (!fo) {
             perror(outfilename);
-            exit(1);
+            return 1;
         }
         fprintf(fo,
                 "/* Compressed unicode tables */\n"
