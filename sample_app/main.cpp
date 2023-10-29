@@ -107,7 +107,7 @@ int main(int argc, const char** argv)
             globalThis.os = os;
             */
 
-            console.log(" [QUICJS] => =>> Script loaded. Ok. \n");
+            console.log(" [QUICKJS] => =>> Script loaded. Ok. \n");
 
             for(n = 1; n <= 5; n++){
                 console.log(` [QUICKJS-TRACE] n = ${n}/5 `);

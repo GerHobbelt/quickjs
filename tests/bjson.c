@@ -82,7 +82,7 @@ static int js_bjson_init(JSContext *ctx, JSModuleDef *m)
 #ifdef JS_SHARED_LIBRARY
 #define JS_INIT_MODULE js_init_module
 #else
-#define JS_INIT_MODULE js_init_module_bjson
+#define JS_INIT_MODULE js_init_module_bjson_test
 #endif
 
 JS_EXPORT JSModuleDef *JS_INIT_MODULE(JSContext *ctx, const char *module_name)
