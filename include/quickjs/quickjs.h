@@ -1,3 +1,6 @@
+#ifndef HEADER_A20A5A7725972CDF
+#define HEADER_A20A5A7725972CDF
+
 /*
  * QuickJS Javascript Engine
  *
@@ -144,6 +147,8 @@ typedef uint64_t JSValue;
 
 #define JS_MKVAL(tag, val) (((uint64_t)(tag) << 32) | (uint32_t)(val))
 #define JS_MKPTR(tag, ptr) (((uint64_t)(tag) << 32) | (uintptr_t)(ptr))
+
+#define toJSValue(V) ((JSValue)(V))
 
 #define JS_FLOAT64_TAG_ADDEND (0x7ff80000 - JS_TAG_FIRST + 1) /* quiet NaN encoding */
 
@@ -739,11 +744,21 @@ JS_MODULE int JS_ToBigInt64(JSContext *ctx, int64_t *pres, JSValueConst val);
 /* same as JS_ToInt64() but allow BigInt */
 JS_MODULE int JS_ToInt64Ext(JSContext *ctx, int64_t *pres, JSValueConst val);
 
+/// Warn: use it carefully
+JS_MODULE JSValue JS_NewStringWLen(JSContext *ctx, size_t len);
+/* create a string from a UTF-8 buffer */
 JS_MODULE JSValue JS_NewStringLen(JSContext *ctx, const char *str1, size_t len1);
 JS_MODULE JSValue JS_NewString(JSContext *ctx, const char *str);
 JS_MODULE JSValue JS_NewAtomString(JSContext *ctx, const char *str);
 JS_MODULE JSValue JS_ToString(JSContext *ctx, JSValueConst val);
 JS_MODULE JSValue JS_ToPropertyKey(JSContext *ctx, JSValueConst val);
+/** return pointer into live raw JSString data,
+ * use it for performance reasons,
+ * be awair of what are you doing.
+ * Warn: dont call JS_FreeCString for the return value,
+ * Note: may return NULL on empty strings and non string values.
+ * Note: It doest change the refrence count so not a thread safe function. **/
+JS_MODULE uint8_t *JS_ToCStringLenRaw(JSContext *ctx, size_t *plen, JSValueConst val1);
 JS_MODULE const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, JS_BOOL cesu8);
 __attribute__((unused)) static inline const char *JS_ToCStringLen(JSContext *ctx, size_t *plen, JSValueConst val1)
 {
@@ -1102,3 +1117,5 @@ JS_MODULE int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
 
 
 #endif /* QUICKJS_H */
+#endif // header guard
+

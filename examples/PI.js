@@ -1,3 +1,4 @@
+//ffucking
 function pad(i, last) {
     var res = i.toString(), count;
     count = 10 - res.length;

@@ -6,7 +6,8 @@ bin/*
 obj/*
 *.qjs
 .git
-
+build.bat
+imgui.ini
 ## Code::Blocks artifacts
 *.layout
 *.depend

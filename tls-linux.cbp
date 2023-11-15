@@ -21,15 +21,17 @@
 					<Add option="-Weffc++" />
 					<Add option="-w" />
 					<Add option="-Og" />
+					<Add option="-g" />
 					<Add option="-Wno-unused-parameter" />
-					<Add option="-g3" />
 					<Add option="-DUSING_UV_SHARED" />
 					<Add option="-DDUMP_LEAKS" />
 					<Add option="-DJS_STATIC_LIBRARY" />
-					<Add option="-DDUMP_BYTECODE" />
 					<Add directory="include" />
+					<Add directory="include/imgui" />
 				</Compiler>
 				<Linker>
+					<Add library="X11" />
+					<Add library="GL" />
 					<Add directory="bin" />
 				</Linker>
 			</Target>
@@ -51,6 +53,7 @@
 					<Add option="-g0" />
 					<Add option="-DUSING_UV_SHARED" />
 					<Add directory="include" />
+					<Add directory="include/imgui" />
 				</Compiler>
 				<Linker>
 					<Add option="-O3" />
@@ -60,6 +63,8 @@
 					<Add option="-march=native" />
 					<Add library="quickjs" />
 					<Add library="uv" />
+					<Add library="X11" />
+					<Add library="GL" />
 					<Add directory="bin" />
 				</Linker>
 			</Target>
@@ -134,15 +139,48 @@
 		<Linker>
 			<Add option="-m64" />
 		</Linker>
+		<Unit filename="include/CrossPlatform.h" />
 		<Unit filename="include/Log.hpp">
 			<Option target="Debug" />
 			<Option target="Release" />
 		</Unit>
-		<Unit filename="include/dynamic_queue.hpp">
+		<Unit filename="include/Window.hpp">
 			<Option target="Debug" />
 			<Option target="Release" />
 		</Unit>
-		<Unit filename="include/exception.hpp">
+		<Unit filename="include/glcorearb.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imconfig.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imgui.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imgui_impl_my.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imgui_impl_opengl3.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imgui_internal.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imstb_rectpack.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imstb_textedit.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="include/imgui/imstb_truetype.h">
 			<Option target="Debug" />
 			<Option target="Release" />
 		</Unit>
@@ -210,10 +248,6 @@
 			<Option target="Debug" />
 			<Option target="Release" />
 		</Unit>
-		<Unit filename="include/span.hpp">
-			<Option target="Debug" />
-			<Option target="Release" />
-		</Unit>
 		<Unit filename="include/string_view.hpp">
 			<Option target="Debug" />
 			<Option target="Release" />
@@ -233,6 +267,47 @@
 		<Unit filename="include/uv/unix.h" />
 		<Unit filename="include/uv/version.h" />
 		<Unit filename="include/uv/win.h" />
+		<Unit filename="src/Timer.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/Window_init.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/Window_main.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/Window_util.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/glcorearb.c">
+			<Option compilerVar="CC" />
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/imgui/imgui.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/imgui/imgui_draw.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/imgui/imgui_impl_opengl3.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/imgui/imgui_tables.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
+		<Unit filename="src/imgui/imgui_widgets.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+		</Unit>
 		<Unit filename="src/main.cpp">
 			<Option target="Debug" />
 			<Option target="Release" />

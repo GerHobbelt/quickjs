@@ -2,7 +2,11 @@
 #define _STRING_VIEW 1
 #include <algorithm>
 #include <string.h>
-#include <bits/c++config.h>
+//#include <bits/c++config.h>
+#define _GLIBCXX14_CONSTEXPR constexpr
+#define _GLIBCXX17_CONSTEXPR constexpr
+
+
 /**
  *  @class basic_string_view <string_view>
  *  @brief  A non-owning reference to a string.

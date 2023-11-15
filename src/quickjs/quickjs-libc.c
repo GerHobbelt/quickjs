@@ -621,11 +621,15 @@ static JSValue js_std_getenviron(JSContext *ctx, JSValueConst this_val,
     obj = JS_NewObject(ctx);
     if (JS_IsException(obj))
         return JS_EXCEPTION;
-    #if !defined(_WIN32)
+
+    #if defined(__linux__) && !defined(__ANDROID__)
     envp = __environ;
-    #else
+    #elif defined(_WIN32)
     envp = _environ;
+    #else
+    envp = environ;
     #endif
+
     for(idx = 0; envp[idx] != NULL; idx++) {
         name = envp[idx];
         p = strchr(name, '=');
@@ -872,6 +876,8 @@ static JSValue js_os_utimes(JSContext *ctx, JSValueConst this_val,
 #define OS_PLATFORM "darwin"
 #elif defined(EMSCRIPTEN)
 #define OS_PLATFORM "js"
+#elif defined(__ANDROID__)
+#define OS_PLATFORM "android"
 #else
 #define OS_PLATFORM "linux"
 #endif

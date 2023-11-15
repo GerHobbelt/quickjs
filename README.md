@@ -6,6 +6,7 @@ a fork of QuickJS, ported to Code::Blocks plus some changes:
 - No Console interepter.
 - JS Compiler and Interepter are mixed into main.c.
 - Changes in file structure
+- no implicite string/object to number conversion.
 
 ###### still is under maintance and more features will be added soon
 

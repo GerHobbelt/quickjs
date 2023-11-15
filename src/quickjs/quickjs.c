@@ -2478,7 +2478,7 @@ uint32_t XXH_swap32 (const uint32_t x)
           | ((x >>  8) & 0x0000ff00 ) | ((x >> 24) & 0x000000ff );
 }
 
-inline uint32_t
+static inline uint32_t
 XXH_readLE32_align(const void* ptr)
 {
     uint32_t val;
@@ -3931,7 +3931,21 @@ static JSValue string_buffer_end(StringBuffer *s)
     return JS_MKPTR(JS_TAG_STRING, str);
 }
 
-/* create a string from a UTF-8 buffer */
+JSValue JS_NewStringWLen(JSContext *ctx, size_t buf_len)
+{
+    JSString *str;
+    if (buf_len <= 0) {
+        return JS_AtomToString(ctx, JS_ATOM_empty_string);
+    }
+    str = js_alloc_string_rt(ctx->rt, buf_len, 0);
+    if (unlikely(!str)){
+        JS_ThrowOutOfMemory(ctx);
+        return JS_EXCEPTION;
+    }
+    memset(str->u.str8, 0, buf_len+1);
+    return JS_MKPTR(JS_TAG_STRING, str);
+}
+
 JSValue JS_NewStringLen(JSContext *ctx, const char *buf, size_t buf_len)
 {
     const uint8_t *p, *p_end, *p_start, *p_next;
@@ -4037,6 +4051,20 @@ JSValue JS_NewAtomString(JSContext *ctx, const char *str)
     JS_FreeAtom(ctx, atom);
     return val;
 }
+
+
+uint8_t *JS_ToCStringLenRaw(JSContext *ctx, size_t *plen, JSValueConst val)
+{
+    if (JS_VALUE_GET_TAG(val) != JS_TAG_STRING)
+    {
+        if(plen) *plen = 0;
+        return NULL;
+    }
+    JSString *str = JS_VALUE_GET_STRING(val);
+    if(plen) *plen = str->len;
+    return str->u.str8;
+}
+
 
 /* return (NULL, 0) if exception. */
 /* return pointer into a JSString with a live ref_count */
@@ -10530,38 +10558,11 @@ static JSValue JS_ToNumberHintFree(JSContext *ctx, JSValue val,
         ret = JS_NAN;
         break;
     case JS_TAG_OBJECT:
-        val = JS_ToPrimitiveFree(ctx, val, HINT_NUMBER);
-        if (JS_IsException(val))
-            return JS_EXCEPTION;
-        goto redo;
+        JS_FreeValue(ctx, val);
+        return JS_ThrowTypeError(ctx, "cannot convert object to number implicitly");
     case JS_TAG_STRING:
-        {
-            const char *str;
-            const char *p;
-            size_t len;
-
-            str = JS_ToCStringLen(ctx, &len, val);
-            JS_FreeValue(ctx, val);
-            if (!str)
-                return JS_EXCEPTION;
-            p = str;
-            p += skip_spaces(p);
-            if ((p - str) == len) {
-                ret = JS_NewInt32(ctx, 0);
-            } else {
-                int flags = ATOD_ACCEPT_BIN_OCT;
-                ret = js_atof(ctx, p, &p, 0, flags);
-                if (!JS_IsException(ret)) {
-                    p += skip_spaces(p);
-                    if ((p - str) != len) {
-                        JS_FreeValue(ctx, ret);
-                        ret = JS_NAN;
-                    }
-                }
-            }
-            JS_FreeCString(ctx, str);
-        }
-        break;
+        JS_FreeValue(ctx, val);
+        return JS_ThrowTypeError(ctx, "cannot convert string to number implicitly");
     case JS_TAG_SYMBOL:
         JS_FreeValue(ctx, val);
         return JS_ThrowTypeError(ctx, "cannot convert symbol to number");
@@ -39809,32 +39810,66 @@ static JSValue js_number_constructor(JSContext *ctx, JSValueConst new_target,
     if (argc == 0) {
         val = JS_NewInt32(ctx, 0);
     } else {
-        val = JS_ToNumeric(ctx, argv[0]);
-        if (JS_IsException(val))
-            return val;
-        switch(JS_VALUE_GET_TAG(val)) {
-#ifdef CONFIG_BIGNUM
-        case JS_TAG_BIG_INT:
-        case JS_TAG_BIG_FLOAT:
-            {
-                JSBigFloat *p = JS_VALUE_GET_PTR(val);
-                double d;
-                bf_get_float64(&p->num, &d, BF_RNDN);
-                JS_FreeValue(ctx, val);
-                val = __JS_NewFloat64(ctx, d);
+        uint32_t tag;
+        val = JS_DupValue(ctx, argv[0]);
+        redo:
+        tag = JS_VALUE_GET_NORM_TAG(val);
+        if(tag == JS_TAG_OBJECT){
+            val = JS_ToPrimitiveFree(ctx, val, HINT_NUMBER);
+            if (JS_IsException(val)) return val;
+            goto redo;
+        } else if(tag == JS_TAG_STRING) {
+            const char *str;
+            const char *p;
+            size_t len;
+            str = JS_ToCStringLen(ctx, &len, val);
+            JS_FreeValue(ctx, val);
+            if (!str)
+                return JS_EXCEPTION;
+            p = str;
+            p += skip_spaces(p);
+            if ((p - str) == len) {
+                val = JS_NewInt32(ctx, 0);
+            } else {
+                int flags = ATOD_ACCEPT_BIN_OCT;
+                val = js_atof(ctx, p, &p, 0, flags);
+                if (!JS_IsException(val)) {
+                    p += skip_spaces(p);
+                    if ((p - str) != len) {
+                        JS_FreeValue(ctx, val);
+                        val = JS_NAN;
+                    }
+                }
             }
-            break;
-        case JS_TAG_BIG_DECIMAL:
-            val = JS_ToStringFree(ctx, val);
+            JS_FreeCString(ctx, str);
+        } else {
+            val = JS_ToNumericFree(ctx, val);
             if (JS_IsException(val))
                 return val;
-            val = JS_ToNumberFree(ctx, val);
-            if (JS_IsException(val))
-                return val;
-            break;
-#endif
-        default:
-            break;
+            switch(JS_VALUE_GET_TAG(val)) {
+    #ifdef CONFIG_BIGNUM
+            case JS_TAG_BIG_INT:
+            case JS_TAG_BIG_FLOAT:
+                {
+                    JSBigFloat *p = JS_VALUE_GET_PTR(val);
+                    double d;
+                    bf_get_float64(&p->num, &d, BF_RNDN);
+                    JS_FreeValue(ctx, val);
+                    val = __JS_NewFloat64(ctx, d);
+                }
+                break;
+            case JS_TAG_BIG_DECIMAL:
+                val = JS_ToStringFree(ctx, val);
+                if (JS_IsException(val))
+                    return val;
+                val = JS_ToNumberFree(ctx, val);
+                if (JS_IsException(val))
+                    return val;
+                break;
+    #endif
+            default:
+                break;
+            }
         }
     }
     if (!JS_IsUndefined(new_target)) {

@@ -8,33 +8,13 @@
 
 
 
-static_assert(sizeof(size_t)==8);
-
-struct header {
-  // a seperator for better readability in binary files.
-  char new_line;
-  // 510 character + null terminator
-  char fname[511];
-  size_t size;
-  // load_only means it is a module and int is not required to be executed
-  // but import exported functions from module.
-  char load_only;
-  char new_line2;
-} __attribute__((packed)) ;
-#define header_size 522
-static_assert(sizeof(struct header) == header_size);
-#define SNAPSHOT_NAME "out.qjs"
-static FILE *fo;
-static BOOL byte_swap=0;
-static char const * const QJSMAGIC="QJSCARCH001002001";
-
 
 static int eval_file(JSContext *ctx, const char *filename, int module)
 {
     int ret=0;
     JSValue val;
-	uint8_t *buf;
-	size_t buf_len=0;
+    uint8_t *buf;
+    size_t buf_len=0;
 
     buf = js_load_file(ctx, &buf_len, filename);
     if(buf==NULL){
@@ -60,8 +40,41 @@ static int eval_file(JSContext *ctx, const char *filename, int module)
     JS_FreeValue(ctx, val);
     js_free(ctx, buf);
 ret:
-	return ret;
+    return ret;
 }
+
+
+
+
+
+
+
+
+
+#ifndef __ANDROID__
+
+
+
+static_assert(sizeof(size_t)==8);
+
+struct header {
+  // a seperator for better readability in binary files.
+  char new_line;
+  // 510 character + null terminator
+  char fname[511];
+  size_t size;
+  // load_only means it is a module and int is not required to be executed
+  // but import exported functions from module.
+  char load_only;
+  char new_line2;
+} __attribute__((packed)) ;
+#define header_size 522
+static_assert(sizeof(struct header) == header_size);
+#define SNAPSHOT_NAME "out.qjs"
+static FILE *fo;
+static BOOL byte_swap=0;
+static char const * const QJSMAGIC="QJSCARCH001002001";
+
 
 
 static int eval_binary(JSContext *ctx, const char *filename)
@@ -216,38 +229,6 @@ static int compile_file(JSContext *ctx, const char *filename, int module)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void help(char const * const name)
 {
 	printf("QuickJS z cusume '" __DATE__"-" __TIME__ "'\n"
@@ -351,7 +332,7 @@ int main(int argc, char const *argv[])
 
 	rt = JS_NewRuntime();
 	if (!rt) {Console::log(Console::crit, "Crit: ",argv[0]," cannot allocate JS runtime\n");exit(2);}
-	JS_SetMemoryLimit(rt, 10000000);/* limit the memory usage to 'n' bytes (optional) */
+	JS_SetMemoryLimit(rt, 1000000);/* limit the memory usage to 'n' bytes (optional) */
 	JS_SetMaxStackSize(rt, 500000);/* limit the stack size to 'n' bytes (optional) */
 
 	ctx = JS_NewContext(rt);
@@ -420,3 +401,96 @@ int main(int argc, char const *argv[])
 	//getchar();
 	return ret_code;
 }
+
+
+#else
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <android/ndk-version.h>
+#include <jni.h>
+
+
+
+extern "C"
+{
+
+JNIEXPORT jstring JNICALL Java_com_mycompany_myapp_jniWrapper_onTest(JNIEnv* env, jobject thiz)
+{
+    return env->NewStringUTF("Hello from JNI !");
+}
+
+JNIEXPORT void JNICALL Java_com_mycompany_myapp_jniWrapper_onMain(JNIEnv* env, jobject thiz)
+{
+    int fd;
+    fd=open("/storage/emulated/0/output.log",O_CLOEXEC|O_CREAT|O_WRONLY,0);
+    if(fd>0)
+        dup2(fd, 1);
+
+    JSRuntime *rt;
+    JSContext *ctx;
+    JSContext *ctx1;
+    int err;
+    Console::init();
+    rt = JS_NewRuntime();
+    if (!rt) {Console::log(Console::crit, "Crit: quickjs cannot allocate JS runtime\n");exit(2);}
+    JS_SetMemoryLimit(rt, 10000000);/* limit the memory usage to 'n' bytes (optional) */
+    JS_SetMaxStackSize(rt, 500000);/* limit the stack size to 'n' bytes (optional) */
+
+    ctx = JS_NewContext(rt);
+    if (!ctx) {Console::log(Console::crit, "Crit: quickjs cannot allocate JS context\n");exit(2);}
+    JS_AddIntrinsicBigFloat(ctx);
+    JS_AddIntrinsicBigDecimal(ctx);
+    JS_AddIntrinsicOperators(ctx);
+    JS_EnableBignumExt(ctx, TRUE);
+    /* system modules */
+    js_init_module_std(ctx, "std");
+    js_init_module_os(ctx, "os");
+    js_init_module_uv(ctx, "uv");
+    /* loader for ES6 modules, also used by import() */
+    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+    js_std_add_helpers(ctx, 0, NULL);
+
+    if (eval_file(ctx, "/storage/emulated/0/main.js", 0))
+        goto fail;
+
+    while(1) {
+        while(0<(err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1))){}
+        if (err < 0) {
+            js_std_dump_error(ctx1);
+            break;
+        }
+        if(0==uv_run(uv_default_loop(), UV_RUN_ONCE))
+            break;
+    }
+fail:
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+
+    close(fd);
+}
+
+
+}
+
+
+#endif

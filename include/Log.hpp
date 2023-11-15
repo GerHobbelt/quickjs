@@ -31,11 +31,11 @@
 			// print the error any way
 			any=99,
 		};
-	private:
+	public:
 		static const priority current_priority=priority::developer;
 
 		// std
-		static inline void log (){putchar('\n');}
+		static inline void log (){}
 		static inline void log(int v){printf("%d",v);}
 		static inline void log(unsigned long i){printf("%lu",i);}
 		static inline void log(long i){printf("%lu",i);}
@@ -44,7 +44,7 @@
 			{puts(str.data());}
 
 		static inline void log(char const*const str)
-			{printf("%s",str);}
+			{puts(str);}
 
 		static inline void log(void *ptr)
 			{printf("%p",ptr);}
@@ -53,7 +53,7 @@
 			{putchar(c);}
 
 		static inline void log(bool b)
-			{b?printf("true"):printf("false");}
+			{b?log("true"):log("false");}
 
 		// std
 		template<typename T,typename... Arg>
@@ -61,14 +61,14 @@
 			{log(v);log(args...);}
 
 
-	public:
+
 		static void init()
 		// :lock()
 		{
 			setvbuf(stdout, nullptr, _IONBF, 0);
 			setvbuf(stderr, nullptr, _IONBF, 0);
 			if(current_priority >= warn)
-				printf("Dont close this windows!\n");
+				log("Dont close this windows!\n");
 		}
 		static Console & endl(Console &thiz);
 
