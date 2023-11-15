@@ -1,3 +1,4 @@
+#include "./mod_uv.hpp"
 #include "uv.h"
 #include "new"
 #include "quickjs/quickjs.h"
