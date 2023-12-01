@@ -1,7 +1,6 @@
 # quickjs
 a fork of QuickJS, ported to Code::Blocks plus some changes:
 - Removed default std file IO
-- No Multithreading
 - LibUV Timer function and File read/write are implimented
 - No Console interepter
 - JS Compiler and Interepter are mixed into 'main.c'
@@ -9,7 +8,7 @@ a fork of QuickJS, ported to Code::Blocks plus some changes:
 - No implicite string/object to number conversion
 - LibUV UDP implimentation
 
-###### still is under maintance and more features will be added soon
+###### Warn: it is in beta stage
 
 ## Why?
 
@@ -35,3 +34,4 @@ although at least I haven't found a good QuickJS documentation.
 - storing compiled files into a zip file
 - LibUV Socket implimentation
 - HTTP server
+- LibUV Worker class
