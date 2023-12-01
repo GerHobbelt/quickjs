@@ -3,7 +3,9 @@
 #*.obj
 #*.exe
 bin/*
+build/*
 obj/*
+libs/*
 *.qjs
 .git
 build.bat

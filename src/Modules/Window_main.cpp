@@ -92,7 +92,7 @@ int WindowManager::OnDraw()
 			show_window=false;
 		}
 		ImGui::SameLine();
-        ImGui::Text("Application average %.3f (%.5g) ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().DeltaTime, ImGui::GetIO().Framerate);
+        ImGui::Text("Application average %.5f (%.5g) ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().DeltaTime, ImGui::GetIO().Framerate);
 		ImGui::Text("Using work area instead of main area");
 		ImGui::SameLine();
 		ImGui::TextDisabled("(i)");

@@ -1,7 +1,7 @@
 #include "uv.h"
 #include "quickjs/cutils.h"
 #include "quickjs/quickjs-libc.h"
-#include "Modules/mod_uv.hpp"
+#include "Modules/mod_uv.h"
 #include <string.h>
 #include <stdint.h>
 #include "Log.hpp"
@@ -87,25 +87,25 @@ static int eval_binary(JSContext *ctx, const char *filename)
     buffer = js_load_file(ctx, &buf_len, filename);
     cur=(buffer+strlen(QJSMAGIC));
     if (buffer==NULL) {
-        Console::log(Console::error,"Error: Unable to read ",filename,"\n");
+        Console(error,"eval_binary","Unable to read %s\n",filename);
         return -1;
     }
     if(buf_len>INT32_MAX){
-        Console::log(Console::error,"Error: Too large file ",filename," (",buf_len," Byte)\n");goto error;
+        Console(error,"eval_binary","Too large file %s (%ld Bytes)\n",filename,buf_len);goto error;
     }
     if(buf_len < (strlen(QJSMAGIC) + header_size)) {
-        Console::log(Console::error,"Error: Too small file ",filename," (",buf_len," Byte)\n");goto error;
+        Console(error,"eval_binary","Too small file %s (%ld Bytes)\n",filename,buf_len);goto error;
     }
     if(memcmp(buffer,QJSMAGIC,strlen(QJSMAGIC))){
-        Console::log(Console::error,"Error: Invalide MAGIC header: ",filename,"\n");goto error;
+        Console(error,"eval_binary","Invalide MAGIC header: %s\n",filename);goto error;
     }
     while((cur-buffer) < (ssize_t)buf_len
           && (buf_len-(cur-buffer)) > header_size)
     {
         struct header *H = (struct header*)cur;
-        Console::log(Console::debug,"Debug: executing ",H->fname," (size: ", H->size, H->load_only?",load_only":"", ")\n");
+        Console(debug,"eval_binary","Debug: executing %s (size: %ld %s)\n",H->fname , H->size, H->load_only?",load_only":"");
         if((buf_len-(cur-buffer)) < H->size) {
-            Console::log(Console::error,"Error: Bad file unexpected ending\n");goto error;
+            Console(error,"eval_binary","Bad file unexpected ending\n");goto error;
         }
         cur+=header_size;
         js_std_eval_binary(ctx, cur, H->size, H->load_only);
@@ -163,7 +163,7 @@ static JSModuleDef *jsc_module_loader(JSContext *ctx, const char *module_name, v
     JSModuleDef *m;
 
     if (has_suffix(module_name, ".so") || has_suffix(module_name, ".dll")) {
-        Console::log(Console::debug,"Debug: binary module '",module_name,"' will be dynamically loaded\n");
+        Console(debug,"jsc_module_loader","binary module '%s' will be dynamically loaded\n",module_name);
         /* create a dummy module */
         m = JS_NewCModule(ctx, module_name, js_module_dummy_init);
         /* the resulting executable will export its symbols for the
@@ -184,7 +184,7 @@ static JSModuleDef *jsc_module_loader(JSContext *ctx, const char *module_name, v
         js_free(ctx, buf);
         if (JS_IsException(func_val))
             return NULL;
-        Console::log(Console::debug,"Debug: jsc_module_loader() -> output_object_code(",module_name,")\n");
+        Console(debug,"jsc_module_loader","jsc_module_loader() -> output_object_code(%s)\n",module_name);
         output_object_code(ctx, func_val, module_name, TRUE);
 
         /* the module is already referenced, so we must free it */
@@ -203,7 +203,7 @@ static int compile_file(JSContext *ctx, const char *filename, int module)
 
     buf = js_load_file(ctx, &buf_len, filename);
     if (!buf) {
-        Console::log(Console::error,"Error: Could not load '",filename,"'\n");
+        Console(error,"compile_file","Could not load '%s'\n",filename);
         return 1;
     }
     eval_flags = JS_EVAL_FLAG_COMPILE_ONLY;
@@ -219,7 +219,7 @@ static int compile_file(JSContext *ctx, const char *filename, int module)
         js_std_dump_error(ctx);
         return 1;
     }
-    Console::log(Console::debug,"Debug: compile_file() -> output_object_code(",filename,",",!!module,")\n");
+    Console(debug,"compile_file","compile_file() -> output_object_code(%s,%s)\n",filename,module?"true":"false");
     output_object_code(ctx, obj, filename, !!module);
     JS_FreeValue(ctx, obj);
     return 0;
@@ -263,8 +263,6 @@ int main(int argc, char const *argv[])
 	/* cannot use getopt because we want to pass the command line to the script */
 	option_ind = 1;
 
-	Console::init();
-
 	while (option_ind < argc && *argv[option_ind] == '-') {
 		const char *arg = argv[option_ind] + 1;
 		const char *longopt = "";
@@ -289,11 +287,11 @@ int main(int argc, char const *argv[])
 			}
 			if (opt == 'I' || !strcmp(longopt, "include")) {
 				if (option_ind >= argc) {
-					Console::log(Console::crit, "Crit: expecting filename");
+					Console(crit, "main", "expecting filename");
 					exit(1);
 				}
 				if (include_count >= (int)countof(include_list)) {
-					Console::log(Console::crit, "Crit: too many included files");
+					Console(crit, "main", "too many included files");
 					exit(1);
 				}
 				include_list[include_count++] = argv[option_ind++];
@@ -316,9 +314,9 @@ int main(int argc, char const *argv[])
 				continue;
 			}
 			if (opt) {
-				Console::log(Console::warn, "Warn: '",argv[0],"' unknown option '-",opt,"'\n");
+				Console(warn, "main", "'%s' unknown option '-%c'\n",argv[0],opt);
 			} else {
-				Console::log(Console::warn, "Warn: '",argv[0],"' unknown option '--",longopt,"'\n");
+                Console(warn, "main", "'%s' unknown option '--%s'\n",argv[0],longopt);
 			}
 			help(argv[0]);
 		}
@@ -326,17 +324,17 @@ int main(int argc, char const *argv[])
 
 	if(option_ind>argc ||  argv[option_ind]==NULL || argv[option_ind][0]==0x0)
 	{
-		Console::log(Console::crit, "Crit: expecting filename!");fflush(stderr);
+		Console(crit, "main", "expecting filename!");fflush(stderr);
 		exit(1);
 	}
 
 	rt = JS_NewRuntime();
-	if (!rt) {Console::log(Console::crit, "Crit: ",argv[0]," cannot allocate JS runtime\n");exit(2);}
+	if (!rt) {Console(crit, "main", "%s cannot allocate JS runtime\n",argv[0]);exit(2);}
 	JS_SetMemoryLimit(rt, 1000000);/* limit the memory usage to 'n' bytes (optional) */
 	JS_SetMaxStackSize(rt, 500000);/* limit the stack size to 'n' bytes (optional) */
 
 	ctx = JS_NewContext(rt);
-	if (!ctx) {Console::log(Console::crit, "Crit: ",argv[0]," cannot allocate JS context\n");exit(2);}
+	if (!ctx) {Console(crit, "main", "%s cannot allocate JS context\n",argv[0]);exit(2);}
 #ifdef CONFIG_BIGNUM
 	JS_AddIntrinsicBigFloat(ctx);
 	JS_AddIntrinsicBigDecimal(ctx);
@@ -364,7 +362,7 @@ int main(int argc, char const *argv[])
         fprintf(fo, QJSMAGIC);
         for(i = 0; i < include_count; i++)
             if (!jsc_module_loader(ctx, include_list[i], NULL)) {
-                Console::log(Console::error, "Error: Could not load dynamic module '",include_list[i],"'\n");goto fail;
+                Console(error,"main","Could not load dynamic module '%s'\n",include_list[i]);goto fail;
             }
         if (compile_file(ctx, argv[option_ind], module))
             goto fail;
@@ -383,22 +381,30 @@ int main(int argc, char const *argv[])
 	//if(MainType!=2){z
 		JSContext *ctx1;
 		int err;
-		while(1) {
-			while(0<(err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1))){}
-			if (err < 0) {
-				js_std_dump_error(ctx1);
-				break;
-			}
-			if(0==uv_run(uv_default_loop(), UV_RUN_ONCE))
-				break;
-		}
+		bool running;
+		do {
+            running=0;
+
+            do{
+                err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1);
+                if (err < 0){
+                    js_std_dump_error(ctx1);
+                    goto fail;
+                }
+                if (err > 0)
+                    running=1;
+            }while(0<err);
+
+			if(uv_run(uv_default_loop(), UV_RUN_ONCE))
+                running=1;
+		}while(running);
 	//}
 	ret_code=0;
  fail:
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);
 
-	//getchar();
+	Console(debug,"main","OK!\n");
 	return ret_code;
 }
 
@@ -450,6 +456,7 @@ JNIEXPORT void JNICALL Java_com_mycompany_myapp_jniWrapper_onMain(JNIEnv* env, j
     JSContext *ctx;
     JSContext *ctx1;
     int err;
+    bool running;
     Console::init();
     rt = JS_NewRuntime();
     if (!rt) {Console::log(Console::crit, "Crit: quickjs cannot allocate JS runtime\n");exit(2);}
@@ -473,15 +480,22 @@ JNIEXPORT void JNICALL Java_com_mycompany_myapp_jniWrapper_onMain(JNIEnv* env, j
     if (eval_file(ctx, "/storage/emulated/0/main.js", 0))
         goto fail;
 
-    while(1) {
-        while(0<(err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1))){}
-        if (err < 0) {
+    do {
+        running=0;
+
+        do{
+            err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1);
+            if (err > 0)
+                running=1;
+        }while(0<err);
+        if (err < 0){
             js_std_dump_error(ctx1);
-            break;
+            goto fail;
         }
-        if(0==uv_run(uv_default_loop(), UV_RUN_ONCE))
-            break;
-    }
+
+        if(uv_run(uv_default_loop(), UV_RUN_ONCE))
+            running=1;
+    }while(running);
 fail:
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);

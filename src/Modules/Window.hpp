@@ -13,7 +13,9 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
-#ifdef _WIN32
+#include "CrossPlatform.h"
+
+#if IS_WINDOWS_OS
 	#include <windows.h>
 	#include "glcorearb.h"
 	#include <GL/wglext.h>

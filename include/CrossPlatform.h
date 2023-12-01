@@ -1,3 +1,6 @@
+#ifndef HEADER_C199732FE6C5F0C5
+#define HEADER_C199732FE6C5F0C5
+
 /**
  * @file CrossPlatform.h
  * @author ZWArrior
@@ -12,13 +15,13 @@
 #include <stdint.h>
 //#include <endian.h>
 
-#if ( defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64) )
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
     #define IS_WINDOWS_OS 1
     #define IS_ANDROID_OS 0
     #define IS_MAC_OS 0
     #define IS_LINUX_OS 0
 #elif  defined(__ANDROID__)
-    #define IS_WINDOWS_OS 1
+    #define IS_WINDOWS_OS 0
     #define IS_ANDROID_OS 1
     #define IS_MAC_OS 0
     #define IS_LINUX_OS 0
@@ -35,3 +38,5 @@
 #endif
 
 #endif
+#endif // header guard 
+

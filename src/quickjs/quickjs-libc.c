@@ -942,19 +942,13 @@ typedef struct {
 static void js_uv_timer_finalizer(JSRuntime *rt, JSValue val)
 {
     JSUVTimer *th = (JSUVTimer*)JS_GetOpaque(val, js_uv_timer_class_id);
-    if(!th){
-        printf("UVTimer was initialized unsuccessfuly");
-        exit(1);
-    }
-    // free it, if function is called.
+    JS_FreeValueRT(rt, th->func);
     js_free_rt(rt, th);
 }
 static void js_uv_timer_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func)
 {
-    JSUVTimer *th = (JSUVTimer*) JS_GetOpaque(val, js_uv_timer_class_id);
-    if (th) {
-        JS_MarkValue(rt, th->func, mark_func);
-    }
+    JSUVTimer *th = (JSUVTimer*)JS_GetOpaque(val, js_uv_timer_class_id);
+    JS_MarkValue(rt, th->func, mark_func);
 }
 static JSClassDef js_uv_timer_class = {
     "UVTimer",
@@ -967,12 +961,20 @@ static JSClassDef js_uv_timer_class = {
 static void uvTimerCB(uv_timer_t* handle)
 {
 	JSUVTimer *th = (JSUVTimer *)handle->data;
-	JSValue ret = JS_Call(th->ctx, th->func, JS_UNDEFINED, 0, NULL);
+	/* 'func' might be destroyed when calling itself (if it frees the
+       handler), so must take extra care */
+    th->func = JS_DupValue(th->ctx, th->func);
+	JSValue ret = JS_Call(th->ctx, th->func, th->this_val, 0, NULL);
+    JS_FreeValue(th->ctx, th->func);
+
 	if (JS_IsException(ret))
         js_std_dump_error(th->ctx);
-	// free if has zero refrence otherwise is called
-	JS_FreeValue(th->ctx, th->func);
-	JS_FreeValue(th->ctx, th->this_val);
+    JS_FreeValue(th->ctx, ret);
+
+    if(uv_timer_get_repeat(handle)==0){
+        uv_timer_stop(handle);
+        JS_FreeValue(th->ctx, th->this_val);
+    }
 }
 
 static JSValue js_uv_clearTimeout(JSContext *ctx, JSValueConst this_val,
@@ -987,30 +989,51 @@ static JSValue js_uv_clearTimeout(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue js_uv_setTimeout(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
+                                int argc, JSValueConst *argv,int magic)
 {(void)this_val;(void)argc;
 	JSUVTimer *th;
 	int64_t timeout;
+	int res;
+	JSValue thiz;
+
+	if(argc != 2)
+        return JS_ThrowTypeError(ctx, "invalid argument");
 	if (!JS_IsFunction(ctx, argv[0]))
-		return JS_ThrowTypeError(ctx, "js_uv_setTimeout: not a function");
+		return JS_ThrowTypeError(ctx, "invalid argument");
 	if (JS_ToInt64(ctx, &timeout, argv[1]))
-        return JS_EXCEPTION;
+        return JS_ThrowTypeError(ctx, "invalid argument");
 	if(timeout<0)timeout=0;
 	th = (JSUVTimer *)js_mallocz(ctx, sizeof(*th));
-	th->func = JS_DupValue(ctx, argv[0]);
+	th->func = JS_UNDEFINED;
 	th->timer.data = th;
 	th->ctx = ctx;
+	thiz = JS_NewObjectClass(ctx, js_uv_timer_class_id);
+	if (JS_IsException(thiz))
+    {
+        js_free(ctx,th);
+        return thiz;
+    }
+	th->this_val = thiz;
+	JS_SetOpaque(thiz, th);
 
 
-	uv_timer_init(uv_default_loop(), &th->timer);
-	uv_timer_start(&th->timer, uvTimerCB, (uint64_t)timeout, 0);
+    res = uv_timer_init(uv_default_loop(), &th->timer);
+	if(res){
+        JS_FreeValue(ctx, thiz);
+        return JS_ThrowInternalError(ctx,"uv_timer_init: %s", uv_strerror(res));
+	}
+	res = uv_timer_start(&th->timer, uvTimerCB, (uint64_t)timeout, magic?(uint64_t)timeout:0);
+	if(res){
+        JS_FreeValue(ctx, thiz);
+        return JS_ThrowInternalError(ctx,"uv_timer_start: %s", uv_strerror(res));
+	}
 
-	th->this_val = JS_NewObjectClass(ctx, js_uv_timer_class_id);
-	JS_SetOpaque(th->this_val, th);
-	// has refrence and not has been called
-	JS_DupValue(ctx, th->this_val);
-	return th->this_val;
+	th->func = JS_DupValue(ctx, argv[0]);
+	JS_DupValue(ctx, thiz);
+	return thiz;
 }
+
+
 
 /**********************************************************/
 
@@ -1049,7 +1072,12 @@ JS_MODULE void js_std_add_helpers(JSContext *ctx, int argc, const char **argv)
     JS_SetPropertyStr(ctx, global_obj, "clearTimeout",
 						JS_NewCFunction(ctx, js_uv_clearTimeout, "clearTimeout", 1));
 	JS_SetPropertyStr(ctx, global_obj, "setTimeout",
-						JS_NewCFunction(ctx, js_uv_setTimeout, "setTimeout", 1));
+						JS_NewCFunctionMagic(ctx, js_uv_setTimeout, "setTimeout", 2, JS_CFUNC_generic_magic, 0));
+
+    JS_SetPropertyStr(ctx, global_obj, "clearInterval",
+						JS_NewCFunction(ctx, js_uv_clearTimeout, "clearInterval", 1));
+	JS_SetPropertyStr(ctx, global_obj, "setInterval",
+						JS_NewCFunctionMagic(ctx, js_uv_setTimeout, "setInterval", 2, JS_CFUNC_generic_magic, 1));
 
     JS_FreeValue(ctx, global_obj);
 

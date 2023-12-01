@@ -7,6 +7,8 @@
 #include <windows.h>
 #endif
 
+#define JS_VERSION "0.15"
+
 #if defined(JS_STATIC_LIBRARY)
 #define JS_MODULE
 // if the C file that include this was for library code that define this function

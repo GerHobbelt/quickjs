@@ -3,8 +3,9 @@ import * as uv from 'uv';
 //"use strict";
 //uv=await import('uv');
 
+let sip=new uv.sockaddr("0.0.0.0",10000);
 let v= new uv.udp();
-v.bind(new uv.sockaddr("0.0.0.0",10000));
+v.bind(sip);
 
 
 function onOpen(err){
@@ -18,12 +19,12 @@ function onOpen(err){
 }
 
 
-let fp=new uv.File('examples/PI.js','rw',onOpen);
+//let fp=new uv.File('examples/PI.js','rw',onOpen);
 
 
 
-function onrecv(ip,val){
-    console.log("Recived from ",ip,val);
+function onrecv(val,ip,port){
+    console.log("Recived from ",ip,port);
     const view = new Int8Array(val);
     if(view[0]==6)
         uv.sim(0x27);
@@ -33,14 +34,41 @@ function onrecv(ip,val){
         uv.sim(0x26);
     else if(view[0]==8)
         uv.sim(0x28);
-    else if(view[0]==5)
-        v.stopRecv();
+    else if(view[0]==0x41)
+        v.stop_recv();
+    else
+        console.log("Unknown: ",view[0]);
 }
 
-function event(){
-    uv.sim(0x2);
+function eve(){
+    v.stop_recv();
+//    v= new uv.udp();
+//    v.bind(ip);
+//    v.startRecv(onrecv);
+//    clearTimeout(this);
+//    setInterval(eve2, 1000);
 }
-//setTimeout(event,2000);
-v.startRecv(onrecv);
+
+
+v.start_recv(onrecv);
+
+//setTimeout(eve,2000);
+//setInterval(eve, 1000);
+
+//setTimeout(async () => {
+//    console.log("CALLED!");
+//    let uv = await import('uv');
+//    console.log("CALLED!");
+//    uv.openFile('./scripts/main.js','rw',(err)=>{
+//        if(!err){
+//            fp.read(-1,10,(err,data)=>{
+//                console.log("read: ",err,data);
+//            })
+//        }else{
+//            console.log(err);
+//        }
+//    });
+//    console.log("CALLED!");
+//}, 1);
 
 
