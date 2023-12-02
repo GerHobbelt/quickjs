@@ -40,6 +40,8 @@
 #endif
 #if defined(__FreeBSD__)
 #include <malloc_np.h> // for malloc_usable_size
+#elif defined(__OpenBSD__)
+#define malloc_usable_size js_malloc_usable_size_unknown
 #endif
 
 #ifdef _MSC_VER
