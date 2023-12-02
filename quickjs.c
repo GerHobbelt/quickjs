@@ -38,6 +38,8 @@
 #include <malloc.h>
 #elif defined(__FreeBSD__)
 #include <malloc_np.h>
+#elif defined(__OpenBSD__)
+#define malloc_usable_size js_malloc_usable_size_unknown
 #endif
 
 #include "cutils.h"
