@@ -99,6 +99,20 @@ declare interface FILE {
   write(buffer: ArrayBuffer, position: number, length: number): number;
 
   /**
+   * Write this file into `target`, using a memory buffer of size `bufferSize`.
+   *
+   * If `limit` is specified, only that amount of bytes will be read and
+   * written. Otherwise, data is read and written until this file reaches EOF.
+   *
+   * A `limit` of 0 is treated the same as not specifying a limit.
+   *
+   * Internally, this function uses libc `fread` and `fwrite` in a loop.
+   *
+   * Returns the number of bytes read and written.
+   */
+  writeTo(target: FILE, bufferSize: number, limit?: number): number;
+
+  /**
    * Return the next line from the file, assuming UTF-8 encoding, excluding the trailing line feed or EOF.
    *
    * If the end of the file has been reached, then `null` will be returned instead of a string.
@@ -256,9 +270,6 @@ declare module "quickjs:std" {
 
   /** Constant for {@link FILE.setvbuf}. Declares that the buffer mode should be 'no buffering'. */
   export var _IONBF: number;
-
-  /** Manually invoke the cycle removal algorithm (garbage collector). The cycle removal algorithm is automatically started when needed, so this function is useful in case of specific memory constraints or for testing. */
-  export function gc(): void;
 
   /** Return the value of the environment variable `name` or `undefined` if it is not defined. */
   export function getenv(name: string): string | undefined;
@@ -910,7 +921,7 @@ declare module "quickjs:os" {
   export function dup2(oldfd: number, newfd: number): number;
 
   /** `pipe` Unix system call. Return two handles as `[read_fd, write_fd]`. */
-  export function pipe(): null | [number, number];
+  export function pipe(): [number, number];
 
   /** Sleep for `delay_ms` milliseconds. */
   export function sleep(delay_ms: number): void;

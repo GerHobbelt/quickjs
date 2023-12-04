@@ -659,13 +659,6 @@ static JSValue js_std_getegid(JSContext *ctx, JSValueConst this_val,
 #endif
 }
 
-static JSValue js_std_gc(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    JS_RunGC(JS_GetRuntime(ctx));
-    return JS_UNDEFINED;
-}
-
 static int interrupt_handler(JSRuntime *rt, void *opaque)
 {
     return (os_pending_signals >> SIGINT) & 1;
@@ -1177,6 +1170,127 @@ static JSValue js_std_file_fileno(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, fileno(f));
 }
 
+static JSValue js_std_file_writeTo(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    FILE *self, *target;
+    double bufsize_double, limit_double;
+    size_t bufsize, limit, total_read, total_written;
+
+    if (argc < 2) {
+        return JS_ThrowTypeError(ctx, "writeTo must be called with at least two arguments: 'target' and 'bufferSize'. Instead, it was called with %d argument(s).", argc);
+    }
+
+    self = js_std_file_get(ctx, this_val);
+    if (self == NULL) {
+        return JS_EXCEPTION;
+    }
+    target = js_std_file_get(ctx, argv[0]);
+    if (target == NULL) {
+        return JS_EXCEPTION;
+    }
+    if (JS_ToFloat64(ctx, &bufsize_double, argv[1])) {
+        return JS_EXCEPTION;
+    }
+    if (bufsize_double <= 0) {
+        return JS_ThrowTypeError(ctx, "'bufferSize' must be greater than 0");
+    }
+    bufsize = (size_t) bufsize_double;
+
+    if (argc == 3) {
+        if (JS_ToFloat64(ctx, &limit_double, argv[2])) {
+            return JS_EXCEPTION;
+        }
+        if (limit_double < 0) {
+            return JS_ThrowTypeError(ctx, "'limit' cannot be negative");
+        }
+        limit = (size_t) limit_double;
+    } else {
+        limit = 0;
+    }
+
+    if (limit != 0 && limit < bufsize) {
+        bufsize = limit;
+    }
+
+    total_read = 0;
+    total_written = 0;
+    {
+        size_t bytes_to_read, bytes_read, bytes_written;
+        BOOL is_final_write;
+        uint8_t *buf;
+
+        bytes_read = 0;
+        bytes_written = 0;
+        is_final_write = FALSE;
+
+        buf = js_malloc(ctx, bufsize);
+        if (buf == NULL) {
+            return JS_EXCEPTION;
+        }
+
+        while (TRUE) {
+            if (limit == 0) {
+                bytes_to_read = bufsize;
+            } else {
+                bytes_to_read = limit - total_read;
+                if (bytes_to_read > bufsize) {
+                    bytes_to_read = bufsize;
+                }
+            }
+
+            if (bytes_to_read <= 0) {
+                break;
+            }
+
+            bytes_read = fread(buf, 1, bytes_to_read, self);
+            total_read += bytes_read;
+            if (bytes_read < bytes_to_read) {
+                if (ferror(self)) {
+                    js_free(ctx, buf);
+                    JS_ThrowError(ctx, "%s (errno = %d)", strerror(errno), errno);
+                    JS_AddPropertyToException(ctx, "errno", JS_NewInt32(ctx, errno));
+                    JS_AddPropertyToException(ctx, "totalBytesWritten", JS_NewInt64(ctx, total_written));
+                    JS_AddPropertyToException(ctx, "totalBytesRead", JS_NewInt64(ctx, total_read));
+                    return JS_EXCEPTION;
+                } else {
+                    is_final_write = TRUE;
+                }
+            }
+
+            // NOTE: fwrite is a no-op when bytes_read is 0
+            bytes_written = fwrite(buf, 1, bytes_read, target);
+            total_written += bytes_written;
+            if (bytes_written < bytes_read) {
+                if (ferror(target)) {
+                    js_free(ctx, buf);
+                    JS_ThrowError(ctx, "%s (errno = %d)", strerror(errno), errno);
+                    JS_AddPropertyToException(ctx, "errno", JS_NewInt32(ctx, errno));
+                    JS_AddPropertyToException(ctx, "totalBytesWritten", JS_NewInt64(ctx, total_written));
+                    JS_AddPropertyToException(ctx, "totalBytesRead", JS_NewInt64(ctx, total_read));
+                    return JS_EXCEPTION;
+                } else {
+                    js_free(ctx, buf);
+                    JS_ThrowError(ctx, "Failed to write file: reached EOF before we were done writing data");
+                    JS_AddPropertyToException(ctx, "attemptedWriteSize", JS_NewInt64(ctx, bytes_read));
+                    JS_AddPropertyToException(ctx, "actualWriteSize", JS_NewInt64(ctx, bytes_written));
+                    JS_AddPropertyToException(ctx, "totalBytesWritten", JS_NewInt64(ctx, total_written));
+                    JS_AddPropertyToException(ctx, "totalBytesRead", JS_NewInt64(ctx, total_read));
+                    return JS_EXCEPTION;
+                }
+            }
+
+            if (is_final_write) {
+                break;
+            }
+        }
+
+        js_free(ctx, buf);
+    }
+
+    return JS_NewInt64(ctx, total_written);
+}
+
 static JSValue js_std_file_read_write(JSContext *ctx, JSValueConst this_val,
                                       int argc, JSValueConst *argv, int is_write)
 {
@@ -1593,7 +1707,6 @@ static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("setExitCode", 1, js_std_setExitCode ),
     JS_CFUNC_DEF("getExitCode", 0, js_std_getExitCode ),
     JS_CFUNC_DEF("exit", 1, js_std_exit ),
-    JS_CFUNC_DEF("gc", 0, js_std_gc ),
     JS_CFUNC_DEF("getenv", 1, js_std_getenv ),
     JS_CFUNC_DEF("setenv", 1, js_std_setenv ),
     JS_CFUNC_DEF("unsetenv", 1, js_std_unsetenv ),
@@ -1640,6 +1753,7 @@ static const JSCFunctionListEntry js_std_file_proto_funcs[] = {
     JS_CFUNC_DEF("fileno", 0, js_std_file_fileno ),
     JS_CFUNC_MAGIC_DEF("read", 3, js_std_file_read_write, 0 ),
     JS_CFUNC_MAGIC_DEF("write", 3, js_std_file_read_write, 1 ),
+    JS_CFUNC_DEF("writeTo", 3, js_std_file_writeTo ),
     JS_CFUNC_DEF("getline", 0, js_std_file_getline ),
     JS_CFUNC_DEF("readAsString", 0, js_std_file_readAsString ),
     JS_CFUNC_DEF("getByte", 0, js_std_file_getByte ),
@@ -3421,7 +3535,7 @@ static JSValue js_os_WIFCONTINUED(JSContext *ctx, JSValueConst this_val,
 #endif
 }
 
-/* pipe() -> [read_fd, write_fd] or null if error */
+/* pipe() -> [read_fd, write_fd] */
 static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
 {

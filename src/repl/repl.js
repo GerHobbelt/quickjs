@@ -32,7 +32,7 @@ import * as os from "quickjs:os";
   g.std = std;
 
   /* add bindings for other builtin modules */
-  g.mod = require("quickjs:module");
+  g.engine = require("quickjs:engine");
   g.Bytecode = require("quickjs:bytecode");
   g.ptr = require("quickjs:pointer");
 
@@ -1147,7 +1147,7 @@ import * as os from "quickjs:os";
       if (eval_mode === "math") expr = '"use math"; void 0;' + expr;
       var now = new Date().getTime();
       /* eval as a script */
-      result = mod.evalScript(expr, { backtraceBarrier: true });
+      result = engine.evalScript(expr, { backtraceBarrier: true });
       eval_time = new Date().getTime() - now;
       std.puts(colors[styles.result]);
       print(result);
@@ -1241,7 +1241,7 @@ import * as os from "quickjs:os";
     level = 0;
 
     /* run the garbage collector after each command */
-    std.gc();
+    engine.gc();
   }
 
   function colorize_js(str) {

@@ -1,4 +1,4 @@
-declare module "quickjs:module" {
+declare module "quickjs:engine" {
   /**
    * Return whether the provided resolved module path is set as the main module.
    *
@@ -71,11 +71,30 @@ declare module "quickjs:module" {
   export function getFileNameFromStack(stackLevels?: number): string;
 
   /**
-   * An object which lets you configure the module loader (import/export/require).
-   * You can use these properties to add support for importing new filetypes.
-   *
-   * This object can also be used to identify whether an object is a module
-   * namespace record.
+   * Returns true if `target` is a module namespace object.
    */
-  export const Module: Module;
+  export function isModuleNamespace(target: any): boolean;
+
+  /**
+   * Create a virtual built-in module whose exports consist of the own
+   * enumerable properties of `obj`.
+   */
+  export function defineBuiltinModule(
+    name: string,
+    obj: { [key: string]: any }
+  ): void;
+
+  /**
+   * An object which lets you configure the module loader (import/export/require).
+   * You can change these properties to add support for importing new filetypes.
+   */
+  export const ModuleDelegate: ModuleDelegate;
+
+  /**
+   * Manually invoke the cycle removal algorithm (garbage collector).
+   *
+   * The cycle removal algorithm is automatically started when needed, so this
+   * function is useful in case of specific memory constraints or for testing.
+   */
+  export function gc(): void;
 }

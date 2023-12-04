@@ -49,6 +49,7 @@ Fork of the fantastic QuickJS engine by Fabrice Bellard, with many changes.
 - `os.access` function added (wrapper for libc `access`).
 - `FILE.prototype.sync` method added (wrapper for `fsync`).
 - `FILE.prototype.setvbuf` method added (wrapper for `setvbuf`).
+- `FILE.prototype.writeTo` method added (pipe data from one FILE to another, given a buffer size and limit).
 - `std.isFILE` function added (returns whether the provided object is a `FILE` (via `js_std_file_class_id`)).
 - `os.{WUNTRACED,WEXITSTATUS,WTERMSIG,WSTOPSIG,WIFEXITED,WIFSIGNALED,WIFSTOPPED,WIFCONTINUED}` added, for working with `os.waitpid`.
 - `os.{S_IRWXU,S_IRUSR,S_IWUSR,S_IXUSR,S_IRWXG,S_IRGRP,S_IWGRP,S_IXGRP,S_IRWXO,S_IROTH,S_IWOTH,S_IXOTH}` added, for working with file modes.
@@ -62,6 +63,7 @@ Fork of the fantastic QuickJS engine by Fabrice Bellard, with many changes.
 - Several C-side helper functions were moved out of quickjs-libc and into quickjs-utils.
 - Most module-related code (setting import.meta, etc) was moved into quickjs-modulesys.
 - Added `std.setExitCode`, `std.getExitCode`, and made `std.exit`'s parameter optional. The value passed to `std.setExitCode` will be used when the process exits normally, or when `std.exit` is called without any arguments. `std.setExitCode`, `std.getExitCode`, and `std.exit` throw if called from a thread other than the main thread (ie. a Worker).
+- The manual garbage collection function `std.gc()` was moved to `"quickjs:engine"`.
 
 ### Changes to the `qjs` binary:
 
@@ -104,6 +106,10 @@ A Module that allows JS code to create new JS Contexts (Realms). You can create 
 
 A barebones Module that exports a JS class which can be used to represent an opaque pointer. C modules can use the `js_new_pointer` function provided by this module to pass opaque pointer handles to users without needing to make their own wrapper class for stuff. This is mostly just useful in order to have a codified convention for how FFI libraries and such should represent foreign pointers.
 
+### New module: "quickjs:encoding"
+
+Text encoding/decoding functions. Currently just exports an ArrayBuffer-to-utf8-string function.
+
 ### New library: `quickjs-utils`
 
 Helper structs, functions, and macros that make it easier to work with QuickJS in C code.
@@ -143,6 +149,39 @@ Helper structs, functions, and macros that make it easier to work with QuickJS i
 - Synchronous import function added (`importModule`), which provides the same module record object you would get via dynamic (async) import.
 - JS api for using the engine's configured module name normalization function was added (`resolveModule`).
 
+### New module: "quickjs:engine"
+
+This module contains APIs related to engine internals like script execution, module loading, code eval, filename reflection, and garbage collection. Several parts of quickjs-libc were moved here so that quickjs-libc could be focused on "C standard library" bindings.
+
+### Changes to the module loader
+
+- `.js` extensions can now be omitted from import specifiers; they're optional.
+- If your import specifier points to a folder, it will attempt to load `index.js` from that folder.
+- Adds the global `require`, a CommonJS-like synchronous module loading function.
+  - The `require` function is not fully CommonJS-compliant; for instance, `require.main` is not present. `require.resolve` is, though.
+- Adds `import.meta.require`
+  - It's the same as the global `require`; it's just added to import.meta for compatibility with bundlers that output `import.meta.require`, like `bun`.
+- Adds `import.meta.resolve`
+  - Similar to [the one in the browser](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import.meta/resolve#specifications), but it's actually just `require.resolve` exposed via `import.meta`.
+- Module and eval helpers have been moved from "quickjs:std" to the new module "quickjs:engine".
+- Makes the module loader's resolution and loading behavior configurable
+  - The module "quickjs:engine" exports an object called `ModuleDelegate`.
+  - You can specify additional implicit import specifier extensions by adding to the `ModuleDelegate.searchExtensions` array.
+  - You can transform any file prior to evaluating it as a module by adding a function to the `ModuleDelegate.compilers` object. Useful for compile-to-ts languages like TypeScript, Coffeescript, etc.
+  - You can override module name normalization (aka module resolution) by replacing the `ModuleDelegate.resolve` function.
+    - Note that you must handle `ModuleDelegate.searchExtensions` yourself in your replacement implementation.
+  - You can override the method used to load modules by replacing the `ModuleDelegate.read` function.
+    - Note that you must handle `ModuleDelegate.compilers` yourself in your replacement implementation.
+- Makes `import.meta.main` configurable
+  - The module "quickjs:engine" exports two functions named `setMainModule` and `isMainModule`.
+  - You can use `setMainModule` to make `import.meta.main` true within that module's code. Note, however, that it does not work retroactively; only modules loaded after the `setMainModule` call will be affected. To defer module load, use `import()`, `importModule` from "quickjs:engine", or `require`.
+  - You can use `isMainModule` to check if a given module would be the main module without loading it.
+- New `isModuleNamespace` function lets users identify module namespace objects
+- New `defineBuiltinModule` function lets users add their own builtin modules
+- When using `require` to load a module which contains an export named `__cjsExports`, the value of the `__cjsExports` property will be returned from `require` instead of the usual module namespace object. This can be leveraged by users configuring the module loader to add some CommonJS <-> ESM interop. Note, however, that dynamic import and `"quickjs:engine"`'s `importModule` always receive the usual module namespace object.
+- Synchronous import function added (`importModule`), which provides the same module record object you would get via dynamic (async) import.
+- JS api for using the engine's configured module name normalization function was added (`resolveModule`).
+
 ### Changes to project organization
 
 - Stuff is reorganized into separate folders under `src`.
@@ -150,6 +189,7 @@ Helper structs, functions, and macros that make it easier to work with QuickJS i
 - Line endings have been made consistent and trailing whitespace has been removed
 - The tests are authored in a new format which leverages jest snapshot testing.
 - Module-loading code in `quickjs-libc` was moved into `quickjs-modulesys` and `quickjs-libmodule`.
+- Some parts of `quickjs-libc` were moved into `quickjs-modulesys` and `quickjs-libengine`.
 - The `eval_*` functions that were duplicated in each of the programs (`eval_buf`, `eval_file`, and `eval_binary`) were deduplicated and moved into `quickjs-modulesys`.
 
 ### More target OSes/runtimes
@@ -184,7 +224,7 @@ QuickJS itself has no external dependencies outside this repo except pthreads, a
 
 Linux, macOS, iOS, and Windows binaries can be compiled using Docker. Or, you can compile binaries for just your own unix system, without using Docker.
 
-If you're not gonna use Docker, you'll need to install [Ninja](https://ninja-build.org/) and [Node.js](https://nodejs.org/) in order to compile. I use Ninja 1.10.1 and Node.js 18.12.1, but it should work with most versions of both of those.
+If you're not gonna use Docker, you'll need to install [Ninja](https://ninja-build.org/) and [Node.js](https://nodejs.org/) in order to compile. I use Ninja 1.10.1 and Node.js 18.18.0, but it should work with most versions of both of those.
 
 ### Compilation Instructions
 
@@ -197,7 +237,7 @@ To compile binaries for Linux, macOS, iOS, and Windows (using Docker):
 
 Or, to compile binaries for just your own unix system:
 
-- Make sure you have both [Ninja](https://ninja-build.org/) and [Node.js](https://nodejs.org/) installed. I use Ninja 1.10.1 and Node.js 18.12.1, but it should work with most versions of both of those.
+- Make sure you have both [Ninja](https://ninja-build.org/) and [Node.js](https://nodejs.org/) installed. I use Ninja 1.10.1 and Node.js 18.18.0, but it should work with most versions of both of those.
 - Clone the repo and cd to its folder
 - Run `meta/build.sh`
 - Build artifacts will be placed in the `build` folder. You're probably most interested in stuff in the `build/bin` and `build/lib` folders.
