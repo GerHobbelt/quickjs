@@ -2,7 +2,7 @@
 #define SYS_TIME_H
 
 #if defined(_MSC_VER)
-#include "WinSock2.h"
+#include <WinSock2.h>
 #endif
 
 #ifndef _WINSOCKAPI_ // struct timeval already defined in winsock.h
