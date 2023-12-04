@@ -10456,6 +10456,7 @@ static inline BOOL JS_IsHTMLDDA(JSContext *ctx, JSValueConst obj)
     return p->is_HTMLDDA;
 }
 
+/* return -1 (exception) or TRUE/FALSE */
 static JS_BOOL JS_ToBoolFree(JSContext *ctx, JSValue val)
 {
     uint32_t tag = JS_VALUE_GET_TAG(val);
@@ -10463,9 +10464,10 @@ static JS_BOOL JS_ToBoolFree(JSContext *ctx, JSValue val)
 	case JS_TAG_INT:
         return JS_VALUE_GET_INT(val) != 0;
     case JS_TAG_BOOL:
+        return JS_VALUE_GET_INT(val) != 0;
     case JS_TAG_NULL:
     case JS_TAG_UNDEFINED:
-        return JS_VALUE_GET_INT(val) != 0;
+        return QJSB_FALSE;
     case JS_TAG_EXCEPTION:
         return QJSB_EXCEPTION;
     case JS_TAG_STRING:
@@ -10513,7 +10515,8 @@ static JS_BOOL JS_ToBoolFree(JSContext *ctx, JSValue val)
     }
 }
 
-int JS_ToBool(JSContext *ctx, JSValueConst val)
+/* return -1 (exception) or TRUE/FALSE */
+JS_BOOL JS_ToBool(JSContext *ctx, JSValueConst val)
 {
     return JS_ToBoolFree(ctx, JS_DupValue(ctx, val));
 }
