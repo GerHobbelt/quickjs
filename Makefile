@@ -218,6 +218,14 @@ qjs$(EXE): $(QJS_OBJS)
 qjs-debug$(EXE): $(patsubst %.o, %.debug.o, $(QJS_OBJS))
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+QBENCH_OBJS=$(OBJDIR)/qbench.o $(QJS_LIB_OBJS)
+
+qbench$(EXE): $(QBENCH_OBJS)
+	$(CC) $(LDFLAGS) $(LDEXPORT) -o $@ $^ $(LIBS)
+
+qbench-debug$(EXE): $(patsubst %.o, %.debug.o, $(QBENCH_OBJS))
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 qjsc$(EXE): $(OBJDIR)/qjsc.o $(QJS_LIB_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
