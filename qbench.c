@@ -6,6 +6,9 @@
 #include <time.h>
 #if !defined(_WIN32)
 #include <unistd.h>
+#else
+#include "win/sys_time.h"
+#include <sys/utime.h>
 #endif
 
 #include "quickjs.h"
@@ -16,11 +19,10 @@
 static uint64_t
 njs_time(void)
 {
-    struct timespec ts;
+	struct timeval ts;
+	gettimeofday(&ts, NULL);
 
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-
-    return (uint64_t) ts.tv_sec * 1000000000 + ts.tv_nsec;
+    return (uint64_t) ts.tv_sec * 1000000 + ts.tv_usec;
 }
 
 
@@ -32,10 +34,12 @@ int main(int argc, const char **argv)
 {
     JSRuntime *rt;
     JSContext *ctx;
-    struct rusage  usage;
-
+#if defined(RUSAGE_SELF)
+	struct rusage usage;
+#endif
     uint64_t iters = 10000000;
-    uint64_t ns = njs_time(), ms;
+    uint64_t ns = njs_time();
+	uint64_t ms;
 
 #if 1
     const char *str;
@@ -139,19 +143,23 @@ int main(int argc, const char **argv)
     ms = total / 1000000;
     ns = total % 1000000;
 
-    printf("total: %lu.%06lums\n", ms, ns);
+    printf("total: %lu.%06lums\n", (long)ms, (long)ns);
 
     uint64_t periter = total / iters;
 
     ms = periter / 1000000;
     ns = periter % 1000000;
 
-    printf("per req: %lu.%06lums\n", ms, ns);
+    printf("per req: %lu.%06lums\n", (long)ms, (long)ns);
 
-    getrusage(RUSAGE_SELF, &usage);
+#if defined(RUSAGE_SELF)
+	getrusage(RUSAGE_SELF, &usage);
 
     uint64_t us = usage.ru_utime.tv_sec * 1000000 + usage.ru_utime.tv_usec
     + usage.ru_stime.tv_sec * 1000000 + usage.ru_stime.tv_usec;
+#else
+	uint64_t us = total;
+#endif
 
     printf("%.3fμs per VM, %d times/s\n",
       (double) us / iters, (int) ((uint64_t) iters * 1000000 / us));
