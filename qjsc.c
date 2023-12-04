@@ -244,6 +244,7 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
     JSModuleDef *m;
     namelist_entry_t *e;
     char *filename = js_find_module(ctx, module_name);
+	const char *name = filename ? filename : module_name;
 
     /* check if it is a declared C or system module */
     e = namelist_find(&cmodule_list, module_name);
@@ -252,10 +253,10 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         namelist_add(&init_module_list, e->name, e->short_name, 0);
         /* create a dummy module */
         m = JS_NewCModule(ctx, module_name, js_module_dummy_init);
-    } else if (has_suffix(filename ? filename : module_name, ".so")) {
-        fprintf(stderr, "Warning: binary module '%s' will be dynamically loaded\n", filename ? filename : module_name);
+    } else if (has_suffix(name, ".so")) {
+        fprintf(stderr, "Warning: binary module '%s' will be dynamically loaded\n", name);
         /* create a dummy module */
-        m = JS_NewCModule(ctx, filename ? filename : module_name, js_module_dummy_init);
+        m = JS_NewCModule(ctx, name, js_module_dummy_init);
         /* the resulting executable will export its symbols for the
            dynamic library */
         dynamic_export = TRUE;
@@ -265,10 +266,9 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         JSValue func_val;
         char cname[1024];
 
-        buf = js_load_file(ctx, &buf_len, filename ? filename : module_name);
+        buf = js_load_file(ctx, &buf_len, name);
         if (!buf) {
-            JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
-                                   filename ? filename : module_name);
+            JS_ThrowReferenceError(ctx, "could not load module filename '%s'", name);
             return NULL;
         }
 
@@ -278,7 +278,7 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         qjs_free(ctx, buf);
         if (JS_IsException(func_val))
             return NULL;
-        get_c_name(cname, sizeof(cname), filename ? filename : module_name);
+        get_c_name(cname, sizeof(cname), name);
         if (namelist_find(&cname_list, cname)) {
             find_unique_cname(cname, sizeof(cname));
         }
