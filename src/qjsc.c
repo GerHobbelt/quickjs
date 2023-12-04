@@ -58,6 +58,13 @@ typedef struct {
     const char *init_name;
 } FeatureEntry;
 
+typedef enum {
+    OUTPUT_C,
+    OUTPUT_C_MAIN,
+    OUTPUT_EXECUTABLE,
+    OUTPUT_ONLY_BYTECODE,
+} OutputTypeEnum;
+
 static namelist_t cname_list;
 static namelist_t cmodule_list;
 static namelist_t init_module_list;
@@ -66,6 +73,7 @@ static FILE *outfile;
 static BOOL byte_swap;
 static BOOL dynamic_export;
 static const char *c_ident_prefix = "qjsc_";
+static OutputTypeEnum output_type;
 
 #define FE_ALL (-1)
 
@@ -194,13 +202,17 @@ static void output_object_code(JSContext *ctx,
     }
 
     namelist_add(&cname_list, c_name, NULL, load_only);
-    
-    fprintf(fo, "const uint32_t %s_size = %u;\n\n", 
-            c_name, (unsigned int)out_buf_len);
-    fprintf(fo, "const uint8_t %s[%u] = {\n",
-            c_name, (unsigned int)out_buf_len);
-    dump_hex(fo, out_buf, out_buf_len);
-    fprintf(fo, "};\n\n");
+
+    if (output_type == OUTPUT_ONLY_BYTECODE) {
+        fwrite(out_buf, 1, out_buf_len, fo);
+    } else {
+        fprintf(fo, "const uint32_t %s_size = %u;\n\n",
+                c_name, (unsigned int)out_buf_len);
+        fprintf(fo, "const uint8_t %s[%u] = {\n",
+                c_name, (unsigned int)out_buf_len);
+        dump_hex(fo, out_buf, out_buf_len);
+        fprintf(fo, "};\n\n");
+    }
 
     js_free(ctx, out_buf);
 }
@@ -351,6 +363,7 @@ void help(void)
            "\n"
            "options are:\n"
            "-c          only output bytecode in a C file\n"
+           "-z          only output bytecode to a binary file\n"
            "-e          output main() and bytecode in a C file (default = executable output)\n"
            "-o output   set the output filename\n"
            "-N cname    set the C name of the generated data\n"
@@ -480,12 +493,6 @@ static int output_executable(const char *out_filename, const char *cfilename,
 #endif
 
 
-typedef enum {
-    OUTPUT_C,
-    OUTPUT_C_MAIN,
-    OUTPUT_EXECUTABLE,
-} OutputTypeEnum;
-
 int main(int argc, char **argv)
 {
     int c, i, verbose;
@@ -496,7 +503,6 @@ int main(int argc, char **argv)
     JSContext *ctx;
     BOOL use_lto;
     int module;
-    OutputTypeEnum output_type;
     size_t stack_size;
 #ifdef CONFIG_BIGNUM
     BOOL bignum_ext = FALSE;
@@ -519,7 +525,7 @@ int main(int argc, char **argv)
     namelist_add(&cmodule_list, "os", "os", 0);
 
     for(;;) {
-        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:D:");
+        c = getopt(argc, argv, "ho:cN:f:mxevM:p:S:D:z");
         if (c == -1)
             break;
         switch(c) {
@@ -533,6 +539,9 @@ int main(int argc, char **argv)
             break;
         case 'e':
             output_type = OUTPUT_C_MAIN;
+            break;
+        case 'z':
+            output_type = OUTPUT_ONLY_BYTECODE;
             break;
         case 'N':
             cname = optarg;
@@ -611,6 +620,8 @@ int main(int argc, char **argv)
     if (!out_filename) {
         if (output_type == OUTPUT_EXECUTABLE) {
             out_filename = "a.out";
+        } else if (output_type == OUTPUT_ONLY_BYTECODE) {
+            out_filename = "a.qjsbytecode";
         } else {
             out_filename = "out.c";
         }
@@ -648,18 +659,19 @@ int main(int argc, char **argv)
     /* loader for ES6 modules */
     JS_SetModuleLoaderFunc(rt, NULL, jsc_module_loader, NULL);
 
-    fprintf(fo, "/* File generated automatically by the QuickJS compiler. */\n"
-            "\n"
-            );
-    
-    if (output_type != OUTPUT_C) {
-        fprintf(fo, "#include \"quickjs-libc.h\"\n"
+    if (output_type != OUTPUT_ONLY_BYTECODE) {
+        fprintf(fo, "/* File generated automatically by the QuickJS compiler. */\n"
                 "\n"
                 );
-    } else {
-        fprintf(fo, "#include <inttypes.h>\n"
-                "\n"
-                );
+        if (output_type != OUTPUT_C) {
+            fprintf(fo, "#include \"quickjs-libc.h\"\n"
+                    "\n"
+                    );
+        } else {
+            fprintf(fo, "#include <inttypes.h>\n"
+                    "\n"
+                    );
+        }
     }
 
     for(i = optind; i < argc; i++) {
@@ -676,7 +688,7 @@ int main(int argc, char **argv)
         }
     }
     
-    if (output_type != OUTPUT_C) {
+    if (output_type != OUTPUT_C && output_type != OUTPUT_ONLY_BYTECODE) {
         fprintf(fo,
                 "static JSContext *JS_NewCustomContext(JSRuntime *rt)\n"
                 "{\n"
