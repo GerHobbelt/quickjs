@@ -660,6 +660,7 @@ static JSValue js_std_exit(JSContext *ctx, JSValueConst this_val,
     int status;
     if (JS_ToInt32(ctx, &status, argv[0]))
         status = -1;
+	// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
     exit(status);
     return JS_UNDEFINED;
 }
@@ -2993,6 +2994,7 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
         for(i = 0; i < 3; i++) {
             if (std_fds[i] != i) {
                 if (dup2(std_fds[i], i) < 0)
+					// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
                     _exit(127);
             }
         }
@@ -3001,14 +3003,17 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
             close(i);
         if (cwd) {
             if (chdir(cwd) < 0)
+				// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
                 _exit(127);
         }
         if (uid != -1) {
             if (setuid(uid) < 0)
+				// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
                 _exit(127);
         }
         if (gid != -1) {
             if (setgid(gid) < 0)
+				// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
                 _exit(127);
         }
 
@@ -3018,6 +3023,7 @@ static JSValue js_os_exec(JSContext *ctx, JSValueConst this_val,
             ret = my_execvpe(file, (char **)exec_argv, envp);
         else
             ret = execve(file, (char **)exec_argv, envp);
+		// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
         _exit(127);
     }
     /* parent */
@@ -3110,7 +3116,7 @@ static JSValue js_os_pipe(JSContext *ctx, JSValueConst this_val,
     int pipe_fds[2], ret;
     JSValue obj;
 #if defined(_WIN32)
-    ret = _pipe(pipe_fds, 4096 , O_BINARY);
+    ret = _pipe(pipe_fds, 4096, O_BINARY);
 #else
     ret = pipe(pipe_fds);
 #endif
@@ -3314,6 +3320,7 @@ static void worker_func(void *opaque)
     rt = JS_NewRuntime();
     if (rt == NULL) {
         fprintf(stderr, "JS_NewRuntime failure");
+		// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
         exit(1);
     }
     js_std_init_handlers(rt);
@@ -3804,6 +3811,7 @@ void js_std_init_handlers(JSRuntime *rt)
     ts = malloc(sizeof(*ts));
     if (!ts) {
         fprintf(stderr, "Could not allocate memory for the worker");
+		// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
         exit(1);
     }
     memset(ts, 0, sizeof(*ts));
@@ -3954,7 +3962,7 @@ JS_BOOL js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
         if (JS_IsException(val)) {
         exception:
             js_std_dump_error(ctx);
-            //exit(1);
+			// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
 			rv = QJSB_EXCEPTION;
         }
         JS_FreeValue(ctx, val);
@@ -3987,7 +3995,8 @@ JS_BOOL js_std_dump_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
     if (JS_IsException(val)) {
 exception:
         js_std_dump_error(ctx);
-        return QJSB_EXCEPTION; //exit(1);
+		// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
+        return QJSB_EXCEPTION;
     }
     JS_FreeValue(ctx, val);
 	return QJSB_FALSE;

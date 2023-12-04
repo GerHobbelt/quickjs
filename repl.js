@@ -1225,7 +1225,7 @@ import * as os from "os";
         if (!config_numcalc) {
             std.puts("\\q          exit\n");
         }
-		std.puts("\nHit TAB twice to get a list of available identifiers while writing\nyour code in this REPL.\n");
+        std.puts("\nHit TAB twice to get a list of available identifiers while writing\nyour code in this REPL.\n");
     }
 
     function eval_and_print(expr) {

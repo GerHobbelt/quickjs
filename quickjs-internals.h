@@ -1,7 +1,8 @@
 /*
  * QuickJS C library
  *
- * Copyright (c) 2017-2018 Fabrice Bellard
+ * Copyright (c) 2017-2021 Fabrice Bellard
+ * Copyright (c) 2017-2021 Charlie Gordon
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
