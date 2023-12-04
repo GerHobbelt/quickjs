@@ -3,13 +3,17 @@
 #include <stdarg.h>
 #include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
-#include <sys/resource.h>
+#if !defined(_WIN32)
+#include <unistd.h>
+#endif
 
 #include "quickjs.h"
 
-uint64_t
+#include "monolithic_examples.h"
+
+
+static uint64_t
 njs_time(void)
 {
     struct timespec ts;
@@ -19,7 +23,12 @@ njs_time(void)
     return (uint64_t) ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
 
-int main(int argc, char **argv)
+
+#if defined(BUILD_MONOLITHIC)
+#define main      qjs_benchmark_main
+#endif
+
+int main(int argc, const char **argv)
 {
     JSRuntime *rt;
     JSContext *ctx;
@@ -36,13 +45,13 @@ int main(int argc, char **argv)
     rt = JS_NewRuntime();
     if (!rt) {
         fprintf(stderr, "qjs: cannot allocate JS runtime\n");
-        exit(2);
+        return 2;
     }
 
     ctx = JS_NewContext(rt);
     if (!ctx) {
         fprintf(stderr, "qjs: cannot allocate JS context\n");
-        exit(2);
+        return 2;
     }
 
     JSValue gcode = JS_Eval(ctx, (const char *) SRC, strlen(SRC), "<input>",
@@ -52,20 +61,20 @@ int main(int argc, char **argv)
         str = JS_ToCString(ctx, val);
         if (!str) {
             fprintf(stderr, "qjs: cannot get exception after failed to compile\n");
-            exit(2);
+            return 2;
         }
 
         fprintf(stderr, "qjs: failed to compile: %s\n", str);
         JS_FreeCString(ctx, str);
         JS_FreeValue(ctx, val);
-        exit(2);
+        return 2;
     }
 
     gcode = JS_DupValue(ctx, gcode);
     JSValue ret = JS_EvalFunction(ctx, gcode);
     if (JS_IsException(ret)) {
         fprintf(stderr, "qjs: failed to run\n");
-        exit(2);
+        return 2;
     }
 
     JS_FreeValue(ctx, ret);
@@ -77,12 +86,12 @@ int main(int argc, char **argv)
 
     if (JS_IsException(func)) {
         fprintf(stderr, "qjs: failed to get 'test'\n");
-        exit(2);
+        return 2;
     }
 
     if (!JS_IsFunction(ctx, func)) {
         fprintf(stderr, "qjs: 'test' is not a function\n");
-        exit(2);
+        return 2;
     }
 
     for (int i = 0; i < iters; i++) {
@@ -91,7 +100,7 @@ int main(int argc, char **argv)
         str = JS_ToCString(ctx, val);
         if (!str) {
             fprintf(stderr, "qjs: cannot get value of the script\n");
-            exit(2);
+            return 2;
         }
 
 //        fprintf(stderr, "qjs: %s\n", str);
@@ -111,13 +120,13 @@ int main(int argc, char **argv)
         rt = JS_NewRuntime();
         if (!rt) {
             fprintf(stderr, "qjs: cannot allocate JS runtime\n");
-            exit(2);
+            return 2;
         }
 
         ctx = JS_NewContext(rt);
         if (!ctx) {
             fprintf(stderr, "qjs: cannot allocate JS context\n");
-            exit(2);
+            return 2;
         }
 
         JS_FreeContext(ctx);
