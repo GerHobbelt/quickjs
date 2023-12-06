@@ -26,7 +26,7 @@ enum priority
     priority_any=99,
 };
 
-#define Console(PERIORITY,TAG,...) do{printf("[%s] <%s> %s:%d >", "PERIORITY" , TAG , __FILE__ , __LINE__ );printf(__VA_ARGS__);}while(0);
+#define Console(PERIORITY,TAG,...) do{printf("[%s] <%s> %s:%d >", #PERIORITY , TAG , __FILE__ , __LINE__ );printf(__VA_ARGS__);}while(0);
 
 
 #endif

@@ -1,11 +1,5 @@
-// comments are not in compiled binary
-import * as uv from 'uv';
-//"use strict";
-//uv=await import('uv');
-
-let sip=new uv.sockaddr("0.0.0.0",10000);
-let v= new uv.udp();
-v.bind(sip);
+"use strict";
+//import * as uv from 'uv';
 
 
 function onOpen(err){
@@ -17,9 +11,9 @@ function onOpen(err){
         console.log(err);
     }
 }
-
-
 //let fp=new uv.File('examples/PI.js','rw',onOpen);
+
+
 
 
 
@@ -39,18 +33,39 @@ function onrecv(val,ip,port){
     else
         console.log("Unknown: ",view[0]);
 }
-
 function eve(){
     v.stop_recv();
+}
+
+
+
+async function main(){
+    try{
+    //let uv=await import('uv');
+    let uv=await import('/usr/local/lib/libmod_uv.so');
+    let sip=new uv.sockaddr("0.0.0.0",10000);
+    let v = new uv.udp();
+    v.bind(sip);
+    //let sqlite=await import('sqlite');
+    let sqlite=await import('/usr/local/lib/libmod_sqlite.so');
+    v.start_recv(onrecv);
+    let db=new sqlite.sqlite3("test.db");
+    //db.exec("CREATE TABLE BTC_1m(time INTEGER PRIMARY KEY, open INTEGER, close INTEGER);",()=>{
+    db.exec("SELECT * FROM BTC_1m",()=>{});
+    //console.log(sqlite);
+    }catch(e){
+        console.log(e);
+    }
+}
+main();
+
+
+
 //    v= new uv.udp();
 //    v.bind(ip);
 //    v.startRecv(onrecv);
 //    clearTimeout(this);
 //    setInterval(eve2, 1000);
-}
-
-
-v.start_recv(onrecv);
 
 //setTimeout(eve,2000);
 //setInterval(eve, 1000);
@@ -70,5 +85,3 @@ v.start_recv(onrecv);
 //    });
 //    console.log("CALLED!");
 //}, 1);
-
-

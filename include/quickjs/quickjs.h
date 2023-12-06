@@ -34,7 +34,7 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdint.h>
-#include "./config.h"
+#include "quickjs/config.h"
 
 
 

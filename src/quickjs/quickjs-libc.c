@@ -464,26 +464,22 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
 
     /* C module */
     hd = dlopen(filename, RTLD_NOW | RTLD_LOCAL);
+
     if (filename != module_name)
         js_free(ctx, filename);
     if (!hd) {
-        JS_ThrowReferenceError(ctx, "could not load module filename '%s' as shared library",
-                               module_name);
         goto fail;
     }
 
     init = dlsym(hd, "js_init_module");
     if (!init) {
-        JS_ThrowReferenceError(ctx, "could not load module filename '%s': js_init_module not found",
-                               module_name);
         goto fail;
     }
 
     m = init(ctx, module_name);
     if (!m) {
-        JS_ThrowReferenceError(ctx, "could not load module filename '%s': initialization error",
-                               module_name);
     fail:
+        JS_ThrowReferenceError(ctx, "could not load module filename '%s': %s", module_name, dlerror());
         if (hd)
             dlclose(hd);
         return NULL;

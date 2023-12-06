@@ -1,9 +1,26 @@
-#ifndef SERVERWRAPPER_HPP
-#define SERVERWRAPPER_HPP
+#ifndef MOD_UV_HPP
+#define MOD_UV_HPP
 
 #include "quickjs/quickjs-libc.h"
 #include "quickjs/cutils.h"
+#include "quickjs/config.h"
 
-JS_MODULE JSModuleDef *js_init_module_uv(JSContext *ctx, const char *module_name);
 
-#endif // SERVERWRAPPER_HPP
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef DEBUG
+#define UV_INIT_MODULE js_init_module_uv
+#else
+#define UV_INIT_MODULE js_init_module
+#endif // NDEBUG
+
+JS_MODULE JSModuleDef *UV_INIT_MODULE(JSContext *ctx, const char *module_name);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // MOD_UV_HPP

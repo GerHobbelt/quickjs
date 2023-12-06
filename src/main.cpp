@@ -5,7 +5,10 @@
 #include <string.h>
 #include <stdint.h>
 #include "Log.hpp"
-
+#ifdef DEBUG
+#include "./Modules/mod_sqlite.h"
+#include "./Modules/mod_uv.h"
+#endif
 
 
 
@@ -346,7 +349,10 @@ int main(int argc, char const *argv[])
 
     js_init_module_std(ctx, "std");
     js_init_module_os(ctx, "os");
+#ifdef DEBUG
     js_init_module_uv(ctx, "uv");
+    js_init_module_sqlite(ctx, "sqlite");
+#endif
 	/* loader for ES6 modules, also used by import() */
     if(MainType==2)
         JS_SetModuleLoaderFunc(rt, NULL, jsc_module_loader, NULL);
@@ -379,26 +385,25 @@ int main(int argc, char const *argv[])
     }
 
 	//if(MainType!=2){z
+	{
 		JSContext *ctx1;
 		int err;
-		bool running;
+		unsigned char running=2;
 		do {
-            running=0;
-
             do{
                 err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1);
                 if (err < 0){
                     js_std_dump_error(ctx1);
                     goto fail;
                 }
-                if (err > 0)
-                    running=1;
+                if (err != 0)
+                    running=3;
             }while(0<err);
 
 			if(uv_run(uv_default_loop(), UV_RUN_ONCE))
-                running=1;
-		}while(running);
-	//}
+                running=3;
+		}while(--running);
+	}
 	ret_code=0;
  fail:
 	JS_FreeContext(ctx);

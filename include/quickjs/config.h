@@ -9,21 +9,26 @@
 
 #define JS_VERSION "0.15"
 
-#if defined(JS_STATIC_LIBRARY)
-#define JS_MODULE
-// if the C file that include this was for library code that define this function
-// to be exported
-#elif defined(JS_SHARED_LIBRARY)
-    #if defined(_WIN32)
+
+#if defined(_WIN32)
+    #if defined(JS_STATIC_LIBRARY)
+        #define JS_MODULE
+    #elif defined(JS_SHARED_LIBRARY)
+        // if the C file that include this was for library code that define this function
+        // to be exported
         #define JS_MODULE  __declspec(dllexport)
     #else
-        #define JS_MODULE  extern
-    #endif
-// if the C file that include this was the interepter that need to call this function
-// so need to be imported from library
-#else
-    #if defined(_WIN32)
+        // if the C file that include this was the interepter that need to call this function
+        // so need to be imported from library
         #define JS_MODULE  __declspec(dllimport)
+    #endif
+#else
+    #if defined(JS_STATIC_LIBRARY)
+        #define JS_MODULE
+    #elif __GNUC__ >= 4
+        # define JS_MODULE __attribute__((visibility("default")))
+    #elif defined(__SUNPRO_C) && (__SUNPRO_C >= 0x550) /* Sun Studio >= 8 */
+        # define JS_MODULE __global
     #else
         #define JS_MODULE  extern
     #endif

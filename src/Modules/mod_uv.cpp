@@ -78,19 +78,26 @@ static void      js_uv_udp_finalizer       (JSRuntime *rt,  JSValueConst this_va
 static void      js_uv_udp_gc_mark         (JSRuntime *rt,  JSValueConst this_val, JS_MarkFunc *mark_func);
 static JSValue   js_uv_udp_bind            (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 static JSValue   js_uv_udp_connect         (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue   js_uv_udp_set_broadcast   (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 static JSValue   js_uv_udp_start_recv      (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 static JSValue   js_uv_udp_srop_recv       (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 static JSValue   js_uv_udp_send            (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 static JSValue   js_uv_udp_try_send        (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+static JSValue   js_uv_udp_set             (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
+static JSValue   js_uv_udp_get             (JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
 static const JSCFunctionListEntry js_uv_udp_proto[] = {
 	JS_CFUNC_DEF("start_recv", 2, js_uv_udp_start_recv),
 	JS_CFUNC_DEF("stop_recv", 2, js_uv_udp_srop_recv),
 	JS_CFUNC_DEF("bind", 1, js_uv_udp_bind),
 	JS_CFUNC_DEF("connect", 1, js_uv_udp_connect),
-	JS_CFUNC_DEF("set_broadcast", 1, js_uv_udp_set_broadcast),
 	JS_CFUNC_DEF("send", 1, js_uv_udp_send),
 	JS_CFUNC_DEF("try_send", 1, js_uv_udp_try_send),
+	JS_CFUNC_MAGIC_DEF("set_ttl",            1, js_uv_udp_set, 1),
+	JS_CFUNC_MAGIC_DEF("set_multicast_ttl",  1, js_uv_udp_set, 2),
+	JS_CFUNC_MAGIC_DEF("set_multicast_loop", 1, js_uv_udp_set, 4),
+	JS_CFUNC_MAGIC_DEF("set_set_broadcast",  1, js_uv_udp_set, 8),
+	JS_CFUNC_MAGIC_DEF("get_send_queue_size",  0, js_uv_udp_get, 1),
+	JS_CFUNC_MAGIC_DEF("get_send_queue_count", 0, js_uv_udp_get, 2),
+	JS_CFUNC_MAGIC_DEF("using_recvmmsg",       0, js_uv_udp_get, 4),
 };
 static const JSCFunctionListEntry js_uv_udp_funcs[] = {
 };
@@ -176,9 +183,7 @@ static int js_uv_init(JSContext *ctx, JSModuleDef *m)
     JS_SetModuleExport(ctx, m, js_uv_udp_class_name,            udp_func);
 	return JS_SetModuleExportList(ctx,m,js_uv_funcs,countof(js_uv_funcs));
 }
-//JS_MODULE
-//JS_MODULE
-JSModuleDef *js_init_module_uv(JSContext *ctx, const char *module_name)
+JSModuleDef *UV_INIT_MODULE(JSContext *ctx, const char *module_name)
 {
 	JSModuleDef *m = JS_NewCModule(ctx, module_name, js_uv_init);
 	if (!m)
@@ -272,7 +277,7 @@ static JSValue js_uv_file_init(JSContext *ctx, JSValueConst new_target, int argc
                 case 't':mode|=O_TMPFILE;break;
                 #endif
                 default:
-                    Console(debug,"js_uv_file_init","Invalid flag: %c\n",arg_temp[i]);
+                    return JS_ThrowTypeError(ctx, "Invalid flag: %c",arg_temp[i]);
             }
         }
         if(flag_temp&4) flag|=O_CREAT;
@@ -468,7 +473,7 @@ static JSValue js_uv_file_read(JSContext *ctx, JSValueConst this_val, int argc, 
 
 
 
-void free_file_buffer(JSRuntime *rt, void *opaque, void *ptr)
+static void free_file_buffer(JSRuntime *rt, void *opaque, void *ptr)
 {
     (void)rt;
     (void)opaque;
@@ -991,24 +996,6 @@ Invalid_arg:
     return JS_ThrowTypeError(ctx, "Invalid arguments");
 }
 
-static JSValue js_uv_udp_set_broadcast(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    UDP *stream_ctx=nullptr;
-    int val=0;
-
-    if(argc!=1)
-        goto Invalid_arg;
-    val=JS_ToBool(ctx,argv[0]);
-
-    stream_ctx = (UDP *)JS_GetOpaque(this_val,js_uv_udp_class_id);
-    val=uv_udp_set_broadcast(&stream_ctx->s, val);
-    if(val)
-        return JS_ThrowInternalError(ctx, uv_strerror(val));
-    return JS_UNDEFINED;
-Invalid_arg:
-    return JS_ThrowTypeError(ctx, "Invalid arguments");
-}
-
 
 
 static void free_udp_buffer(JSRuntime *rt, void *opaque, void *ptr)
@@ -1093,7 +1080,7 @@ static JSValue js_uv_udp_start_recv(JSContext *ctx, JSValueConst this_val, int a
 {
     UDP *stream_ctx;
     int res;
-    if(argc!=1 || !JS_IsFunction(ctx,argv[0]))  goto Invalid_arg;
+    if(argc!=1 || !JS_IsFunction(ctx,argv[0])) goto Invalid_arg;
     stream_ctx = (UDP *)JS_GetOpaque(this_val,js_uv_udp_class_id);
     res=uv_udp_recv_start(&stream_ctx->s,alloc_udp_buffer,on_udp_read);
     if(res){
@@ -1251,11 +1238,55 @@ Invalid_arg:
     return JS_ThrowTypeError(ctx, "Invalid arguments");
 }
 
+static JSValue js_uv_udp_set(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic)
+{
+    UDP *stream_ctx;
+    int res;
+    if(argc!=1 || JS_ToInt32(ctx, &res, argv[0]))
+        goto Invalid_arg;
+    stream_ctx = (UDP *)JS_GetOpaque(this_val,js_uv_udp_class_id);
 
+    if(magic==1)
+        res=uv_udp_set_ttl(&stream_ctx->s,res);
+    else if(magic==2)
+        res=uv_udp_set_multicast_ttl(&stream_ctx->s,res);
+    else if(magic==4)
+        res=uv_udp_set_multicast_loop(&stream_ctx->s,res);
+    else if(magic==8)
+        res=uv_udp_set_broadcast(&stream_ctx->s,res);
+    else
+        return JS_ThrowTypeError(ctx, "Invalid magic");
+    if(res)
+        return JS_ThrowInternalError(ctx, uv_strerror(res));
+    return JS_UNDEFINED;
+Invalid_arg:
+    return JS_ThrowTypeError(ctx, "Invalid arguments");
+}
 
+static JSValue js_uv_udp_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic)
+{
+    UDP *stream_ctx;
+    union unk1{
+        size_t u64;
+        int i32;
+    } res;
+    if(argc!=0)
+        goto Invalid_arg;
+    stream_ctx = (UDP *)JS_GetOpaque(this_val,js_uv_udp_class_id);
 
-
-
+    if(magic==1)
+        res.u64=uv_udp_get_send_queue_size(&stream_ctx->s);
+    else if(magic==2)
+        res.u64=uv_udp_get_send_queue_count(&stream_ctx->s);
+    else if(magic==4){
+        res.i32=uv_udp_using_recvmmsg(&stream_ctx->s);
+        return JS_NewInt32(ctx, res.i32);
+    }else
+        return JS_ThrowTypeError(ctx, "Invalid magic");
+    return JS_NewInt64(ctx, res.u64);
+Invalid_arg:
+    return JS_ThrowTypeError(ctx, "Invalid arguments");
+}
 
 
 
@@ -1263,13 +1294,12 @@ Invalid_arg:
 
 
 #if IS_LINUX_OS
-inline unsigned int
+static inline unsigned int
 XStringToToKeycode (Display * display, const char * const string) {
   return XKeysymToKeycode(display, XStringToKeysym(string) );
 }
 
-int
-KeyEvent (const char* const keyname) {
+static int KeyEvent (const char* const keyname) {
   Display * display = NULL;
   Window window = 0;
   int revert_to_ret = 0;
@@ -1355,8 +1385,7 @@ static JSValue js_uv_simulate_key(JSContext *ctx, JSValueConst this_val, int arg
     //SendMessage(w,WM_KEYUP,VK_RIGHT,3243048961);
 #endif
 #if IS_LINUX_OS
-
-    KeyEvent("a");
+    //KeyEvent("a");
 #endif
     return JS_UNDEFINED;
 }
