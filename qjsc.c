@@ -179,9 +179,9 @@ static void dump_hex(FILE *f, const uint8_t *buf, size_t len)
         fprintf(f, "\n");
 }
 
-static void output_object_code(JSContext *ctx,
-                               FILE *fo, JSValueConst obj, const char *c_name,
-                               BOOL load_only)
+static int output_object_code(JSContext *ctx,
+                              FILE *fo, JSValueConst obj, const char *c_name,
+                              BOOL load_only)
 {
     uint8_t *out_buf;
     size_t out_buf_len;
@@ -192,7 +192,7 @@ static void output_object_code(JSContext *ctx,
     out_buf = JS_WriteObject(ctx, &out_buf_len, obj, flags);
     if (!out_buf) {
         js_std_dump_error(ctx);
-        exit(1);
+        return -1;
     }
 
     namelist_add(&cname_list, c_name, NULL, load_only);
@@ -205,6 +205,7 @@ static void output_object_code(JSContext *ctx,
     fprintf(fo, "};\n\n");
 
     qjs_free(ctx, out_buf);
+	return 0;
 }
 
 static int js_module_dummy_init(JSContext *ctx, JSModuleDef *m)
@@ -282,7 +283,10 @@ JSModuleDef *jsc_module_loader(JSContext *ctx,
         if (namelist_find(&cname_list, cname)) {
             find_unique_cname(cname, sizeof(cname));
         }
-        output_object_code(ctx, outfile, func_val, cname, TRUE);
+        if (output_object_code(ctx, outfile, func_val, cname, TRUE)) {
+            JS_ThrowReferenceError(ctx, "internal error occurred while processing module '%s'", name);
+            return NULL;
+		}
 
         /* the module is already referenced, so we must free it */
         m = JS_VALUE_GET_PTR(func_val);
@@ -330,9 +334,9 @@ static int compile_file(JSContext *ctx, FILE *fo,
     } else {
         get_c_name(c_name, sizeof(c_name), filename);
     }
-    output_object_code(ctx, fo, obj, c_name, FALSE);
+    int rv = output_object_code(ctx, fo, obj, c_name, FALSE);
     JS_FreeValue(ctx, obj);
-	return 0;
+	return rv;
 }
 
 static const char main_c_template1[] =
