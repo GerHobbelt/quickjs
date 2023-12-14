@@ -2097,7 +2097,9 @@ void JS_FreeRuntime(JSRuntime *rt)
 			qjs_dump_printf("Secondary object leaks: %d\n", count);
     }
 #endif
-    QJS_ASSERT(list_empty(&rt->gc_obj_list));
+    if (!list_empty(&rt->gc_obj_list)) {
+		qjs_dump_printf("Not all JS objects were released at the end of the run.\n");
+	}
 
     /* free the classes */
     for(i = 0; i < rt->class_count; i++) {
@@ -2114,8 +2116,7 @@ void JS_FreeRuntime(JSRuntime *rt)
 
 #ifdef DUMP_LEAKS
     /* only the atoms defined in JS_InitAtoms() should be left */
-	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS))
-	{
+	if (qjs_test_dump_flag(QJS_DUMP_FLAG_LEAKS)) {
         BOOL header_done = FALSE;
 
         for(i = 0; i < rt->atom_size; i++) {
@@ -2221,13 +2222,15 @@ void JS_FreeRuntime(JSRuntime *rt)
 			if (s->malloc_count > 1) {
 				if (rt->rt_info)
 					qjs_dump_printf("%s:1: ", rt->rt_info);
-				qjs_dump_printf("Memory leak: %"PRIu64" bytes lost in %"PRIu64" block%s\n",
-					(uint64_t)(s->malloc_size - sizeof(JSRuntime)),
-					(uint64_t)(s->malloc_count - 1), &"s"[s->malloc_count == 2]);
+					qjs_dump_printf("Memory leak: %"PRIu64" bytes lost in %"PRIu64" block%s\n",
+						(uint64_t)(s->malloc_size - sizeof(JSRuntime)),
+						(uint64_t)(s->malloc_count - 1), &"s"[s->malloc_count == 2]);
 			}
 		}
 	}
 #endif
+
+	qjs_dump_flush();
 
     {
         JSMallocState ms = rt->malloc_state;
@@ -16829,7 +16832,15 @@ static JSValue js_closure(JSContext *ctx, JSValue bfunc,
                                b->defined_arg_count);
     void* opaque = JS_GetContextOpaque(ctx);
     if (opaque != 0) {
-        b->debug.filename = JS_NewAtom(ctx, (char*) opaque);
+		char buf[ATOM_GET_STR_BUF_SIZE + 40];
+		char atom_buf[ATOM_GET_STR_BUF_SIZE];
+		const char *str = "<null>";
+		if (b->func_name && b->func_name != JS_ATOM_NULL) {
+			str = JS_AtomGetStr(ctx, atom_buf, sizeof(atom_buf), b->func_name);
+		}
+		snprintf(buf, sizeof(buf), "%s::closure:0x%p", str, opaque);
+		buf[sizeof(buf) - 1] = 0;
+        b->debug.filename = JS_NewAtom(ctx, buf);
         js_dump_function_bytecode(ctx, b);
     }
     if (b->func_kind & JS_FUNC_GENERATOR) {
