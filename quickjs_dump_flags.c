@@ -259,3 +259,9 @@ void qjs_dump_putchar(const char c)
 {
 	qjs_printf(qjs_get_current_dump_output_channel(), "%c", c);
 }
+
+void qjs_dump_flush(void)
+{
+	fflush(qjs_get_current_dump_output_channel());
+}
+

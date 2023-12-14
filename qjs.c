@@ -39,6 +39,9 @@
 #elif defined(__linux__)
 #include <malloc.h>
 #include <unistd.h>
+#elif defined(__FreeBSD__)
+#include <malloc_np.h>
+#include <unistd.h>
 #endif
 
 #include "cutils.h"

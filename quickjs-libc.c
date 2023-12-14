@@ -822,13 +822,14 @@ static JSValue js_evalScript(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (!ts->recv_pipe && ++ts->eval_script_recurse == 1) {
         /* install the interrupt handler */
-        JS_SetInterruptHandler(JS_GetRuntime(ctx), interrupt_handler, NULL);
+        JS_SetInterruptHandler(rt, interrupt_handler, NULL);
     }
     flags = JS_EVAL_TYPE_GLOBAL;
     if (backtrace_barrier)
         flags |= JS_EVAL_FLAG_BACKTRACE_BARRIER;
     ret = JS_Eval(ctx, str, len, "<evalScript>", flags);
     JS_FreeCString(ctx, str);
+
     if (!ts->recv_pipe && --ts->eval_script_recurse == 0) {
         /* remove the interrupt handler */
         JS_SetInterruptHandler(JS_GetRuntime(ctx), NULL, NULL);
@@ -1203,7 +1204,7 @@ static JSValue js_std_file_fileno(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue js_std_file_read_write(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv, int magic)
+                                      int argc, JSValueConst *argv, int is_write)
 {
     FILE *f = js_std_file_get(ctx, this_val);
     uint64_t pos, len;
@@ -1221,10 +1222,11 @@ static JSValue js_std_file_read_write(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (pos + len > size)
         return JS_ThrowRangeError(ctx, "read/write array buffer overflow");
-    if (magic)
+    if (is_write) {
         ret = fwrite(buf + pos, 1, len, f);
-    else
+    } else {
         ret = fread(buf + pos, 1, len, f);
+    }
     return JS_NewInt64(ctx, ret);
 }
 
@@ -1425,7 +1427,9 @@ static JSValue js_std_urlGet(JSContext *ctx, JSValueConst this_val,
         dbuf_free(&cmd_buf);
         return JS_EXCEPTION;
     }
-    //    printf("%s\n", (char *)cmd_buf.buf);
+
+	qjs_dump_printf("Running curl: %s\n", (char *)cmd_buf.buf);
+
     f = popen((char *)cmd_buf.buf, "r");
     dbuf_free(&cmd_buf);
     if (!f) {
@@ -1933,7 +1937,7 @@ static JSValue js_os_setReadHandler(JSContext *ctx, JSValueConst this_val,
         }
     } else {
         if (!JS_IsFunction(ctx, func))
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, "second argument to os.setReadHandler was not a function.");
         rh = find_rh(ts, fd);
         if (!rh) {
             rh = qjs_mallocz(ctx, sizeof(*rh));
@@ -2009,7 +2013,7 @@ static JSValue js_os_signal(JSContext *ctx, JSValueConst this_val,
         signal(sig_num, handler);
     } else {
         if (!JS_IsFunction(ctx, func))
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, "second argument to os.signal was not a function.");
         sh = find_sh(ts, sig_num);
         if (!sh) {
             sh = qjs_mallocz(ctx, sizeof(*sh));
@@ -2072,7 +2076,7 @@ static JSValue js_os_setTimeout(JSContext *ctx, JSValueConst this_val,
 
     func = argv[0];
     if (!JS_IsFunction(ctx, func))
-        return JS_ThrowTypeError(ctx, "not a function");
+        return JS_ThrowTypeError(ctx, "first argument to setTimeout was not a function");
     if (JS_ToInt64(ctx, &delay, argv[1]))
         return JS_EXCEPTION;
     obj = JS_NewObjectClass(ctx, js_os_timer_class_id);
@@ -3557,7 +3561,7 @@ static JSValue js_worker_set_onmessage(JSContext *ctx, JSValueConst this_val,
         }
     } else {
         if (!JS_IsFunction(ctx, func))
-            return JS_ThrowTypeError(ctx, "not a function");
+            return JS_ThrowTypeError(ctx, "attempting to set worker.onmessage to a non-null, non-function value.");
         if (!port) {
             port = qjs_mallocz(ctx, sizeof(*port));
             if (!port)
@@ -3607,6 +3611,8 @@ void js_std_set_worker_new_context_func(JSContext *(*func)(JSRuntime *rt))
 #define OS_PLATFORM "darwin"
 #elif defined(EMSCRIPTEN)
 #define OS_PLATFORM "js"
+#elif defined(__FreeBSD__)
+#define OS_PLATFORM "freebsd"
 #else
 #define OS_PLATFORM "linux"
 #endif
@@ -3865,6 +3871,8 @@ void js_std_free_handlers(JSRuntime *rt)
 
     free(ts);
     JS_SetRuntimeOpaque(rt, NULL); /* fail safe */
+
+	qjs_dump_flush();
 }
 
 static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
@@ -3932,6 +3940,8 @@ void js_std_loop(JSContext *ctx)
                 break;
             }
         }
+
+		qjs_dump_flush();
 
         if (!os_poll_func || os_poll_func(ctx))
             break;

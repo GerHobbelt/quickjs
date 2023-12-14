@@ -158,6 +158,8 @@ extern size_t qjs_dump_printf(const char* fmt, ...);
 extern void qjs_dump_line(const char* msg);
 extern void qjs_dump_putchar(const char c);
 
+extern void qjs_dump_flush(void);
+
 #ifdef __cplusplus
 } /* extern "C" { */
 #endif

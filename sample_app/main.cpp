@@ -80,6 +80,10 @@ int main(int argc, const char** argv)
     
     using namespace qjs;
 
+	qjs_clear_dump_flags();
+	qjs_set_dump_flags(QJS_DUMP_FLAG_LEAKS);
+	qjs_set_dump_flags(QJS_DUMP_FLAG_GC_FREE);
+
     Runtime runtime;
     //JSRuntime* rt = runtime.rt;
 
