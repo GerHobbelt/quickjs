@@ -13282,7 +13282,7 @@ static bfdec_t *JS_ToBigDecimal(JSContext *ctx, JSValueConst val)
 static JSValue JS_NewBigFloat(JSContext *ctx)
 {
     JSBigFloat *p;
-    p = js_malloc(ctx, sizeof(*p));
+    p = qjs_malloc(ctx, sizeof(*p));
     if (!p)
         return JS_EXCEPTION;
     p->header.ref_count = 1;
@@ -13293,7 +13293,7 @@ static JSValue JS_NewBigFloat(JSContext *ctx)
 static JSValue JS_NewBigDecimal(JSContext *ctx)
 {
     JSBigDecimal *p;
-    p = js_malloc(ctx, sizeof(*p));
+    p = qjs_malloc(ctx, sizeof(*p));
     if (!p)
         return JS_EXCEPTION;
     p->header.ref_count = 1;
@@ -33199,7 +33199,7 @@ static __exception int compute_stack_size(JSContext *ctx,
     for(i = 0; i < s->bc_len; i++)
         s->stack_level_tab[i] = 0xffff;
     s->pc_stack = NULL;
-    s->catch_pos_tab = js_malloc(ctx, sizeof(s->catch_pos_tab[0]) *
+    s->catch_pos_tab = qjs_malloc(ctx, sizeof(s->catch_pos_tab[0]) *
                                    s->bc_len);
     if (!s->catch_pos_tab)
         goto fail;
@@ -39431,32 +39431,6 @@ static int JS_isConcatSpreadable(JSContext *ctx, JSValueConst obj)
 
 // Support Array.prototype.at, like: [1, 2].at(0);
 static JSValue js_array_at(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv) {
-    if(argc > 0 && !JS_IsUndefined(argv[0])) {
-        int64_t len, i;
-        if (js_get_length64(ctx, &len, this_val)) {
-            return JS_EXCEPTION;
-        }
-
-        JS_ToInt64(ctx, &i, argv[0]);
-        if (i < 0) {
-            if (i < -len) {
-                return JS_UNDEFINED;
-            }
-
-            i = i + len;
-        } else {
-            if (i >= len) {
-                return JS_UNDEFINED;
-            }
-        }
-        return JS_GetPropertyUint32(ctx, this_val, i);
-    }
-
-    return JS_EXCEPTION;
-}
-
-static JSValue js_array_at(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
     JSValue obj, ret;
@@ -39468,7 +39442,11 @@ static JSValue js_array_at(JSContext *ctx, JSValueConst this_val,
     if (js_get_length64(ctx, &len, obj))
         goto exception;
 
-    if (JS_ToInt64Sat(ctx, &idx, argv[0]))
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "array index argument not defined");
+		goto exception;
+	}
+	if (JS_ToInt64Sat(ctx, &idx, argv[0]))
         goto exception;
 
     if (idx < 0)
@@ -42404,8 +42382,13 @@ static JSValue js_string_repeat(JSContext *ctx, JSValueConst this_val,
     str = JS_ToStringCheckObject(ctx, this_val);
     if (JS_IsException(str))
         goto fail;
-    if (JS_ToInt64Sat(ctx, &val, argv[0]))
-        goto fail;
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "repeat count argument not defined");
+		goto fail;
+	}
+	if (JS_ToInt64Sat(ctx, &val, argv[0])) {
+	    goto fail;
+	}
     if (val < 0 || val > 2147483647) {
         JS_ThrowRangeError(ctx, "invalid repeat count");
         goto fail;
@@ -50758,7 +50741,11 @@ static JSValue js_bigfloat_toFixed(JSContext *ctx, JSValueConst this_val,
     val = js_thisBigFloatValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
-    if (JS_ToInt64Sat(ctx, &f, argv[0]))
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "number of digits argument not defined");
+		goto fail;
+	}
+	if (JS_ToInt64Sat(ctx, &f, argv[0]))
         goto fail;
     if (f < 0 || f > BF_PREC_MAX) {
         JS_ThrowRangeError(ctx, "invalid number of digits");
@@ -50815,7 +50802,11 @@ static JSValue js_bigfloat_toExponential(JSContext *ctx, JSValueConst this_val,
     val = js_thisBigFloatValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
-    if (JS_ToInt64Sat(ctx, &f, argv[0]))
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "number of digits argument not defined");
+		goto fail;
+	}
+	if (JS_ToInt64Sat(ctx, &f, argv[0]))
         goto fail;
     if (!js_bigfloat_is_finite(ctx, val)) {
         ret = JS_ToString(ctx, val);
@@ -50859,12 +50850,12 @@ static JSValue js_bigfloat_toPrecision(JSContext *ctx, JSValueConst this_val,
     val = js_thisBigFloatValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
-    if (JS_IsUndefined(argv[0]))
+    if (argc == 0 || JS_IsUndefined(argv[0]))
         goto to_string;
     if (JS_ToInt64Sat(ctx, &p, argv[0]))
         goto fail;
     if (!js_bigfloat_is_finite(ctx, val)) {
-    to_string:
+to_string:
         ret = JS_ToString(ctx, this_val);
     } else {
         if (p < 1 || p > BF_PREC_MAX) {
@@ -51373,7 +51364,7 @@ static JSValue js_float_env_constructor(JSContext *ctx,
 
     prec = ctx->fp_env.prec;
     flags = ctx->fp_env.flags;
-    if (!JS_IsUndefined(argv[0])) {
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
         if (JS_ToInt64Sat(ctx, &prec, argv[0]))
             return JS_EXCEPTION;
         if (prec < BF_PREC_MIN || prec > BF_PREC_MAX)
@@ -51427,7 +51418,11 @@ static JSValue js_float_env_setPrec(JSContext *ctx,
     limb_t saved_prec;
     int64_t prec;
 
-    func = argv[0];
+	if (argc < 2) {
+		JS_ThrowRangeError(ctx, "precision and/or number of exponent bits arguments not defined");
+		return JS_EXCEPTION;
+	}
+	func = argv[0];
     if (JS_ToInt64Sat(ctx, &prec, argv[1]))
         return JS_EXCEPTION;
     if (prec < BF_PREC_MIN || prec > BF_PREC_MAX)
@@ -51956,7 +51951,11 @@ static JSValue js_bigdecimal_toFixed(JSContext *ctx, JSValueConst this_val,
     val = js_thisBigDecimalValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
-    if (JS_ToInt64Sat(ctx, &f, argv[0]))
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "number of digits argument not defined");
+		goto fail;
+	}
+	if (JS_ToInt64Sat(ctx, &f, argv[0]))
         goto fail;
     if (f < 0 || f > BF_PREC_MAX) {
         JS_ThrowRangeError(ctx, "invalid number of digits");
@@ -51986,7 +51985,11 @@ static JSValue js_bigdecimal_toExponential(JSContext *ctx, JSValueConst this_val
     val = js_thisBigDecimalValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
-    if (JS_ToInt64Sat(ctx, &f, argv[0]))
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "number of digits argument not defined");
+		goto fail;
+	}
+	if (JS_ToInt64Sat(ctx, &f, argv[0]))
         goto fail;
     if (JS_IsUndefined(argv[0])) {
         ret = js_bigdecimal_to_string1(ctx, val, 0,
@@ -52022,7 +52025,7 @@ static JSValue js_bigdecimal_toPrecision(JSContext *ctx, JSValueConst this_val,
     val = js_thisBigDecimalValue(ctx, this_val);
     if (JS_IsException(val))
         return val;
-    if (JS_IsUndefined(argv[0])) {
+    if (argc == 0 || JS_IsUndefined(argv[0])) {
         return JS_ToStringFree(ctx, val);
     }
     if (JS_ToInt64Sat(ctx, &p, argv[0]))
@@ -52944,7 +52947,11 @@ static JSValue js_typed_array_at(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    if (JS_ToInt64Sat(ctx, &idx, argv[0]))
+	if (argc == 0) {
+		JS_ThrowRangeError(ctx, "array index argument not defined");
+		return JS_EXCEPTION;
+	}
+	if (JS_ToInt64Sat(ctx, &idx, argv[0]))
         return JS_EXCEPTION;
 
     len = p->u.array.count;
