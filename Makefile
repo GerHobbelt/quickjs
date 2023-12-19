@@ -61,7 +61,7 @@ CONFIG_STACK_CHECK=y
 #CONFIG_PROFILE=y
 # use address sanitizer
 #CONFIG_ASAN=y
-# include the code for BigInt/BigFloat/BigDecimal and math mode
+# include the code for BigFloat/BigDecimal, math mode and faster large integers
 CONFIG_BIGNUM=y
 
 OBJDIR=.obj
@@ -186,7 +186,7 @@ endif
 
 all: $(OBJDIR) $(OBJDIR)/quickjs.check.o $(OBJDIR)/qjs.check.o $(PROGS)
 
-QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o $(OBJDIR)/quickjs-port.o
+QJS_LIB_OBJS=$(OBJDIR)/quickjs.o $(OBJDIR)/libregexp.o $(OBJDIR)/libunicode.o $(OBJDIR)/cutils.o $(OBJDIR)/quickjs-libc.o $(OBJDIR)/quickjs-port.o $(OBJDIR)/libbf.o
 
 # debugger
 QJS_LIB_OBJS+=$(OBJDIR)/quickjs-debugger.o
@@ -356,10 +356,7 @@ endif
 HELLO_SRCS=examples/hello.js
 HELLO_OPTS=-fno-string-normalize -fno-map -fno-promise -fno-typedarray \
            -fno-typedarray -fno-regexp -fno-json -fno-eval -fno-proxy \
-           -fno-date -fno-module-loader
-ifdef CONFIG_BIGNUM
-HELLO_OPTS+=-fno-bigint
-endif
+           -fno-date -fno-module-loader -fno-bigint
 
 hello.c: $(QJSC) $(HELLO_SRCS)
 	$(QJSC) -e $(HELLO_OPTS) -o $@ $(HELLO_SRCS)
