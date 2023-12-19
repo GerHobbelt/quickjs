@@ -1,5 +1,7 @@
 #include <iostream>
+
 #include <quickjspp.hpp>
+#include <quickjs-libc.h>
 
 #include "monolithic_examples.h"
 
@@ -18,7 +20,7 @@ public:
 
     void show() const 
     {
-      std::cout << " [ĆhartXY Object] x = " << x << " ; y = " << y 
+      std::cout << " [ChartXY Object] x = " << x << " ; y = " << y 
                 << " ; width = " << width << " height = " << height 
                 << '\n';
     }
@@ -202,8 +204,8 @@ int main(int argc, const char** argv)
       .property<&ChartXY::get_height, &ChartXY::set_height>("height")      
       ;  
 
-    module.add("user_path", "/Users/data/assets/game/score/marks");
-    module.add("user_points", 1023523);
+    module.add("user_path", js_traits<const char *>::wrap(context.ctx, "/Users/data/assets/game/score/marks"));
+    module.add("user_points", js_traits<int>::wrap(context.ctx, 1023523));
 
     module.function("myfunc", [](double x, double y){ return 4.61 * x + 10 * y * y; });
 
@@ -238,6 +240,6 @@ int main(int argc, const char** argv)
     js_std_loop(context.ctx);
     // ----- Shutdown virtual machine ---------------// 
     js_std_free_handlers(runtime.rt);
-    
+
     return 0;
 }
