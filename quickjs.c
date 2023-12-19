@@ -31094,6 +31094,7 @@ static int resolve_scope_private_field(JSContext *ctx, JSFunctionDef *s,
                 /* obj func value */
                 dbuf_putc(bc, OP_call_method);
                 dbuf_put_u16(bc, 1);
+                dbuf_putc(bc, OP_drop);
             }
             break;
         default:
@@ -33192,7 +33193,7 @@ static __exception int ss_check(JSContext *ctx, StackSizeState *s,
     if (s->stack_level_tab[pos] != 0xffff) {
         /* already explored: check that the stack size is consistent */
         if (s->stack_level_tab[pos] != stack_len) {
-            JS_ThrowInternalError(ctx, "unconsistent stack size: %d %d (pc=%d)",
+            JS_ThrowInternalError(ctx, "inconsistent stack size: %d %d (pc=%d)",
                                   s->stack_level_tab[pos], stack_len, pos);
             return -1;
         } else {
@@ -49229,20 +49230,19 @@ static JSValue set_date_field(JSContext *ctx, JSValueConst this_val,
     res = get_date_fields(ctx, this_val, fields, is_local, first_field == 0);
     if (res < 0)
         return JS_EXCEPTION;
+
+    // Argument coercion is observable and must be done unconditionally.
+    n = min_int(argc, end_field - first_field);
+    for(i = 0; i < n; i++) {
+        if (JS_ToFloat64(ctx, &a, argv[i]))
+            return JS_EXCEPTION;
+        if (!isfinite(a))
+            res = FALSE;
+        fields[first_field + i] = trunc(a);
+    }
     if (res && argc > 0) {
-        n = end_field - first_field;
-        if (argc < n)
-            n = argc;
-        for(i = 0; i < n; i++) {
-            if (JS_ToFloat64(ctx, &a, argv[i]))
-                return JS_EXCEPTION;
-            if (!isfinite(a))
-                goto done;
-            fields[first_field + i] = trunc(a);
-        }
         d = set_date_fields(fields, is_local);
     }
-done:
     return JS_SetThisTimeValue(ctx, this_val, d);
 }
 
@@ -49511,8 +49511,11 @@ static int string_get_signed_digits(JSString *sp, int *pp, int64_t *pval) {
         p++;
 
     res = string_get_digits(sp, &p, pval);
-    if (res == 0 && sgn == '-')
+    if (res == 0 && sgn == '-') {
+        if (*pval == 0)
+            return -1; // reject negative zero
         *pval = -*pval;
+    }
     *pp = p;
     return res;
 }
