@@ -1118,8 +1118,7 @@ static JSValue JS_EvalObject(JSContext *ctx, JSValueConst this_obj,
 JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
 #if defined(DUMP_ENABLED)
 static __maybe_unused void JS_DumpAtoms(JSRuntime *rt);
-static __maybe_unused void JS_DumpString(JSRuntime *rt,
-                                                  const JSString *p);
+static __maybe_unused void JS_DumpString(JSRuntime *rt, const JSString *p, int show_refcount);
 static __maybe_unused void JS_DumpObjectHeader(JSRuntime *rt);
 static __maybe_unused void JS_DumpObject(JSRuntime *rt, JSObject *p);
 static __maybe_unused void JS_DumpGCObject(JSRuntime *rt, JSGCObjectHeader *p);
@@ -2140,21 +2139,21 @@ void JS_FreeRuntime(JSRuntime *rt)
                     }
                     switch (p->atom_type) {
                     case JS_ATOM_TYPE_STRING:
-                        JS_DumpString(rt, p);
+                        JS_DumpString(rt, p, FALSE);
                         break;
                     case JS_ATOM_TYPE_GLOBAL_SYMBOL:
 						qjs_dump_printf("Symbol.for(");
-                        JS_DumpString(rt, p);
+                        JS_DumpString(rt, p, FALSE);
 						qjs_dump_printf(")");
                         break;
                     case JS_ATOM_TYPE_SYMBOL:
                         if (p->hash == JS_ATOM_HASH_SYMBOL) {
 							qjs_dump_printf("Symbol(");
-                            JS_DumpString(rt, p);
+                            JS_DumpString(rt, p, FALSE);
 							qjs_dump_printf(")");
                         } else {
 							qjs_dump_printf("Private(");
-                            JS_DumpString(rt, p);
+                            JS_DumpString(rt, p, FALSE);
 							qjs_dump_printf(")");
                         }
                         break;
@@ -2204,7 +2203,7 @@ void JS_FreeRuntime(JSRuntime *rt)
 				else {
 					qjs_dump_printf("    %6u ", str->header.ref_count);
 				}
-				JS_DumpString(rt, str);
+				JS_DumpString(rt, str, FALSE);
 				if (rt->rt_info) {
 					qjs_dump_printf(":%u", str->header.ref_count);
 				}
@@ -2634,8 +2633,7 @@ static uint32_t hash_string(const JSString *str, uint32_t h)
 }
 
 #if defined(DUMP_ENABLED)
-static __maybe_unused void JS_DumpString(JSRuntime *rt,
-                                                  const JSString *p)
+static __maybe_unused void JS_DumpString(JSRuntime *rt, const JSString *p, int show_refcount)
 {
     int i, c, sep;
 
@@ -2643,7 +2641,9 @@ static __maybe_unused void JS_DumpString(JSRuntime *rt,
 		qjs_dump_printf("<null>");
         return;
     }
-	qjs_dump_printf("%d", p->header.ref_count);
+	if (show_refcount) {
+		qjs_dump_printf("%d:", p->header.ref_count);
+	}
     sep = (p->header.ref_count == 1) ? '\"' : '\'';
 	qjs_dump_putchar(sep);
     for(i = 0; i < p->len; i++) {
@@ -2681,7 +2681,7 @@ static __maybe_unused void JS_DumpAtoms(JSRuntime *rt)
             while (h) {
                 p = rt->atom_array[h];
 				qjs_dump_printf(" ");
-                JS_DumpString(rt, p);
+                JS_DumpString(rt, p, TRUE);
                 h = p->hash_next;
             }
 			qjs_dump_printf("\n");
@@ -2694,7 +2694,7 @@ static __maybe_unused void JS_DumpAtoms(JSRuntime *rt)
         if (!atom_is_free(p)) {
 			qjs_dump_printf("  %d: { %d %08x ", i, p->atom_type, p->hash);
             if (!(p->len == 0 && p->is_wide_char != 0))
-                JS_DumpString(rt, p);
+                JS_DumpString(rt, p, TRUE);
 			qjs_dump_printf(" %d }\n", p->hash_next);
         }
     }
@@ -2845,7 +2845,7 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
 
 #if 0
     qjs_dump_printf("__JS_NewAtom: ");
-	JS_DumpString(rt, str);
+	JS_DumpString(rt, str, TRUE);
 	qjs_dump_printf("\n");
 #endif
     if (atom_type < JS_ATOM_TYPE_SYMBOL) {
@@ -4835,7 +4835,7 @@ static __maybe_unused void JS_DumpShape(JSRuntime *rt, int i, JSShape *sh)
     int j;
 
     /* XXX: should output readable class prototype */
-    qjs_dump_printf("%5d %3d%c %14p %5d %5d", i,
+    qjs_dump_printf("%5d %3d%c %16p %5d %5d", i,
            sh->header.ref_count, " *"[sh->is_hashed],
            (void *)sh->proto, sh->prop_size, sh->prop_count);
     for(j = 0; j < sh->prop_count; j++) {
@@ -4854,7 +4854,7 @@ static __maybe_unused void JS_DumpShapes(JSRuntime *rt)
     JSGCObjectHeader *gp;
 
     qjs_dump_printf("JSShapes: {\n");
-    qjs_dump_printf("%5s %4s %14s %5s %5s %s\n", "SLOT", "REFS", "PROTO", "SIZE", "COUNT", "PROPS");
+    qjs_dump_printf("%5s %4s %16s %5s %5s %s\n", "SLOT", "REFS", "PROTO", "SIZE", "COUNT", "PROPS");
     for(i = 0; i < rt->shape_hash_size; i++) {
         for(sh = rt->shape_hash[i]; sh != NULL; sh = sh->shape_hash_next) {
             JS_DumpShape(rt, i, sh);
@@ -12249,7 +12249,7 @@ static JSValue JS_ToQuotedString(JSContext *ctx, JSValueConst val1)
 
 static __maybe_unused void JS_DumpObjectHeader(JSRuntime *rt)
 {
-    qjs_dump_printf("%14s %4s %4s %14s %10s %s\n",
+    qjs_dump_printf("%16s %4s %4s %16s %10s %s\n",
            "ADDRESS", "REFS", "SHRF", "PROTO", "CLASS", "PROPS");
 }
 
@@ -12266,16 +12266,16 @@ static __maybe_unused void JS_DumpObject(JSRuntime *rt, JSObject *p)
 
     /* XXX: should encode atoms with special characters */
     sh = p->shape; /* the shape can be NULL while freeing an object */
-	qjs_dump_printf("%14p %4d ",
+	qjs_dump_printf("%16p %4d ",
            (void *)p,
            p->header.ref_count);
     if (sh) {
-		qjs_dump_printf("%3d%c %14p ",
+		qjs_dump_printf("%3d%c %16p ",
                sh->header.ref_count,
                " *"[sh->is_hashed],
                (void *)sh->proto);
     } else {
-		qjs_dump_printf("%3s  %14s ", "-", "-");
+		qjs_dump_printf("%3s  %16s ", "-", "-");
     }
 	qjs_dump_printf("%10s ",
            JS_AtomGetStrRT(rt, atom_buf, sizeof(atom_buf), rt->class_array[p->class_id].class_name));
@@ -12442,7 +12442,7 @@ static int JS_DumpValueShortWithBuffer(JSRuntime *rt, JSValueConst val, char *bu
         {
             JSString *p;
             p = JS_VALUE_GET_STRING(val);
-            // JS_DumpString(rt, p);
+            // JS_DumpString(rt, p, TRUE);
 
             int i, c, sep;
 
@@ -12455,7 +12455,7 @@ static int JS_DumpValueShortWithBuffer(JSRuntime *rt, JSValueConst val, char *bu
                 remain = len - strlen(buffer);
                 break;;
             }
-            res = snprintf(cur, remain, "%d", p->header.ref_count);
+            res = snprintf(cur, remain, "%d:", p->header.ref_count);
             if (res >= remain) {
                 return -1;
             }
@@ -12787,7 +12787,7 @@ static __maybe_unused void JS_DumpGCObject(JSRuntime *rt, JSGCObjectHeader *p)
     if (p->gc_obj_type == JS_GC_OBJ_TYPE_JS_OBJECT) {
         JS_DumpObject(rt, (JSObject *)p);
     } else {
-		qjs_dump_printf("%14p %4d ",
+		qjs_dump_printf("%16p %4d ",
                (void *)p,
                p->ref_count);
         switch(p->gc_obj_type) {
@@ -12886,7 +12886,7 @@ static __maybe_unused void JS_DumpValueShort(JSRuntime *rt,
         {
             JSString *p;
             p = JS_VALUE_GET_STRING(val);
-            JS_DumpString(rt, p);
+            JS_DumpString(rt, p, FALSE);		// should we also print the refcount here?
         }
         break;
     case JS_TAG_FUNCTION_BYTECODE:
@@ -36339,7 +36339,7 @@ static JSString *JS_ReadString(BCReaderState *s)
     }
 #ifdef DUMP_READ_OBJECT
 	if (qjs_test_dump_flag(QJS_DUMP_FLAG_READ_OBJECT)) {
-		JS_DumpString(s->ctx->rt, p);
+		JS_DumpString(s->ctx->rt, p, FALSE);	// should we print the refcount here as well?
 		qjs_dump_printf("\n");
 	}
 #endif
