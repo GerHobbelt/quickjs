@@ -11141,6 +11141,10 @@ static __maybe_unused JSValue JS_ToIntegerFree(JSContext *ctx, JSValue val)
             BOOL is_nan;
 
             a = JS_ToBigFloat(ctx, &a_s, val);
+            if (!a) {
+                JS_FreeValue(ctx, val);
+                return JS_EXCEPTION;
+            }
             if (!bf_is_finite(a)) {
                 is_nan = bf_is_nan(a);
                 if (is_nan)
@@ -11730,6 +11734,10 @@ static JSValue js_ftoa(JSContext *ctx, JSValueConst val1, int radix,
     if (JS_IsException(val))
         return val;
     a = JS_ToBigFloat(ctx, &a_s, val);
+    if (!a) {
+        JS_FreeValue(ctx, val);
+        return JS_EXCEPTION;
+    }
     saved_sign = a->sign;
     if (a->expn == BF_EXP_ZERO)
         a->sign = 0;
@@ -11786,6 +11794,8 @@ static JSValue js_bigdecimal_to_string1(JSContext *ctx, JSValueConst val,
     int saved_sign;
 
     a = JS_ToBigDecimal(ctx, val);
+    if (!a)
+        return JS_EXCEPTION;
     saved_sign = a->sign;
     if (a->expn == BF_EXP_ZERO)
         a->sign = 0;
@@ -13682,6 +13692,11 @@ static int js_unary_arith_bigfloat(JSContext *ctx,
     }
     r = JS_GetBigFloat(res);
     a = JS_ToBigFloat(ctx, &a_s, op1);
+    if (!a) {
+        JS_FreeValue(ctx, res);
+        JS_FreeValue(ctx, op1);
+        return -1;
+    }
     ret = 0;
     switch(op) {
     case OP_inc:
@@ -13731,6 +13746,11 @@ static int js_unary_arith_bigdecimal(JSContext *ctx,
     }
     r = JS_GetBigDecimal(res);
     a = JS_ToBigDecimal(ctx, op1);
+    if (!a) {
+        JS_FreeValue(ctx, res);
+        JS_FreeValue(ctx, op1);
+        return -1;
+    }
     ret = 0;
     switch(op) {
     case OP_inc:
@@ -13779,6 +13799,11 @@ static int js_unary_arith_bigint(JSContext *ctx,
     }
     r = JS_GetBigInt(res);
     a = JS_ToBigInt(ctx, &a_s, op1);
+    if (!a) {
+        JS_FreeValue(ctx, res);
+        JS_FreeValue(ctx, op1);
+        return -1;
+    }
     ret = 0;
     switch(op) {
     case OP_inc:
@@ -14137,14 +14162,21 @@ static int js_binary_arith_bigfloat(JSContext *ctx, OPCodeEnum op,
     JSValue res;
 
     res = JS_NewBigFloat(ctx);
-    if (JS_IsException(res)) {
-        JS_FreeValue(ctx, op1);
-        JS_FreeValue(ctx, op2);
-        return -1;
-    }
+    if (JS_IsException(res))
+        goto fail;
     r = JS_GetBigFloat(res);
     a = JS_ToBigFloat(ctx, &a_s, op1);
+    if (!a) {
+        JS_FreeValue(ctx, res);
+        goto fail;
+    }
     b = JS_ToBigFloat(ctx, &b_s, op2);
+    if (!b) {
+        if (a == &a_s)
+            bf_delete(a);
+        JS_FreeValue(ctx, res);
+        goto fail;
+    }
     bf_init(ctx->bf_ctx, r);
     switch(op) {
     case OP_add:
@@ -14188,6 +14220,10 @@ static int js_binary_arith_bigfloat(JSContext *ctx, OPCodeEnum op,
     }
     *pres = res;
     return 0;
+ fail:
+    JS_FreeValue(ctx, op1);
+    JS_FreeValue(ctx, op2);
+    return -1;
 }
 
 /* b must be a positive integer */
@@ -14734,8 +14770,8 @@ static int js_compare_bigdecimal(JSContext *ctx, OPCodeEnum op,
         JS_FreeValue(ctx, op1);
         return -1;
     }
-    a = JS_ToBigDecimal(ctx, op1);
-    b = JS_ToBigDecimal(ctx, op2);
+    a = JS_ToBigDecimal(ctx, op1); /* cannot fail */
+    b = JS_ToBigDecimal(ctx, op2); /* cannot fail */
 
     switch(op) {
     case OP_lt:
@@ -15174,8 +15210,10 @@ static no_inline int js_mul_pow10(JSContext *ctx, JSValue *sp)
     op1 = sp[-2];
     op2 = sp[-1];
     a = JS_ToBigFloat(ctx, &a_s, op1);
-    if (!a)
+    if (!a) {
+        JS_FreeValue(ctx, res);
         return -1;
+    }
     if (JS_IsBigInt(ctx, op2)) {
         ret = JS_ToBigInt64(ctx, &e, op2);
     } else {
@@ -15297,8 +15335,8 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
                 res = FALSE;
                 break;
             }
-            a = JS_ToBigFloat(ctx, &a_s, op1);
-            b = JS_ToBigFloat(ctx, &b_s, op2);
+            a = JS_ToBigFloat(ctx, &a_s, op1); /* cannot fail */
+            b = JS_ToBigFloat(ctx, &b_s, op2); /* cannot fail */
             res = bf_cmp_eq(a, b);
             if (a == &a_s)
                 bf_delete(a);
@@ -39391,6 +39429,41 @@ static JSValue js_array_at(JSContext *ctx, JSValueConst this_val,
     return JS_EXCEPTION;
 }
 
+static JSValue js_array_at(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    JSValue obj, ret;
+    int64_t len, idx;
+    JSValue *arrp;
+    uint32_t count;
+    
+    obj = JS_ToObject(ctx, this_val);
+    if (js_get_length64(ctx, &len, obj))
+        goto exception;
+
+    if (JS_ToInt64Sat(ctx, &idx, argv[0]))
+        goto exception;
+
+    if (idx < 0)
+        idx = len + idx;
+    if (idx < 0 || idx >= len) {
+        ret = JS_UNDEFINED;
+    } else if (js_get_fast_array(ctx, obj, &arrp, &count) && idx < count) {
+        ret = JS_DupValue(ctx, arrp[idx]);
+    } else {
+        int present = JS_TryGetPropertyInt64(ctx, obj, idx, &ret);
+        if (present < 0)
+            goto exception;
+        if (!present)
+            ret = JS_UNDEFINED;
+    }
+    JS_FreeValue(ctx, obj);
+    return ret;
+ exception:
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
+}
+
 static JSValue js_array_concat(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
@@ -41453,7 +41526,7 @@ static JSValue js_string_charCodeAt(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue js_string_charAt(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
+                                int argc, JSValueConst *argv, int is_at)
 {
     JSValue val, ret;
     JSString *p;
@@ -41467,8 +41540,13 @@ static JSValue js_string_charAt(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, val);
         return JS_EXCEPTION;
     }
+    if (idx < 0 && is_at)
+        idx += p->len;
     if (idx < 0 || idx >= p->len) {
-        ret = js_new_string8(ctx, NULL, 0);
+        if (is_at)
+            ret = JS_UNDEFINED;
+        else
+            ret = js_new_string8(ctx, NULL, 0);
     } else {
         if (p->is_wide_char)
             c = p->u.str16[idx];
@@ -42729,8 +42807,9 @@ static const JSCFunctionListEntry js_string_funcs[] = {
 
 static const JSCFunctionListEntry js_string_proto_funcs[] = {
     JS_PROP_INT32_DEF("length", 0, JS_PROP_CONFIGURABLE ),
+    JS_CFUNC_MAGIC_DEF("at", 1, js_string_charAt, 1 ),
     JS_CFUNC_DEF("charCodeAt", 1, js_string_charCodeAt ),
-    JS_CFUNC_DEF("charAt", 1, js_string_charAt ),
+    JS_CFUNC_MAGIC_DEF("charAt", 1, js_string_charAt, 0 ),
     JS_CFUNC_DEF("concat", 1, js_string_concat ),
     JS_CFUNC_DEF("codePointAt", 1, js_string_codePointAt ),
     JS_CFUNC_MAGIC_DEF("indexOf", 1, js_string_indexOf, 0 ),
@@ -50208,6 +50287,10 @@ static JSValue JS_ToBigIntCtorFree(JSContext *ctx, JSValue val)
             bf_t *a, a_s;
 
             a = JS_ToBigFloat(ctx, &a_s, val);
+            if (!a) {
+                JS_FreeValue(ctx, val);
+                return JS_EXCEPTION;
+            }
             if (!bf_is_finite(a)) {
                 JS_FreeValue(ctx, val);
                 val = JS_ThrowRangeError(ctx, "cannot convert NaN or Infinity to bigint");
@@ -51009,6 +51092,10 @@ static JSValue js_bigfloat_fop(JSContext *ctx, JSValueConst this_val,
     if (JS_IsException(op1))
         return op1;
     a = JS_ToBigFloat(ctx, &a_s, op1);
+    if (!a) {
+        JS_FreeValue(ctx, op1);
+        return JS_EXCEPTION;
+    }
     fe = &ctx->fp_env;
     if (argc > 1) {
         fe = JS_GetOpaque2(ctx, argv[1], JS_CLASS_FLOAT_ENV);
@@ -51107,7 +51194,11 @@ static JSValue js_bigfloat_fop2(JSContext *ctx, JSValueConst this_val,
         return op2;
     }
     a = JS_ToBigFloat(ctx, &a_s, op1);
+    if (!a)
+        goto fail1;
     b = JS_ToBigFloat(ctx, &b_s, op2);
+    if (!b)
+        goto fail2;
     fe = &ctx->fp_env;
     if (argc > 2) {
         fe = JS_GetOpaque2(ctx, argv[2], JS_CLASS_FLOAT_ENV);
@@ -51117,10 +51208,12 @@ static JSValue js_bigfloat_fop2(JSContext *ctx, JSValueConst this_val,
     res = JS_NewBigFloat(ctx);
     if (JS_IsException(res)) {
     fail:
-        if (a == &a_s)
-            bf_delete(a);
         if (b == &b_s)
             bf_delete(b);
+    fail2:
+        if (a == &a_s)
+            bf_delete(a);
+    fail1:
         JS_FreeValue(ctx, op1);
         JS_FreeValue(ctx, op2);
         return JS_EXCEPTION;
@@ -52756,6 +52849,32 @@ fail:
     return JS_EXCEPTION;
 }
 
+static JSValue js_typed_array_at(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    JSObject *p;
+    int64_t idx, len;
+
+    p = get_typed_array(ctx, this_val, 0);
+    if (!p)
+        return JS_EXCEPTION;
+
+    if (typed_array_is_detached(ctx, p)) {
+        JS_ThrowTypeErrorDetachedArrayBuffer(ctx);
+        return JS_EXCEPTION;
+    }
+
+    if (JS_ToInt64Sat(ctx, &idx, argv[0]))
+        return JS_EXCEPTION;
+
+    len = p->u.array.count;
+    if (idx < 0)
+        idx = len + idx;
+    if (idx < 0 || idx >= len)
+        return JS_UNDEFINED;
+    return JS_GetPropertyUint32(ctx, this_val, idx);
+}
+
 static JSValue js_typed_array_set(JSContext *ctx,
                                   JSValueConst this_val,
                                   int argc, JSValueConst *argv)
@@ -53926,6 +54045,7 @@ static const JSCFunctionListEntry js_typed_array_base_funcs[] = {
 
 static const JSCFunctionListEntry js_typed_array_base_proto_funcs[] = {
     JS_CGETSET_DEF("length", js_typed_array_get_length, NULL ),
+    JS_CFUNC_DEF("at", 1, js_typed_array_at ),
     JS_CGETSET_MAGIC_DEF("buffer", js_typed_array_get_buffer, NULL, 0 ),
     JS_CGETSET_MAGIC_DEF("byteLength", js_typed_array_get_byteLength, NULL, 0 ),
     JS_CGETSET_MAGIC_DEF("byteOffset", js_typed_array_get_byteOffset, NULL, 0 ),
