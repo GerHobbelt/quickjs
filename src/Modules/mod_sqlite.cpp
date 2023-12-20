@@ -216,16 +216,16 @@ static int sqlite_exec_callback(void *parg, int argc, char **argv, char **azColN
 {
     callback_data *data=(callback_data *)parg;
     JSValue ret;
-    JSValue res[1]={JS_UNDEFINED};
+    JSValue res[1];
+    res[0]=JS_NewObject(data->ctx);
 
     for (int i = 0; i < argc; i++) {
-        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+        JS_SetPropertyStr(data->ctx,res[0], azColName[i], argv[i] ? JS_NewString(data->ctx, argv[i]) : JS_NULL );
     }
-    puts("");
-
-    ret = JS_Call(data->ctx, data->cb, data->this_val, 0, res);
+    ret = JS_Call(data->ctx, data->cb, data->this_val, 1, res);
     if (unlikely(JS_IsException(ret))) js_std_dump_error(data->ctx);
     JS_FreeValue(data->ctx, ret);
+    JS_FreeValue(data->ctx, res[0]);
 
     return 0;
 }

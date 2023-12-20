@@ -450,7 +450,7 @@ static JSValue js_uv_file_read(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_ThrowRangeError(ctx, "invalid size %ld",size);
     }
 
-    //printf("LOG: read(%ld,%ld)\n",offset,size);
+    Console(log,"js_uv_file_read","read (%ld,%ld)\n",offset,size);
     if(stream_ctx->F>=0){
         int res;
         IOEvent *event_ctx=(IOEvent*)js_malloc(ctx,sizeof(IOEvent)+size);
@@ -1028,7 +1028,7 @@ static void on_udp_read(uv_udp_t *handle, ssize_t nread, const uv_buf_t* buf, co
         //uv_close((uv_handle_t*) req, NULL);
         goto end;
     }
-    //fprintf(stdout, "Recv from %s %d bytes\n", sender, nread, buf->base);
+    Console(log,"on_udp_read", "Recv from %s %d bytes\n", sender, nread, buf->base);
     //fwrite(buf->base, nread, 1, stdout);
     if(!addr){
         args[1]=JS_UNDEFINED;
@@ -1299,7 +1299,7 @@ XStringToToKeycode (Display * display, const char * const string) {
   return XKeysymToKeycode(display, XStringToKeysym(string) );
 }
 
-static int KeyEvent (const char* const keyname) {
+static const char* KeyEvent (const char* const keyname) {
   Display * display = NULL;
   Window window = 0;
   int revert_to_ret = 0;
@@ -1308,8 +1308,7 @@ static int KeyEvent (const char* const keyname) {
 
   display = XOpenDisplay(NULL); /* localhost:0.0 */
   if (display == NULL) {
-    fprintf(stderr, "Could not open display: localhost:0.0\n");
-    return 1;
+    return "Could not open display: localhost:0.0\n";
   }
 
   /**
@@ -1317,8 +1316,7 @@ static int KeyEvent (const char* const keyname) {
   */
   XGetInputFocus(display, &window, &revert_to_ret);
   if (window == 0) {
-    fprintf(stderr, "Could not detect the window which has gotten input focus.\n");
-    return 1;
+    return "Could not detect the window which has gotten input focus.\n";
   }
 
   event.display = display;
@@ -1335,8 +1333,7 @@ static int KeyEvent (const char* const keyname) {
   event.type = KeyPress;
   status = XSendEvent(display, window, 1, KeyPressMask, (XEvent *)&event);
   if (status == 0) {
-    fprintf(stderr, "Failed to send evnet: type=KeyPress\n");
-    return 1; /* error */
+    return "Failed to send evnet: type=KeyPress\n"; /* error */
   }
 
   event.type = KeyRelease;
@@ -1345,7 +1342,7 @@ static int KeyEvent (const char* const keyname) {
   XSync(display, 1);
   XCloseDisplay(display);
 
-  return status;
+  return status==0?"XSendEvent failed",0;
 }
 #endif
 
@@ -1385,7 +1382,9 @@ static JSValue js_uv_simulate_key(JSContext *ctx, JSValueConst this_val, int arg
     //SendMessage(w,WM_KEYUP,VK_RIGHT,3243048961);
 #endif
 #if IS_LINUX_OS
-    //KeyEvent("a");
+    const char *res=KeyEvent("a");
+    if(res)
+        return JS_ThrowInternalError(ctx, res);
 #endif
     return JS_UNDEFINED;
 }

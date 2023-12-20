@@ -42,16 +42,18 @@ function eve(){
 async function main(){
     try{
     //let uv=await import('uv');
-    let uv=await import('/usr/local/lib/libmod_uv.so');
+    let uv=await import('bin/libmod_uv.so');
     let sip=new uv.sockaddr("0.0.0.0",10000);
     let v = new uv.udp();
     v.bind(sip);
+    //v.start_recv(onrecv);
     //let sqlite=await import('sqlite');
-    let sqlite=await import('/usr/local/lib/libmod_sqlite.so');
-    v.start_recv(onrecv);
+    let sqlite=await import('bin/libmod_sqlite.so');
     let db=new sqlite.sqlite3("test.db");
     //db.exec("CREATE TABLE BTC_1m(time INTEGER PRIMARY KEY, open INTEGER, close INTEGER);",()=>{
-    db.exec("SELECT * FROM BTC_1m",()=>{});
+    db.exec("SELECT * FROM BTC_1m",(val)=>{
+        console.log(JSON.stringify(val));
+    });
     //console.log(sqlite);
     }catch(e){
         console.log(e);

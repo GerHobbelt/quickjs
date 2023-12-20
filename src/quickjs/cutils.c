@@ -180,7 +180,7 @@ int __attribute__((format(printf, 2, 3))) dbuf_printf(DynBuf *s,
     va_end(ap);
     if(len.i32 < 0)
     {
-        printf("Error: vsnprintf returned %d!\n",len.i32);
+        Console(error,"dbuf_printf", "vsnprintf returned %d!\n",len.i32);
         len.i32=0;
     }
     if (len.u32 < (int) sizeof(buf)) {
