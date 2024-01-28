@@ -57122,7 +57122,7 @@ static JSValue js_debugger_eval(JSContext *ctx, JSValueConst this_obj, JSStackFr
     JSFunctionDef *fd;
 
     js_parse_init(ctx, s, input, input_len, filename);
-    skip_shebang(s);
+    skip_shebang(&s->buf_ptr, s->buf_end);
 
     JSObject *p;
     QJS_ASSERT(sf != NULL);

@@ -2138,7 +2138,7 @@ static JSValue js_os_sleepAsync(JSContext *ctx, JSValueConst this_val,
     if (JS_IsException(promise))
         return JS_EXCEPTION;
 
-    th = js_mallocz(ctx, sizeof(*th));
+    th = qjs_mallocz(ctx, sizeof(*th));
     if (!th) {
         JS_FreeValue(ctx, promise);
         JS_FreeValue(ctx, resolving_funcs[0]);
@@ -2146,7 +2146,7 @@ static JSValue js_os_sleepAsync(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
     th->has_object = FALSE;
-    th->timeout = get_time_ms() + delay;
+    th->timeout = qjs_get_time_ms() + delay;
     th->func = JS_DupValue(ctx, resolving_funcs[0]);
     list_add_tail(&th->link, &ts->os_timers);
     JS_FreeValue(ctx, resolving_funcs[0]);
