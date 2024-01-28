@@ -27997,7 +27997,7 @@ static void js_free_module_def(JSContext *ctx, JSModuleDef *m)
         JS_FreeAtom(ctx, mi->import_name);
     }
     qjs_free(ctx, m->import_entries);
-    js_free(ctx, m->async_parent_modules);
+    qjs_free(ctx, m->async_parent_modules);
 
     JS_FreeValue(ctx, m->module_ns);
     JS_FreeValue(ctx, m->func_obj);
@@ -28925,7 +28925,7 @@ static int js_inner_module_linking(JSContext *ctx, JSModuleDef *m,
         m->status == JS_MODULE_STATUS_EVALUATED)
         return index;
 
-    assert(m->status == JS_MODULE_STATUS_UNLINKED);
+    QJS_ASSERT(m->status == JS_MODULE_STATUS_UNLINKED);
     m->status = JS_MODULE_STATUS_LINKING;
     m->dfs_index = index;
     m->dfs_ancestor_index = index;
@@ -28940,7 +28940,7 @@ static int js_inner_module_linking(JSContext *ctx, JSModuleDef *m,
         index = js_inner_module_linking(ctx, m1, pstack_top, index);
         if (index < 0)
             goto fail;
-        assert(m1->status == JS_MODULE_STATUS_LINKING ||
+        QJS_ASSERT(m1->status == JS_MODULE_STATUS_LINKING ||
                m1->status == JS_MODULE_STATUS_LINKED ||
                m1->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
                m1->status == JS_MODULE_STATUS_EVALUATED);
@@ -29083,7 +29083,7 @@ static int js_inner_module_linking(JSContext *ctx, JSModuleDef *m,
         JS_FreeValue(ctx, ret_val);
     }
 
-    assert(m->dfs_ancestor_index <= m->dfs_index);
+    QJS_ASSERT(m->dfs_ancestor_index <= m->dfs_index);
     if (m->dfs_index == m->dfs_ancestor_index) {
         for(;;) {
             /* pop m1 from stack */
@@ -29117,7 +29117,7 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
         printf("js_link_module '%s':\n", JS_AtomGetStr(ctx, buf1, sizeof(buf1), m->module_name));
     }
 #endif
-    assert(m->status == JS_MODULE_STATUS_UNLINKED ||
+    QJS_ASSERT(m->status == JS_MODULE_STATUS_UNLINKED ||
            m->status == JS_MODULE_STATUS_LINKED ||
            m->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
            m->status == JS_MODULE_STATUS_EVALUATED);
@@ -29125,14 +29125,14 @@ static int js_link_module(JSContext *ctx, JSModuleDef *m)
     if (js_inner_module_linking(ctx, m, &stack_top, 0) < 0) {
         while (stack_top != NULL) {
             m1 = stack_top;
-            assert(m1->status == JS_MODULE_STATUS_LINKING);
+            QJS_ASSERT(m1->status == JS_MODULE_STATUS_LINKING);
             m1->status = JS_MODULE_STATUS_UNLINKED;
             stack_top = m1->stack_prev;
         }
         return -1;
     }
-    assert(stack_top == NULL);
-    assert(m->status == JS_MODULE_STATUS_LINKED ||
+    QJS_ASSERT(stack_top == NULL);
+    QJS_ASSERT(m->status == JS_MODULE_STATUS_LINKED ||
            m->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
            m->status == JS_MODULE_STATUS_EVALUATED);
     return 0;
@@ -29390,7 +29390,7 @@ static void js_set_module_evaluated(JSContext *ctx, JSModuleDef *m)
     m->status = JS_MODULE_STATUS_EVALUATED;
     if (!JS_IsUndefined(m->promise)) {
         JSValue value, ret_val;
-        assert(m->cycle_root == m);
+        QJS_ASSERT(m->cycle_root == m);
         value = JS_UNDEFINED;
         ret_val = JS_Call(ctx, m->resolving_funcs[0], JS_UNDEFINED,
                           1, (JSValueConst *)&value);
@@ -29428,10 +29428,10 @@ static int gather_available_ancestors(JSContext *ctx, JSModuleDef *module,
         JSModuleDef *m = module->async_parent_modules[i];
         if (!find_in_exec_module_list(exec_list, m) &&
             !m->cycle_root->eval_has_exception) {
-            assert(m->status == JS_MODULE_STATUS_EVALUATING_ASYNC);
-            assert(!m->eval_has_exception);
-            assert(m->async_evaluation);
-            assert(m->pending_async_dependencies > 0);
+            QJS_ASSERT(m->status == JS_MODULE_STATUS_EVALUATING_ASYNC);
+            QJS_ASSERT(!m->eval_has_exception);
+            QJS_ASSERT(m->async_evaluation);
+            QJS_ASSERT(m->pending_async_dependencies > 0);
             m->pending_async_dependencies--;
             if (m->pending_async_dependencies == 0) {
                 if (js_resize_array(ctx, (void **)&exec_list->tab, sizeof(exec_list->tab[0]), &exec_list->size, exec_list->count + 1)) {
@@ -29471,13 +29471,13 @@ static JSValue js_async_module_execution_rejected(JSContext *ctx, JSValueConst t
         return JS_ThrowStackOverflow(ctx);
 
     if (module->status == JS_MODULE_STATUS_EVALUATED) {
-        assert(module->eval_has_exception);
+        QJS_ASSERT(module->eval_has_exception);
         return JS_UNDEFINED;
     }
 
-    assert(module->status == JS_MODULE_STATUS_EVALUATING_ASYNC);
-    assert(!module->eval_has_exception);
-    assert(module->async_evaluation);
+    QJS_ASSERT(module->status == JS_MODULE_STATUS_EVALUATING_ASYNC);
+    QJS_ASSERT(!module->eval_has_exception);
+    QJS_ASSERT(module->async_evaluation);
 
     module->eval_has_exception = TRUE;
     module->eval_exception = JS_DupValue(ctx, error);
@@ -29493,7 +29493,7 @@ static JSValue js_async_module_execution_rejected(JSContext *ctx, JSValueConst t
 
     if (!JS_IsUndefined(module->promise)) {
         JSValue ret_val;
-        assert(module->cycle_root == module);
+        QJS_ASSERT(module->cycle_root == module);
         ret_val = JS_Call(ctx, module->resolving_funcs[1], JS_UNDEFINED,
                           1, &error);
         JS_FreeValue(ctx, ret_val);
@@ -29509,12 +29509,12 @@ static JSValue js_async_module_execution_fulfilled(JSContext *ctx, JSValueConst 
     int i;
     
     if (module->status == JS_MODULE_STATUS_EVALUATED) {
-        assert(module->eval_has_exception);
+        QJS_ASSERT(module->eval_has_exception);
         return JS_UNDEFINED;
     }
-    assert(module->status == JS_MODULE_STATUS_EVALUATING_ASYNC);
-    assert(!module->eval_has_exception);
-    assert(module->async_evaluation);
+    QJS_ASSERT(module->status == JS_MODULE_STATUS_EVALUATING_ASYNC);
+    QJS_ASSERT(!module->eval_has_exception);
+    QJS_ASSERT(module->async_evaluation);
     module->async_evaluation = FALSE;
     js_set_module_evaluated(ctx, module);
 
@@ -29523,7 +29523,7 @@ static JSValue js_async_module_execution_fulfilled(JSContext *ctx, JSValueConst 
     exec_list->size = 0;
 
     if (gather_available_ancestors(ctx, module, exec_list) < 0) {
-        js_free(ctx, exec_list->tab);
+        qjs_free(ctx, exec_list->tab);
         return JS_EXCEPTION;
     }
 
@@ -29534,7 +29534,7 @@ static JSValue js_async_module_execution_fulfilled(JSContext *ctx, JSValueConst 
     for(i = 0; i < exec_list->count; i++) {
         JSModuleDef *m = exec_list->tab[i];
         if (m->status == JS_MODULE_STATUS_EVALUATED) {
-            assert(m->eval_has_exception);
+            QJS_ASSERT(m->eval_has_exception);
         } else if (m->has_tla) {
             js_execute_async_module(ctx, m);
         } else {
@@ -29551,7 +29551,7 @@ static JSValue js_async_module_execution_fulfilled(JSContext *ctx, JSValueConst 
             }
         }
     }
-    js_free(ctx, exec_list->tab);
+    qjs_free(ctx, exec_list->tab);
     return JS_UNDEFINED;
 }
 
@@ -29644,7 +29644,7 @@ static int js_inner_module_evaluation(JSContext *ctx, JSModuleDef *m,
         *pvalue = JS_UNDEFINED;
         return index;
     }
-    assert(m->status == JS_MODULE_STATUS_LINKED);
+    QJS_ASSERT(m->status == JS_MODULE_STATUS_LINKED);
 
     m->status = JS_MODULE_STATUS_EVALUATING;
     m->dfs_index = index;
@@ -29661,7 +29661,7 @@ static int js_inner_module_evaluation(JSContext *ctx, JSModuleDef *m,
         index = js_inner_module_evaluation(ctx, m1, index, pstack_top, pvalue);
         if (index < 0) 
             return -1;
-        assert(m1->status == JS_MODULE_STATUS_EVALUATING ||
+        QJS_ASSERT(m1->status == JS_MODULE_STATUS_EVALUATING ||
                m1->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
                m1->status == JS_MODULE_STATUS_EVALUATED);
         if (m1->status == JS_MODULE_STATUS_EVALUATING) {
@@ -29669,7 +29669,7 @@ static int js_inner_module_evaluation(JSContext *ctx, JSModuleDef *m,
                                             m1->dfs_ancestor_index);
         } else {
             m1 = m1->cycle_root;
-            assert(m1->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
+            QJS_ASSERT(m1->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
                    m1->status == JS_MODULE_STATUS_EVALUATED);
             if (m1->eval_has_exception) {
                 *pvalue = JS_DupValue(ctx, m1->eval_exception);
@@ -29687,12 +29687,12 @@ static int js_inner_module_evaluation(JSContext *ctx, JSModuleDef *m,
     }
 
     if (m->pending_async_dependencies > 0) {
-        assert(!m->async_evaluation);
+        QJS_ASSERT(!m->async_evaluation);
         m->async_evaluation = TRUE;
         m->async_evaluation_timestamp =
             ctx->rt->module_async_evaluation_next_timestamp++;
     } else if (m->has_tla) {
-        assert(!m->async_evaluation);
+        QJS_ASSERT(!m->async_evaluation);
         m->async_evaluation = TRUE;
         m->async_evaluation_timestamp =
             ctx->rt->module_async_evaluation_next_timestamp++;
@@ -29702,7 +29702,7 @@ static int js_inner_module_evaluation(JSContext *ctx, JSModuleDef *m,
             return -1;
     }
 
-    assert(m->dfs_ancestor_index <= m->dfs_index);
+    QJS_ASSERT(m->dfs_ancestor_index <= m->dfs_index);
     if (m->dfs_index == m->dfs_ancestor_index) {
         for(;;) {
             /* pop m1 from stack */
@@ -29730,7 +29730,7 @@ static JSValue js_evaluate_module(JSContext *ctx, JSModuleDef *m)
     JSModuleDef *m1, *stack_top;
     JSValue ret_val, result;
 
-    assert(m->status == JS_MODULE_STATUS_LINKED ||
+    QJS_ASSERT(m->status == JS_MODULE_STATUS_LINKED ||
            m->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
            m->status == JS_MODULE_STATUS_EVALUATED);
     if (m->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
@@ -29748,7 +29748,7 @@ static JSValue js_evaluate_module(JSContext *ctx, JSModuleDef *m)
     if (js_inner_module_evaluation(ctx, m, 0, &stack_top, &result) < 0) {
         while (stack_top != NULL) {
             m1 = stack_top;
-            assert(m1->status == JS_MODULE_STATUS_EVALUATING);
+            QJS_ASSERT(m1->status == JS_MODULE_STATUS_EVALUATING);
             m1->status = JS_MODULE_STATUS_EVALUATED;
             m1->eval_has_exception = TRUE;
             m1->eval_exception = JS_DupValue(ctx, result);
@@ -29756,24 +29756,24 @@ static JSValue js_evaluate_module(JSContext *ctx, JSModuleDef *m)
             stack_top = m1->stack_prev;
         }
         JS_FreeValue(ctx, result);
-        assert(m->status == JS_MODULE_STATUS_EVALUATED);
-        assert(m->eval_has_exception);
+        QJS_ASSERT(m->status == JS_MODULE_STATUS_EVALUATED);
+        QJS_ASSERT(m->eval_has_exception);
         ret_val = JS_Call(ctx, m->resolving_funcs[1], JS_UNDEFINED,
                           1, (JSValueConst *)&m->eval_exception);
         JS_FreeValue(ctx, ret_val);
     } else {
-        assert(m->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
+        QJS_ASSERT(m->status == JS_MODULE_STATUS_EVALUATING_ASYNC ||
                m->status == JS_MODULE_STATUS_EVALUATED);
-        assert(!m->eval_has_exception);
+        QJS_ASSERT(!m->eval_has_exception);
         if (!m->async_evaluation) {
             JSValue value;
-            assert(m->status == JS_MODULE_STATUS_EVALUATED);
+            QJS_ASSERT(m->status == JS_MODULE_STATUS_EVALUATED);
             value = JS_UNDEFINED;
             ret_val = JS_Call(ctx, m->resolving_funcs[0], JS_UNDEFINED,
                               1, (JSValueConst *)&value);
             JS_FreeValue(ctx, ret_val);
         }
-        assert(stack_top == NULL);
+        QJS_ASSERT(stack_top == NULL);
     }
     return JS_DupValue(ctx, m->promise);
 }
@@ -43250,8 +43250,8 @@ static int js_string_normalize1(JSContext *ctx, uint32_t **pout_buf,
     if (buf_len < 0)
         return -1;
     out_len = unicode_normalize(&out_buf, buf, buf_len, n_type,
-                                ctx->rt, (DynBufReallocFunc *)js_realloc_rt);
-    js_free(ctx, buf);
+                                ctx->rt, (DynBufReallocFunc *)qjs_realloc_rt);
+    qjs_free(ctx, buf);
     if (out_len < 0)
         return -1;
     *pout_buf = out_buf;
@@ -43357,12 +43357,12 @@ static JSValue js_string_localeCompare(JSContext *ctx, JSValueConst this_val,
     b_len = js_string_normalize1(ctx, &b_buf, b, UNICODE_NFC);
     JS_FreeValue(ctx, b);
     if (b_len < 0) {
-        js_free(ctx, a_buf);
+        qjs_free(ctx, a_buf);
         return JS_EXCEPTION;
     }
     cmp = js_UTF32_compare(a_buf, a_len, b_buf, b_len);
-    js_free(ctx, a_buf);
-    js_free(ctx, b_buf);
+    qjs_free(ctx, a_buf);
+    qjs_free(ctx, b_buf);
     return JS_NewInt32(ctx, cmp);
 }
 #else /* CONFIG_ALL_UNICODE */
