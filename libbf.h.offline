@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if (INTPTR_MAX >= INT64_MAX) && !defined(_MSC_VER) /* MSVC has no __int128 in stdC mode */
+#if defined(__SIZEOF_INT128__) && (INTPTR_MAX >= INT64_MAX) && !defined(_MSC_VER) /* MSVC has no __int128 in stdC mode */
 #define LIMB_LOG2_BITS 6
 #else
 #define LIMB_LOG2_BITS 5
