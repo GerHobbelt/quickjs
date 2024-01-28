@@ -538,21 +538,21 @@ void parse_case_folding(CCInfo *tab, const char *filename)
             continue;
         
         p = get_field(line, 2);
-        assert(p != NULL);
+        QJS_ASSERT(p != NULL);
         if (status == 'S') {
             /* we always select the simple case folding and assume it
              * comes after the full case folding case */
-            assert(ci->f_len >= 2);
+            QJS_ASSERT(ci->f_len >= 2);
             ci->f_len = 0;
         } else {
-            assert(ci->f_len == 0);
+            QJS_ASSERT(ci->f_len == 0);
         }
         for(;;) {
             while (isspace(*p))
                 p++;
             if (*p == ';')
                 break;
-            assert(ci->l_len < CC_LEN_MAX);
+            QJS_ASSERT(ci->l_len < CC_LEN_MAX);
             ci->f_data[ci->f_len++] = strtoul(p, (char **)&p, 16);
         }
     }
