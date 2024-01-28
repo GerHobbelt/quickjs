@@ -602,6 +602,7 @@ int main(int argc, const char** argv)
         JS_ComputeMemoryUsage(rt, &stats);
         JS_DumpMemoryUsage(&stats, rt);
     }
+	int exit_status = qjs_GetExitStatus(ctx);
     js_std_free_handlers(rt);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
@@ -632,7 +633,7 @@ int main(int argc, const char** argv)
     }
 
 	JS_Finalize();
-	return EXIT_SUCCESS;
+	return exit_status;
 
  fail:
     js_std_free_handlers(rt);

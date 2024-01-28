@@ -661,8 +661,13 @@ static JSValue js_std_exit(JSContext *ctx, JSValueConst this_val,
     if (JS_ToInt32(ctx, &status, argv[0]))
         status = -1;
 	// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
-    exit(status);
-    return JS_UNDEFINED;
+#if 0
+	exit(status);
+	return JS_UNDEFINED;
+#else
+	// fake JS_ThrowError
+	return JS_ThrowScriptStdExit(ctx, status, "std.exit");
+#endif
 }
 
 static JSValue js_std_getenv(JSContext *ctx, JSValueConst this_val,
@@ -2119,7 +2124,7 @@ static void call_handler(JSContext *ctx, JSValueConst func)
     func1 = JS_DupValue(ctx, func);
     ret = JS_Call(ctx, func1, JS_UNDEFINED, 0, NULL);
     JS_FreeValue(ctx, func1);
-    if (JS_IsException(ret))
+    if (JS_IsException(ret))    // and check it's not the exit exception
         js_std_dump_error(ctx);
     JS_FreeValue(ctx, ret);
 }
@@ -2212,6 +2217,10 @@ static int js_os_poll(JSContext *ctx)
     fd_set rfds, wfds;
     JSOSRWHandler *rh;
     struct list_head *el;
+
+	if (qjs_IsExitPending(ctx)) {
+		return -1;
+	}
 
     /* only check signals in the main thread */
     if (!ts->recv_pipe &&
