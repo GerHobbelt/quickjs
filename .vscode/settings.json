@@ -1,0 +1,17 @@
+{
+    "files.autoGuessEncoding": true,
+    "C_Cpp.autoAddFileAssociations": false,
+    "cmake.configureArgs": [
+        "-DQUICKJS_ENABLE_SLOW_TEST=ON"
+    ],
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.generator": "Ninja",
+    "cmake.mingwSearchDirs":[
+        "C:/MentorGraphics/arm-2014.05",
+        "C:/MentorGraphics/linaro",
+        "C:/MentorGraphics/gcc-arm-none-eabi-9-2019-q4-major-win32",
+        "C:/CI-Tools/msys64/mingw64",
+        "C:/CI-Tools/msys64/mingw32",
+    ],
+    "cmake.buildDirectory": "${workspaceFolder}/build/${buildKitVendor}-${buildType}-${buildKitHostOs}-${buildKitTargetArch}"
+}
