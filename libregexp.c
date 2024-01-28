@@ -851,8 +851,8 @@ static int re_parse_char_class(REParseState *s, const uint8_t **pp)
             if ((int)c2 < 0)
                 goto fail;
             if (c2 >= CLASS_RANGE_BASE) {
+                cr_free(cr1);
                 if (s->is_utf16) {
-                    cr_free(cr1);
                     goto invalid_class_range;
                 }
                 /* Annex B: match '-' character */
@@ -1489,6 +1489,9 @@ static int re_parse_term(REParseState *s, BOOL is_backward_dir)
             if (*p == '?') {
                 p++;
                 greedy = FALSE;
+            }
+            if (last_atom_start < 0) {
+                return re_parse_error(s, "nothing to repeat");
             }
             if (greedy) {
                 int len, pos;
@@ -2521,7 +2524,6 @@ void lre_byte_swap(uint8_t *bc_buf, int bc_buf_len)
         case REOP_push_i32:
         case REOP_lookahead:
         case REOP_negative_lookahead:
-        case REOP_bne_char_pos:
             put_u32(pc, bswap32(get_u32(pc)));
             break;
         case REOP_range:

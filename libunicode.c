@@ -1442,7 +1442,7 @@ int cr_regexp_canonicalize(CharRange *cr, BOOL is_unicode)
                 if (c >= code && c < code + len)
                     break;
                 idx++;
-                assert(idx < countof(case_conv_table1));
+                QJS_ASSERT(idx < countof(case_conv_table1));
                 v = case_conv_table1[idx];
                 code = v >> (32 - 17);
                 len = (v >> (32 - 17 - 7)) & 0x7f;
