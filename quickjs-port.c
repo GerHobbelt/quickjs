@@ -186,9 +186,24 @@ int64_t qjs_get_time_ms(void)
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 #else
-    struct qjs_timeval tv;
+	/* more portable, but does not work if the date is updated */
+	struct qjs_timeval tv;
     qjs_gettimeofday(&tv);
     return (int64_t)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
+#endif
+}
+
+int64_t qjs_get_time_ns(void)
+{
+#if defined(__linux__) || defined(__APPLE__)
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (int64_t)ts.tv_sec * 1000000000 + (ts.tv_nsec);
+#else
+	/* more portable, but does not work if the date is updated */
+	struct qjs_timeval tv;
+	qjs_gettimeofday(&tv);
+	return (int64_t)tv.tv_sec * 1000000000 + (tv.tv_usec * 1000);
 #endif
 }
 

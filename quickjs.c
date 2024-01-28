@@ -1841,19 +1841,22 @@ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
 
 #ifdef CONFIG_ATOMICS
 static qjs_mutex js_atomics_mutex = QJS_MUTEX_INITIALIZER;
+static qjs_mutex js_class_id_mutex = QJS_MUTEX_INITIALIZER;
 #endif
 
 void JS_Initialize(void)
 {
 #ifdef CONFIG_ATOMICS
     qjs_mutex_init(&js_atomics_mutex);
+	qjs_mutex_init(&js_class_id_mutex);
 #endif
 }
 
 void JS_Finalize(void)
 {
 #ifdef CONFIG_ATOMICS
-    qjs_mutex_destroy(&js_atomics_mutex);
+	qjs_mutex_destroy(&js_class_id_mutex);
+	qjs_mutex_destroy(&js_atomics_mutex);
 #endif
 }
 
@@ -3550,16 +3553,12 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
 
 /* JSClass support */
 
-#ifdef CONFIG_ATOMICS
-static pthread_mutex_t js_class_id_mutex = PTHREAD_MUTEX_INITIALIZER;
-#endif
-
 /* a new class ID is allocated if *pclass_id != 0 */
 JSClassID JS_NewClassID(JSClassID *pclass_id)
 {
     JSClassID class_id;
 #ifdef CONFIG_ATOMICS
-    pthread_mutex_lock(&js_class_id_mutex);
+    qjs_mutex_lock(&js_class_id_mutex);
 #endif
     class_id = *pclass_id;
     if (class_id == 0) {
@@ -3567,7 +3566,7 @@ JSClassID JS_NewClassID(JSClassID *pclass_id)
         *pclass_id = class_id;
     }
 #ifdef CONFIG_ATOMICS
-    pthread_mutex_unlock(&js_class_id_mutex);
+    qjs_mutex_unlock(&js_class_id_mutex);
 #endif
     return class_id;
 }

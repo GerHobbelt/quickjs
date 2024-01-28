@@ -2034,41 +2034,10 @@ static JSValue js_os_signal(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-#if defined(__linux__) || defined(__APPLE__)
-static int64_t get_time_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
-}
-
-static int64_t get_time_ns(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000 + ts.tv_nsec;
-}
-#else
-/* more portable, but does not work if the date is updated */
-static int64_t get_time_ms(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (int64_t)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
-}
-
-static int64_t get_time_ns(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (int64_t)tv.tv_sec * 1000000000 + (tv.tv_usec * 1000);
-}
-#endif
-
 static JSValue js_os_now(JSContext *ctx, JSValue this_val,
                          int argc, JSValue *argv)
 {
-    return JS_NewFloat64(ctx, (double)get_time_ns() / 1e6);
+    return JS_NewFloat64(ctx, (double)qjs_get_time_ns() / 1e6);
 }
 
 static void unlink_timer(JSRuntime *rt, JSOSTimer *th)

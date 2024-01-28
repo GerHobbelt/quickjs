@@ -117,6 +117,7 @@ int qjs_fesetround(int round);
 int qjs_gettimeofday(struct qjs_timeval * tp);
 int qjs_gettimezoneoffset(int64_t time);
 int64_t qjs_get_time_ms(void);
+int64_t qjs_get_time_ns(void);
 void qjs_usleep(int64_t us);
 
 typedef int (*qjs_listdir_callback_t)(void* context, const char* path, int is_dir);
