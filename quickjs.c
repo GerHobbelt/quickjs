@@ -245,7 +245,7 @@ typedef enum JSErrorEnum {
     JS_NATIVE_ERROR_COUNT, /* number of different NativeError objects */
 } JSErrorEnum;
 
-#define JS_MAX_LOCAL_VARS 65536
+#define JS_MAX_LOCAL_VARS 65535
 #ifdef CONFIG_STACK_SIZE_MAX
 #define JS_STACK_SIZE_MAX CONFIG_STACK_SIZE_MAX
 #else
