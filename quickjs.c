@@ -4648,7 +4648,7 @@ static no_inline int resize_properties(JSContext *ctx, JSShape **psh,
     /* resize the property shapes. Using js_realloc() is not possible in
        case the GC runs during the allocation */
     old_sh = sh;
-    sh_alloc = js_malloc(ctx, get_shape_size(new_hash_size, new_size));
+    sh_alloc = qjs_malloc(ctx, get_shape_size(new_hash_size, new_size));
     if (!sh_alloc)
         return -1;
     sh = get_shape_from_alloc(sh_alloc, new_hash_size);
@@ -4676,7 +4676,7 @@ static no_inline int resize_properties(JSContext *ctx, JSShape **psh,
         memcpy(prop_hash_end(sh) - new_hash_size, prop_hash_end(old_sh) - new_hash_size,
                sizeof(prop_hash_end(sh)[0]) * new_hash_size);
     }
-    js_free(ctx, get_alloc_from_shape(old_sh));
+    qjs_free(ctx, get_alloc_from_shape(old_sh));
     *psh = sh;
     sh->prop_size = new_size;
     return 0;
@@ -19814,7 +19814,7 @@ static JSAsyncFunctionState *async_func_init(JSContext *ctx,
     JSStackFrame *sf;
     int local_count, i, arg_buf_len, n;
 
-    s = js_mallocz(ctx, sizeof(*s));
+    s = qjs_mallocz(ctx, sizeof(*s));
     if (!s)
         return NULL;
     s->header.ref_count = 1;
@@ -19830,7 +19830,7 @@ static JSAsyncFunctionState *async_func_init(JSContext *ctx,
     local_count = arg_buf_len + b->var_count + b->stack_size;
     sf->arg_buf = qjs_malloc(ctx, sizeof(JSValue) * max_int(local_count, 1));
     if (!sf->arg_buf) {
-        js_free(ctx, s);
+        qjs_free(ctx, s);
         return NULL;
     }
     sf->cur_func = JS_DupValue(ctx, func_obj);
@@ -19874,7 +19874,7 @@ static JSValue async_func_resume(JSContext *ctx, JSAsyncFunctionState *s)
     JSStackFrame *sf = &s->frame;
     JSValue func_obj, ret;
 
-    assert(!s->is_completed);
+    QJS_ASSERT(!s->is_completed);
     if (js_check_stack_overflow(ctx->rt, 0)) {
         ret = JS_ThrowStackOverflow(ctx);
     } else {
@@ -19914,7 +19914,7 @@ static void __async_func_free(JSRuntime *rt, JSAsyncFunctionState *s)
     if (rt->gc_phase == JS_GC_PHASE_REMOVE_CYCLES && s->header.ref_count != 0) {
         list_add_tail(&s->header.link, &rt->gc_zero_ref_count_list);
     } else {
-        js_free_rt(rt, s);
+        qjs_free_rt(rt, s);
     }
 }
 
@@ -20033,7 +20033,7 @@ static JSValue js_generator_next(JSContext *ctx, JSValueConst this_val,
             free_generator_stack(ctx, s);
             return func_ret;
         } else {
-            assert(JS_VALUE_GET_TAG(func_ret) == JS_TAG_INT);
+            QJS_ASSERT(JS_VALUE_GET_TAG(func_ret) == JS_TAG_INT);
             /* get the returned yield value at the top of the stack */
             ret = sf->cur_sp[-1];
             sf->cur_sp[-1] = JS_UNDEFINED;
@@ -20545,7 +20545,7 @@ static void js_async_generator_resume_next(JSContext *ctx,
                 }
             } else {
                 int func_ret_code, ret;
-                assert(JS_VALUE_GET_TAG(func_ret) == JS_TAG_INT);
+                QJS_ASSERT(JS_VALUE_GET_TAG(func_ret) == JS_TAG_INT);
                 func_ret_code = JS_VALUE_GET_INT(func_ret);
                 value = s->func_state->frame.cur_sp[-1];
                 s->func_state->frame.cur_sp[-1] = JS_UNDEFINED;
@@ -41212,7 +41212,7 @@ static JSValue js_array_toSpliced(JSContext *ctx, JSValueConst this_val,
                 goto exception;
     }
 
-    assert(pval == last);
+    QJS_ASSERT(pval == last);
 
     if (JS_SetProperty(ctx, arr, JS_ATOM_length, JS_NewInt64(ctx, newlen)) < 0)
         goto exception;
