@@ -660,14 +660,8 @@ static JSValue js_std_exit(JSContext *ctx, JSValueConst this_val,
     int status;
     if (JS_ToInt32(ctx, &status, argv[0]))
         status = -1;
-	// TODO: do not exit, but fail/terminate the script and invoke userland/application exit hook (replaces the regular std::exit() behaviour)
-#if 0
-	exit(status);
-	return JS_UNDEFINED;
-#else
-	// fake JS_ThrowError
+	// terminate the script ASAP
 	return JS_ThrowScriptStdExit(ctx, status, "std.exit");
-#endif
 }
 
 static JSValue js_std_getenv(JSContext *ctx, JSValueConst this_val,
@@ -2124,7 +2118,7 @@ static void call_handler(JSContext *ctx, JSValueConst func)
     func1 = JS_DupValue(ctx, func);
     ret = JS_Call(ctx, func1, JS_UNDEFINED, 0, NULL);
     JS_FreeValue(ctx, func1);
-    if (JS_IsException(ret))    // and check it's not the exit exception
+    if (JS_IsException(ret))
         js_std_dump_error(ctx);
     JS_FreeValue(ctx, ret);
 }

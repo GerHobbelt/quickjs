@@ -243,8 +243,6 @@ typedef enum JSErrorEnum {
     JS_AGGREGATE_ERROR,
 
     JS_NATIVE_ERROR_COUNT, /* number of different NativeError objects */
-
-	JS_STD_EXIT_ERROR,     // special exception fired by std.exit() to exit the current script.
 } JSErrorEnum;
 
 #define JS_MAX_LOCAL_VARS 65536
@@ -1856,7 +1854,7 @@ void JS_Suspend(JSRuntime *rt, JSRuntimeThreadState *state)
     s->stack_top = rt->stack_top;
     s->current_exception = rt->current_exception;
     s->in_prepare_stack_trace = rt->in_prepare_stack_trace;
-	s->current_stack_frame = rt->current_stack_frame;
+    s->current_stack_frame = rt->current_stack_frame;
     memcpy(&s->job_list, &rt->job_list, sizeof(rt->job_list));
 
     rt->stack_top = 0;
@@ -7154,19 +7152,7 @@ JSValue __js_printf_like(2, 3) JS_ThrowScriptStdExit(JSContext* ctx, int status,
 		rt->in_std_exit = TRUE;
 		rt->std_exit_return_value = status;
 	}
-	JSValue rv = JS_NewUncatchableError(ctx);
-#if 0
-	if (!JS_IsException(rt->current_exception)) {
-		JSValue val;
-		va_list ap;
-
-		va_start(ap, fmt);
-		val = JS_ThrowError(ctx, JS_STD_EXIT_ERROR, fmt, ap);
-		va_end(ap);
-		return val;
-	}
-#endif
-	return rv;
+	return JS_NewUncatchableError(ctx);
 }
 
 static JSValue JS_ThrowStackOverflow(JSContext *ctx)
@@ -52146,7 +52132,6 @@ static const char * const native_error_name[JS_NATIVE_ERROR_COUNT] = {
     "EvalError", "RangeError", "ReferenceError",
     "SyntaxError", "TypeError", "URIError",
     "InternalError", "AggregateError",
-	//"Std::Exit"                           // we exit a script using std.exit() by throwing a special (fake) exception.
 };
 
 /* Minimum amount of objects to be able to compile code and display
