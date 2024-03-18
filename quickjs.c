@@ -2674,7 +2674,7 @@ static __maybe_unused void JS_DumpChar(JSRuntime *rt, int c, int sep)
 
 static __maybe_unused void JS_DumpString(JSRuntime *rt, const JSString *p, int show_refcount)
 {
-    int i, c, sep;
+    int i, sep;
 
     if (p == NULL) {
 		qjs_dump_printf("<null>");
@@ -12022,20 +12022,20 @@ static int js_ecvt(double d, int n_digits, int *decpt, int *sign, char *buf,
     return n_digits;
 }
 
-static int js_fcvt1(char (*buf)[JS_DTOA_BUF_SIZE], double d, int n_digits,
+static int js_fcvt1(char *buf, size_t buf_size, double d, int n_digits,
                     int rounding_mode)
 {
     int n;
     if (rounding_mode != QJS_FE_TONEAREST)
         qjs_fesetround(rounding_mode);
-    n = snprintf(*buf, sizeof(*buf), "%.*f", n_digits, d);
+    n = snprintf(buf, buf_size, "%.*f", n_digits, d);
     if (rounding_mode != QJS_FE_TONEAREST)
         qjs_fesetround(QJS_FE_TONEAREST);
-    QJS_ASSERT(n < sizeof(*buf));
+    QJS_ASSERT(n < buf_size);
     return n;
 }
 
-static void js_fcvt(char (*buf)[JS_DTOA_BUF_SIZE], double d, int n_digits)
+static void js_fcvt(char *buf, size_t buf_size, double d, int n_digits)
 {
     int rounding_mode;
     rounding_mode = QJS_FE_TONEAREST;
@@ -12049,12 +12049,12 @@ static void js_fcvt(char (*buf)[JS_DTOA_BUF_SIZE], double d, int n_digits)
            zero (RNDNA), but in printf the "ties" case is not specified
            (for example it is RNDN for glibc, RNDNA for Windows), so we
            must round manually. */
-        n1 = js_fcvt1(&buf1, sizeof(buf1), d, n_digits + 1, QJS_FE_TONEAREST);
+        n1 = js_fcvt1(buf1, sizeof(buf1), d, n_digits + 1, QJS_FE_TONEAREST);
         rounding_mode = QJS_FE_TONEAREST;
         /* XXX: could use 2 digits to reduce the average running time */
         if (buf1[n1 - 1] == '5') {
-            n1 = js_fcvt1(&buf1, sizeof(buf1), d, n_digits + 1, QJS_FE_DOWNWARD);
-            n2 = js_fcvt1(&buf2, sizeof(buf2), d, n_digits + 1, QJS_FE_UPWARD);
+            n1 = js_fcvt1(buf1, sizeof(buf1), d, n_digits + 1, QJS_FE_DOWNWARD);
+            n2 = js_fcvt1(buf2, sizeof(buf2), d, n_digits + 1, QJS_FE_UPWARD);
             if (n1 == n2 && memcmp(buf1, buf2, n1) == 0) {
                 /* exact result: round away from zero */
                 if (buf1[0] == '-')
@@ -12065,7 +12065,7 @@ static void js_fcvt(char (*buf)[JS_DTOA_BUF_SIZE], double d, int n_digits)
         }
     }
 #endif /* CONFIG_PRINTF_RNDN */
-    js_fcvt1(buf, d, n_digits, rounding_mode);
+    js_fcvt1(buf, buf_size, d, n_digits, rounding_mode);
 }
 
 /* radix != 10 is only supported with flags = JS_DTOA_VAR_FORMAT */
@@ -12081,18 +12081,17 @@ static void js_fcvt(char (*buf)[JS_DTOA_BUF_SIZE], double d, int n_digits)
 /* XXX: slow and maybe not fully correct. Use libbf when it is fast enough.
    XXX: radix != 10 is only supported for small integers
 */
-static void js_dtoa1(char (*buf)[JS_DTOA_BUF_SIZE], double d,
-                     int radix, int n_digits, int flags)
+static void js_dtoa1(char *buf, size_t buf_size, double d, int radix, int n_digits, int flags)
 {
     char *q;
 
     if (!isfinite(d)) {
         if (isnan(d)) {
-            pstrcpy(*buf, sizeof(*buf), "NaN");
+            pstrcpy(buf, buf_size, "NaN");
         } else if (d < 0) {
-            pstrcpy(*buf, sizeof(*buf), "-Infinity");
+            pstrcpy(buf, buf_size, "-Infinity");
         } else {
-            pstrcpy(*buf, sizeof(*buf), "Infinity");
+            pstrcpy(buf, buf_size, "Infinity");
         }
     } else if (flags == JS_DTOA_VAR_FORMAT) {
         int64_t i64 = 0;
@@ -12104,12 +12103,12 @@ static void js_dtoa1(char (*buf)[JS_DTOA_BUF_SIZE], double d,
             goto generic_conv;
         /* fast path for integers */
         ptr = i64toa(buf1 + sizeof(buf1), i64, radix);
-        pstrcpy(*buf, sizeof(*buf), ptr);
+        pstrcpy(buf, buf_size, ptr);
     } else {
         if (d == 0.0)
             d = 0.0; /* convert -0 to 0 */
         if (flags == JS_DTOA_FRAC_FORMAT) {
-            js_fcvt(buf, d, n_digits);
+            js_fcvt(buf, buf_size, d, n_digits);
         } else {
             char buf1[JS_DTOA_BUF_SIZE];
             int sign, decpt, k, n, i, p, n_max;
@@ -12124,7 +12123,7 @@ static void js_dtoa1(char (*buf)[JS_DTOA_BUF_SIZE], double d,
             /* the number has k digits (k >= 1) */
             k = js_ecvt(d, n_digits, &decpt, &sign, buf1, is_fixed);
             n = decpt; /* d=10^(n-k)*(buf1) i.e. d= < x.yyyy 10^(n-1) */
-            q = *buf;
+            q = buf;
             if (sign)
                 *q++ = '-';
             if (flags & JS_DTOA_FORCE_EXP)
@@ -12166,7 +12165,7 @@ static void js_dtoa1(char (*buf)[JS_DTOA_BUF_SIZE], double d,
                 p = n - 1;
                 if (p >= 0)
                     *q++ = '+';
-                snprintf(q, *buf + sizeof(*buf) - q, "%d", p);
+                snprintf(q, buf + buf_size - q, "%d", p);
             }
         }
     }
@@ -12176,7 +12175,7 @@ static JSValue js_dtoa(JSContext *ctx,
                        double d, int radix, int n_digits, int flags)
 {
     char buf[JS_DTOA_BUF_SIZE];
-    js_dtoa1(&buf, d, radix, n_digits, flags);
+    js_dtoa1(buf, sizeof(buf), d, radix, n_digits, flags);
     return JS_NewString(ctx, buf);
 }
 
