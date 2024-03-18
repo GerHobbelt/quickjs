@@ -6498,7 +6498,7 @@ void JS_DumpMemoryUsage(const JSMemoryUsage *s, JSRuntime *rt)
             "BigNum "
 #endif
             QUICKJS_CONFIG_VERSION " version, %d-bit, malloc limit: %"PRId64"\n\n",
-            (int)sizeof(void *) * 8, (int64_t)(ssize_t)s->malloc_limit);
+            (int)sizeof(void *) * 8, (int64_t)s->malloc_limit);
 #if 1
     if (rt) {
         static const struct {
