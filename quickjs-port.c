@@ -435,7 +435,7 @@ extern force_inline size_t qjs_port_malloc_usable_size(const void *ptr)
     return malloc_usable_size((void*)ptr);
 #else
     /* change this to `return 0;` if compilation fails */
-    return malloc_usable_size(ptr);
+    return malloc_usable_size((void*)ptr);
 #endif
 }
 

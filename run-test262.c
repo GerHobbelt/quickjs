@@ -1532,7 +1532,7 @@ static void run_test262_finalize() {
 #endif
 }
 
-static int run_test_buf(const char *filename, char *harness, namelist_t *ip,
+static int run_test_buf(const char *filename, const char *harness, namelist_t *ip,
                  char *buf, size_t buf_len, const char* error_type,
                  int eval_flags, BOOL is_negative, BOOL is_async,
                  BOOL can_block)
@@ -1617,6 +1617,8 @@ static int run_test(const char *filename, int index)
             if (p) {
                 snprintf(harnessbuf, sizeof(harnessbuf), "%.*s%s",
                          (int)(p - filename), filename, "harness");
+            } else {
+                pstrcpy(harnessbuf, sizeof(harnessbuf), "");
             }
             harness = harnessbuf;
         }
@@ -1704,6 +1706,8 @@ static int run_test(const char *filename, int index)
             if (p) {
                 snprintf(harnessbuf, sizeof(harnessbuf), "%.*s%s",
                          (int)(p - filename), filename, "test/harness");
+            } else {
+                pstrcpy(harnessbuf, sizeof(harnessbuf), "");
             }
             harness = harnessbuf;
         }
