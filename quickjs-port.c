@@ -462,7 +462,7 @@ int qjs_thread_create(qjs_thread* thread, qjs_thread_method method, void* data, 
     {
         params->i_method = method;
         params->i_data   = data;
-        *thread = CreateThread(NULL, 0, internal_method_ptr, params, 0, NULL);
+        *thread = CreateThread(NULL, 2 << 20 /* 2 MB, glibc default */, internal_method_ptr, params, 0, NULL);
         if(*thread == NULL)
         {
             free(params);
@@ -496,7 +496,10 @@ int qjs_thread_create(qjs_thread* thread, qjs_thread_method method, void* data, 
     if (detached) {
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     }
-    ret = pthread_create(thread, &attr, (void *)method, data);
+	// musl libc gives threads 80 kb stacks, much smaller than
+	// JS_DEFAULT_STACK_SIZE (256 kb)
+	pthread_attr_setstacksize(&attr, 2 << 20); // 2 MB, glibc default
+	ret = pthread_create(thread, &attr, (void *)method, data);
     pthread_attr_destroy(&attr);
     return ret;
 }

@@ -535,7 +535,6 @@ static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
 {
     const char *script;
     Test262Agent *agent;
-    pthread_attr_t attr;
 
     if (JS_GetContextOpaque(ctx) != NULL)
         return JS_ThrowTypeError(ctx, "cannot be called inside an agent");
@@ -550,12 +549,7 @@ static JSValue js_agent_start(JSContext *ctx, JSValue this_val,
     agent->script = strdup(script);
     JS_FreeCString(ctx, script);
     list_add_tail(&agent->link, &agent_list);
-    pthread_attr_init(&attr);
-    // musl libc gives threads 80 kb stacks, much smaller than
-    // JS_DEFAULT_STACK_SIZE (256 kb)
-    pthread_attr_setstacksize(&attr, 2 << 20); // 2 MB, glibc default
-    pthread_create(&agent->tid, &attr, agent_start, agent);
-    pthread_attr_destroy(&attr);
+    qjs_thread_create(&agent->tid, agent_start, agent, 0);
     return JS_UNDEFINED;
 }
 
@@ -2091,7 +2085,7 @@ int main(int argc, const char** argv)
 
     optind = 1;
     while (optind < argc) {
-        char *arg = argv[optind];
+        const char *arg = argv[optind];
         if (*arg != '-')
             break;
         optind++;
