@@ -757,29 +757,21 @@ JSValue JS_NewBigUint64(JSContext *ctx, uint64_t v);
 
 static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double d)
 {
-    JSValue v;
     int32_t val;
     union {
         double d;
         uint64_t u;
     } u, t;
-    u.d = d;
-    if (d < (double)INT32_MIN) {
-        val = INT32_MIN;
-    } else if (d > (double)INT32_MAX) {
-        val = INT32_MAX;
-    } else {
+    if (d >= (double)INT32_MIN && d <= (double)INT32_MAX) {
+        u.d = d;
         val = (int32_t)d;
+        t.d = val;
+        /* -0 cannot be represented as integer, so we compare the bit
+           representation */
+        if (u.u == t.u)
+            return JS_MKVAL(JS_TAG_INT, val);
     }
-    t.d = val;
-    /* -0 cannot be represented as integer, so we compare the bit
-        representation */
-    if (u.u == t.u) {
-        v = JS_MKVAL(JS_TAG_INT, val);
-    } else {
-        v = __JS_NewFloat64(ctx, d);
-    }
-    return v;
+    return __JS_NewFloat64(ctx, d);
 }
 
 static inline BOOL JS_IsNumber(JSValueConst v)
