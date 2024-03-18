@@ -36343,7 +36343,9 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
     JSFunctionBytecode *b = JS_VALUE_GET_PTR(obj);
     uint32_t flags;
     int idx, i;
+#if 0
     uint8_t *idx_needs_regexp_bswap = NULL;
+#endif
 
     bc_put_u8(s, BC_TAG_FUNCTION_BYTECODE);
     flags = idx = 0;
@@ -36415,6 +36417,7 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
         dbuf_put(&s->dbuf, b->debug.pc2line_buf, b->debug.pc2line_len);
     }
 
+#if 0
     if (s->byte_swap) {
         uint8_t *bc_buf = b->byte_code_buf;
         int bc_len = b->byte_code_len;
@@ -36468,10 +36471,18 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
                 goto fail;
         }
     }
+#else
+    for(i = 0; i < b->cpool_count; i++) {
+        if (JS_WriteObjectRec(s, b->cpool[i]))
+            goto fail;
+    }
+#endif
 
     return 0;
  fail:
+#if 0
     qjs_free(s->ctx, idx_needs_regexp_bswap);
+#endif
     return -1;
 }
 
