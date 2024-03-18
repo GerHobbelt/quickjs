@@ -71,6 +71,12 @@ ifdef CONFIG_DARWIN
 CONFIG_CLANG=y
 CONFIG_DEFAULT_AR=y
 endif
+ifdef CONFIG_FREEBSD
+# use clang instead of gcc
+CONFIG_CLANG=y
+CONFIG_DEFAULT_AR=y
+CONFIG_LTO=
+endif
 
 ifdef CONFIG_WIN32
   ifdef CONFIG_M32
