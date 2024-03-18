@@ -2672,10 +2672,6 @@ static __maybe_unused void JS_DumpChar(JSRuntime *rt, int c, int sep)
     }
 }
 
-static __maybe_unused void JS_DumpString(JSRuntime *rt, const JSString *p)
-{
-    int i, sep;
-
 static __maybe_unused void JS_DumpString(JSRuntime *rt, const JSString *p, int show_refcount)
 {
     int i, c, sep;
@@ -4367,7 +4363,7 @@ static BOOL JS_ConcatStringInPlace(JSContext *ctx, JSString *p1, JSValueConst op
             return TRUE;
         if (p1->header.ref_count != 1)
             return FALSE;
-        size1 = js_malloc_usable_size(ctx, p1);
+        size1 = qjs_malloc_usable_size(ctx, p1);
         if (p1->is_wide_char) {
             if (size1 >= sizeof(*p1) + ((p1->len + p2->len) << 1)) {
                 if (p2->is_wide_char) {
