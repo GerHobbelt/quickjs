@@ -59,9 +59,10 @@ CONFIG_STACK_CHECK=y
 #CONFIG_ASAN=y
 # use memory sanitizer
 #CONFIG_MSAN=y
-# include the code for BigFloat/BigDecimal, math mode and faster large integers
 # use UB sanitizer
 #CONFIG_UBSAN=y
+
+# include the code for BigFloat/BigDecimal and math mode
 CONFIG_BIGNUM=y
 
 OBJDIR=.obj
