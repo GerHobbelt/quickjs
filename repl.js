@@ -1303,7 +1303,7 @@ import * as os from "os";
 
     function eval_and_print_start(expr, is_async) {
         var result;
-        
+
         try {
             if (eval_mode === "math")
                 expr = '"use math"; void 0;' + expr;
@@ -1346,7 +1346,7 @@ import * as os from "os";
             console.log(error);
         }
         std.puts(colors.none);
-        
+
         handle_cmd_end();
     }
 

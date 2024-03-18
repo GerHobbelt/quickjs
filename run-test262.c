@@ -1183,7 +1183,7 @@ static int eval_buf(JSContext *ctx, const char *buf, size_t buf_len,
     /* a module evaluation returns a promise */
     ret_promise = ((eval_flags & JS_EVAL_TYPE_MODULE) != 0);
     async_done = 0; /* counter of "Test262:AsyncTestComplete" messages */
-    
+
     res_val = JS_Eval(ctx, buf, buf_len, filename, eval_flags);
 
     if ((is_async || ret_promise) && !JS_IsException(res_val)) {

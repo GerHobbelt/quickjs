@@ -154,9 +154,9 @@ static int lre_case_conv_entry(uint32_t *res, uint32_t c, int conv_type, uint32_
 }
 
 /* conv_type:
-   0 = to upper 
+   0 = to upper
    1 = to lower
-   2 = case folding (= to lower with modifications) 
+   2 = case folding (= to lower with modifications)
 */
 int lre_case_conv(uint32_t *res, uint32_t c, int conv_type)
 {
@@ -173,7 +173,7 @@ int lre_case_conv(uint32_t *res, uint32_t c, int conv_type)
     } else {
         uint32_t v, code, len;
         int idx, idx_min, idx_max;
-        
+
         idx_min = 0;
         idx_max = countof(case_conv_table1) - 1;
         while (idx_min <= idx_max) {
@@ -245,7 +245,7 @@ int lre_canonicalize(uint32_t c, BOOL is_unicode)
     } else {
         uint32_t v, code, len;
         int idx, idx_min, idx_max;
-        
+
         idx_min = 0;
         idx_max = countof(case_conv_table1) - 1;
         while (idx_min <= idx_max) {
@@ -1368,7 +1368,7 @@ static int point_cmp(const void *p1, const void *p2, void *arg)
 static void cr_sort_and_remove_overlap(CharRange *cr)
 {
     uint32_t start, end, start1, end1, i, j;
-    
+
     /* the resulting ranges are not necessarily sorted and may overlap */
     rqsort(cr->points, cr->len / 2, sizeof(cr->points[0]) * 2, point_cmp, NULL);
     j = 0;
@@ -1407,7 +1407,7 @@ int cr_regexp_canonicalize(CharRange *cr, BOOL is_unicode)
 {
     CharRange cr_inter, cr_mask, cr_result, cr_sub;
     uint32_t v, code, len, i, idx, start, end, c, d_start, d_end, d;
-    
+
     cr_init(&cr_mask, cr->mem_opaque, cr->realloc_func);
     cr_init(&cr_inter, cr->mem_opaque, cr->realloc_func);
     cr_init(&cr_result, cr->mem_opaque, cr->realloc_func);
@@ -1422,7 +1422,7 @@ int cr_regexp_canonicalize(CharRange *cr, BOOL is_unicode)
         goto fail;
     if (cr_op(&cr_sub, cr_mask.points, cr_mask.len, cr->points, cr->len, CR_OP_INTER))
         goto fail;
-    
+
     /* cr_inter = cr & cr_mask */
     /* cr_sub = cr & ~cr_mask */
 

@@ -910,7 +910,7 @@ static BOOL re_need_check_advance(const uint8_t *bc_buf, int bc_buf_len)
     int pos, opcode, len;
     uint32_t val;
     BOOL ret;
-    
+
     ret = TRUE;
     pos = 0;
     while (pos < bc_buf_len) {
@@ -1559,7 +1559,7 @@ static int re_parse_term(REParseState *s, BOOL is_backward_dir)
                                 len + 5 * has_goto + add_zero_advance_check * 2);
                         if (add_zero_advance_check) {
                             s->byte_code.buf[last_atom_start + 1 + 4] = REOP_push_char_pos;
-                            re_emit_op(s, REOP_check_advance); 
+                            re_emit_op(s, REOP_check_advance);
                         }
                         if (has_goto)
                             re_emit_goto(s, REOP_goto, last_atom_start);
@@ -1575,7 +1575,7 @@ static int re_parse_term(REParseState *s, BOOL is_backward_dir)
                         pos += 4;
                         if (add_zero_advance_check) {
                             s->byte_code.buf[pos++] = REOP_push_char_pos;
-                            re_emit_op(s, REOP_check_advance); 
+                            re_emit_op(s, REOP_check_advance);
                         }
                         re_emit_goto(s, REOP_loop, last_atom_start + 5);
                         re_emit_op(s, REOP_drop);

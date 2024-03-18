@@ -536,7 +536,7 @@ void parse_case_folding(CCInfo *tab, const char *filename)
         status = *p;
         if (status != 'C' && status != 'S' && status != 'F')
             continue;
-        
+
         p = get_field(line, 2);
         QJS_ASSERT(p != NULL);
         if (status == 'S') {
@@ -556,7 +556,7 @@ void parse_case_folding(CCInfo *tab, const char *filename)
             ci->f_data[ci->f_len++] = strtoul(p, (char **)&p, 16);
         }
     }
-        
+
     fclose(f);
 }
 
@@ -1375,7 +1375,7 @@ static int sp_cc_cmp(const void *p1, const void *p2)
         return memcmp(c1->f_data, c2->f_data, sizeof(c1->f_data[0]) * c1->f_len);
     }
 }
-                     
+
 /* dump the case special cases (multi character results which are
    identical and need specific handling in lre_canonicalize() */
 void dump_case_folding_special_cases(CCInfo *tab)
@@ -1395,7 +1395,7 @@ void dump_case_folding_special_cases(CCInfo *tab)
             len = 1;
             while ((i + len) <= CHARCODE_MAX && !sp_cc_cmp(&perm[i], &perm[i + len]))
                 len++;
-            
+
             if (len > 1) {
                 for(j = i; j < i + len; j++)
                     dump_cc_info(&tab[perm[j]], perm[j]);
@@ -1406,7 +1406,7 @@ void dump_case_folding_special_cases(CCInfo *tab)
     free(perm);
     global_tab = NULL;
 }
-                                     
+
 
 int tabcmp(const int *tab1, const int *tab2, int n)
 {
@@ -3104,7 +3104,7 @@ int main(int argc, const char** argv)
     build_conv_table(unicode_db);
 
 #ifdef DUMP_CASE_FOLDING_SPECIAL_CASES
-    dump_case_folding_special_cases(unicode_db); 
+    dump_case_folding_special_cases(unicode_db);
 #endif
 
     if (!outfilename) {

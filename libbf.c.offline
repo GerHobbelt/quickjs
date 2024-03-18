@@ -1614,7 +1614,7 @@ int bf_mul(bf_t *r, const bf_t *a, const bf_t *b, limb_t prec,
             if (bf_resize(r, a_len + b_len)) {
 #ifdef USE_FFT_MUL
             fail:
-#endif                
+#endif
                 bf_set_nan(r);
                 ret = BF_ST_MEM_ERROR;
                 goto done;
@@ -2317,7 +2317,7 @@ static int bf_pow_ui_ui(bf_t *r, limb_t a1, limb_t b,
            because we expect the caller to do it */
         ret = bf_set_ui(r, mp_pow_dec[b]);
     } else
-#endif        
+#endif
     {
         bf_init(r->ctx, &a);
         ret = bf_set_ui(&a, a1);
