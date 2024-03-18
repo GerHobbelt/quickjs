@@ -706,7 +706,9 @@ typedef struct JSClassDef {
     JSClassExoticMethods *exotic;
 } JSClassDef;
 
+#define JS_INVALID_CLASS_ID 0
 JSClassID JS_NewClassID(JSClassID *pclass_id);
+/* Returns the class ID if `v` is an object, otherwise returns JS_INVALID_CLASS_ID. */
 JSClassID JS_GetClassID(JSValueConst v);
 int JS_NewClass(JSRuntime *rt, JSClassID class_id, const JSClassDef *class_def);
 BOOL JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
