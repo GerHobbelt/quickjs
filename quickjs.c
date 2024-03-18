@@ -3571,13 +3571,15 @@ JSClassID JS_NewClassID(JSClassID *pclass_id)
     return class_id;
 }
 
+/* return 0 if not an object of class class_id */
 JSClassID JS_GetClassID(JSValue v)
 {
     JSObject *p;
     if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
         return JS_INVALID_CLASS_ID;
     p = JS_VALUE_GET_OBJ(v);
-    return p->class_id;
+	QJS_ASSERT(p != 0);
+	return p->class_id;
 }
 
 BOOL JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id)
@@ -10379,17 +10381,6 @@ void JS_SetOpaque(JSValue obj, void *opaque)
         p = JS_VALUE_GET_OBJ(obj);
         p->u.opaque = opaque;
     }
-}
-
-/* return 0 if not an object of class class_id */
-JSClassID JS_GetClassID(JSValueConst obj)
-{
-    JSObject *p;
-    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
-        return 0;
-    p = JS_VALUE_GET_OBJ(obj);
-	QJS_ASSERT(p != 0);
-	return p->class_id;
 }
 
 /* return NULL if not an object of class class_id */
