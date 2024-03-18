@@ -128,7 +128,7 @@ typedef struct {
 
 typedef struct {
     struct list_head link;
-    BOOL has_object;
+    int timer_id;
     int64_t timeout;
     JSValue func;
 } JSOSTimer;
@@ -164,6 +164,7 @@ typedef struct JSThreadState {
     struct list_head os_timers; /* list of JSOSTimer.link */
     struct list_head port_list; /* list of JSWorkerMessageHandler.link */
     int eval_script_recurse; /* only used in the main thread */
+    int next_timer_id; /* for setTimeout() */
     /* not used in the main thread */
     JSWorkerMessagePipe *recv_pipe, *send_pipe;
 } JSThreadState;
@@ -2040,39 +2041,11 @@ static JSValue js_os_now(JSContext *ctx, JSValue this_val,
     return JS_NewFloat64(ctx, (double)qjs_get_time_ns() / 1e6);
 }
 
-static void unlink_timer(JSRuntime *rt, JSOSTimer *th)
-{
-    if (th->link.prev) {
-        list_del(&th->link);
-        th->link.prev = th->link.next = NULL;
-    }
-}
-
 static void free_timer(JSRuntime *rt, JSOSTimer *th)
 {
+    list_del(&th->link);
     JS_FreeValueRT(rt, th->func);
     qjs_free_rt(rt, th);
-}
-
-static JSClassID js_os_timer_class_id;
-
-static void js_os_timer_finalizer(JSRuntime *rt, JSValue val)
-{
-    JSOSTimer *th = JS_GetOpaque(val, js_os_timer_class_id);
-    if (th) {
-        th->has_object = FALSE;
-        if (!th->link.prev)
-            free_timer(rt, th);
-    }
-}
-
-static void js_os_timer_mark(JSRuntime *rt, JSValueConst val,
-                             JS_MarkFunc *mark_func)
-{
-    JSOSTimer *th = JS_GetOpaque(val, js_os_timer_class_id);
-    if (th) {
-        JS_MarkValue(rt, th->func, mark_func);
-    }
 }
 
 static JSValue js_os_setTimeout(JSContext *ctx, JSValueConst this_val,
@@ -2083,44 +2056,55 @@ static JSValue js_os_setTimeout(JSContext *ctx, JSValueConst this_val,
     int64_t delay;
     JSValueConst func;
     JSOSTimer *th;
-    JSValue obj;
 
     func = argv[0];
     if (!JS_IsFunction(ctx, func))
         return JS_ThrowTypeError(ctx, "first argument to setTimeout was not a function");
     if (JS_ToInt64(ctx, &delay, argv[1]))
         return JS_EXCEPTION;
-    obj = JS_NewObjectClass(ctx, js_os_timer_class_id);
-    if (JS_IsException(obj))
-        return obj;
     th = qjs_mallocz(ctx, sizeof(*th));
-    if (!th) {
-        JS_FreeValue(ctx, obj);
+    if (!th)
         return JS_EXCEPTION;
-    }
-    th->has_object = TRUE;
+    th->timer_id = ts->next_timer_id;
+    if (ts->next_timer_id == INT32_MAX)
+        ts->next_timer_id = 1;
+    else
+        ts->next_timer_id++;
     th->timeout = qjs_get_time_ms() + delay;
     th->func = JS_DupValue(ctx, func);
     list_add_tail(&th->link, &ts->os_timers);
-    JS_SetOpaque(obj, th);
-    return obj;
+    return JS_NewInt32(ctx, th->timer_id);
+}
+
+static JSOSTimer *find_timer_by_id(JSThreadState *ts, int timer_id)
+{
+    struct list_head *el;
+    if (timer_id <= 0)
+        return NULL;
+    list_for_each(el, &ts->os_timers) {
+        JSOSTimer *th = list_entry(el, JSOSTimer, link);
+        if (th->timer_id == timer_id)
+            return th;
+    }
+    return NULL;
 }
 
 static JSValue js_os_clearTimeout(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv)
 {
-    JSOSTimer *th = JS_GetOpaque2(ctx, argv[0], js_os_timer_class_id);
-    if (!th)
+    JSRuntime *rt = JS_GetRuntime(ctx);
+    JSThreadState *ts = JS_GetRuntimeOpaque(rt);
+    JSOSTimer *th;
+    int timer_id;
+    
+    if (JS_ToInt32(ctx, &timer_id, argv[0]))
         return JS_EXCEPTION;
-    unlink_timer(JS_GetRuntime(ctx), th);
+    th = find_timer_by_id(ts, timer_id);
+    if (!th)
+        return JS_UNDEFINED;
+    free_timer(rt, th);
     return JS_UNDEFINED;
 }
-
-static JSClassDef js_os_timer_class = {
-    "OSTimer",
-    .finalizer = js_os_timer_finalizer,
-    .gc_mark = js_os_timer_mark,
-};
 
 /* return a promise */
 static JSValue js_os_sleepAsync(JSContext *ctx, JSValueConst this_val,
@@ -2145,7 +2129,7 @@ static JSValue js_os_sleepAsync(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, resolving_funcs[1]);
         return JS_EXCEPTION;
     }
-    th->has_object = FALSE;
+    th->timer_id = -1;
     th->timeout = qjs_get_time_ms() + delay;
     th->func = JS_DupValue(ctx, resolving_funcs[0]);
     list_add_tail(&th->link, &ts->os_timers);
@@ -2292,9 +2276,7 @@ static int js_os_poll(JSContext *ctx)
                 /* the timer expired */
                 func = th->func;
                 th->func = JS_UNDEFINED;
-                unlink_timer(rt, th);
-                if (!th->has_object)
-                    free_timer(rt, th);
+                free_timer(rt, th);
                 call_handler(ctx, func);
                 JS_FreeValue(ctx, func);
                 return 0;
@@ -3374,7 +3356,7 @@ static void worker_func(void *opaque)
     JSRuntime *rt;
     JSThreadState *ts;
     JSContext *ctx;
-    JSValue promise;
+    JSValue val;
 
     rt = JS_NewRuntime();
     if (rt == NULL) {
@@ -3402,14 +3384,14 @@ static void worker_func(void *opaque)
 
     js_std_add_helpers(ctx, -1, NULL);
 
-    promise = JS_LoadModule(ctx, args->basename, args->filename);
-    if (JS_IsException(promise))
-        js_std_dump_error(ctx);
-    /* XXX: check */
-    JS_FreeValue(ctx, promise);
+    val = JS_LoadModule(ctx, args->basename, args->filename);
     free(args->filename);
     free(args->basename);
     free(args);
+    val = js_std_await(ctx, val);
+    if (JS_IsException(val))
+        js_std_dump_error(ctx);
+    JS_FreeValue(ctx, val);
 
     js_std_loop(ctx);
 
@@ -3770,10 +3752,6 @@ static int js_os_init(JSContext *ctx, JSModuleDef *m)
 {
     os_poll_func = js_os_poll;
 
-    /* OSTimer class */
-    JS_NewClassID(&js_os_timer_class_id);
-    JS_NewClass(JS_GetRuntime(ctx), js_os_timer_class_id, &js_os_timer_class);
-
 #ifdef USE_WORKER
     {
         JSRuntime *rt = JS_GetRuntime(ctx);
@@ -3886,7 +3864,8 @@ void js_std_init_handlers(JSRuntime *rt)
     init_list_head(&ts->os_signal_handlers);
     init_list_head(&ts->os_timers);
     init_list_head(&ts->port_list);
-
+    ts->next_timer_id = 1;
+    
     JS_SetRuntimeOpaque(rt, ts);
 
 #ifdef USE_WORKER
@@ -3919,9 +3898,7 @@ void js_std_free_handlers(JSRuntime *rt)
 
     list_for_each_safe(el, el1, &ts->os_timers) {
         JSOSTimer *th = list_entry(el, JSOSTimer, link);
-        unlink_timer(rt, th);
-        if (!th->has_object)
-            free_timer(rt, th);
+        free_timer(rt, th);
     }
 
 #ifdef USE_WORKER
@@ -4009,6 +3986,41 @@ void js_std_loop(JSContext *ctx)
     }
 }
 
+/* Wait for a promise and execute pending jobs while waiting for
+   it. Return the promise result or JS_EXCEPTION in case of promise
+   rejection. */
+JSValue js_std_await(JSContext *ctx, JSValue obj)
+{
+    JSValue ret;
+    int state;
+
+    for(;;) {
+        state = JS_PromiseState(ctx, obj);
+        if (state == JS_PROMISE_FULFILLED) {
+            ret = JS_PromiseResult(ctx, obj);
+            JS_FreeValue(ctx, obj);
+            break;
+        } else if (state == JS_PROMISE_REJECTED) {
+            ret = JS_Throw(ctx, JS_PromiseResult(ctx, obj));
+            JS_FreeValue(ctx, obj);
+            break;
+        } else if (state == JS_PROMISE_PENDING) {
+            JSContext *ctx1;
+            int err;
+            err = JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1);
+            if (err < 0) {
+                js_std_dump_error(ctx1);
+            }
+            if (os_poll_func)
+                os_poll_func(ctx);
+        } else {
+            /* not a promise */
+            ret = obj;
+        }
+    }
+    return ret;
+}
+
 JS_BOOL js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                         int load_only)
 {
@@ -4028,8 +4040,11 @@ JS_BOOL js_std_eval_binary(JSContext *ctx, const uint8_t *buf, size_t buf_len,
                 goto exception;
             }
             rv = js_module_set_import_meta(ctx, obj, FALSE, TRUE);
+            val = JS_EvalFunction(ctx, obj);
+            val = js_std_await(ctx, val);
+        } else {
+            val = JS_EvalFunction(ctx, obj);
         }
-        val = JS_EvalFunction(ctx, obj);
         if (JS_IsException(val)) {
         exception:
             js_std_dump_error(ctx);
