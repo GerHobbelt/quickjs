@@ -997,6 +997,8 @@ BOOL JS_SetConstructorBit(JSContext *ctx, JSValueConst func_obj, BOOL val);
 JSValue JS_NewArray(JSContext *ctx);
 BOOL JS_IsArray(JSContext *ctx, JSValueConst val);
 
+JSValue JS_NewDate(JSContext *ctx, double epoch_ms);
+
 JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
                                JSAtom prop, JSValueConst receiver,
                                BOOL throw_ref_error);
