@@ -53,6 +53,8 @@ typedef intptr_t ssize_t;
 //#pragma function (ceil)
 //#pragma function (floor)
 
+#define minimum_length(n)   /**/
+
 #else
 #include <sys/time.h>
 #ifndef INFINITY
@@ -1388,7 +1390,6 @@ static JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
                                  void *opaque);
 static JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p,
                                                JSAtom atom, void *opaque);
-void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
 static JSValue js_object_groupBy(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv, int is_map);
 
@@ -6778,6 +6779,11 @@ JSValue JS_GetException(JSContext *ctx)
     val = rt->current_exception;
     rt->current_exception = JS_NULL;
     return val;
+}
+
+BOOL JS_HasException(JSContext *ctx)
+{
+    return !JS_IsNull(ctx->rt->current_exception);
 }
 
 static void dbuf_put_leb128(DynBuf *s, uint32_t v)
@@ -15583,11 +15589,21 @@ static BOOL js_same_value(JSContext *ctx, JSValueConst op1, JSValueConst op2)
                          JS_EQ_SAME_VALUE);
 }
 
+BOOL JS_SameValue(JSContext *ctx, JSValueConst op1, JSValueConst op2)
+{
+    return js_same_value(ctx, op1, op2);
+}
+
 static BOOL js_same_value_zero(JSContext *ctx, JSValueConst op1, JSValueConst op2)
 {
     return js_strict_eq2(ctx,
                          JS_DupValue(ctx, op1), JS_DupValue(ctx, op2),
                          JS_EQ_SAME_VALUE_ZERO);
+}
+
+BOOL JS_SameValueZero(JSContext *ctx, JSValueConst op1, JSValueConst op2)
+{
+    return js_same_value_zero(ctx, op1, op2);
 }
 
 static no_inline int js_strict_eq_slow(JSContext *ctx, JSValue *sp,
@@ -51310,6 +51326,11 @@ has_val:
         rv = s;
     }
     return rv;
+}
+
+int JS_ToDate(JSContext *ctx, double *pres, JSValueConst val)
+{
+    return JS_ThisTimeValue(ctx, pres, val);
 }
 
 static JSValue js_Date_UTC(JSContext *ctx, JSValueConst this_val,

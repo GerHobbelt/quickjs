@@ -840,7 +840,9 @@ static inline BOOL JS_IsObject(JSValueConst v)
 
 JSValue JS_Throw(JSContext *ctx, JSValue obj);
 JSValue JS_GetException(JSContext *ctx);
+BOOL JS_HasException(JSContext *ctx);
 BOOL JS_IsError(JSContext *ctx, JSValueConst val);
+void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
 void JS_ResetUncatchableError(JSContext *ctx);
 JSValue JS_NewError(JSContext *ctx);
 JSValue JS_NewUncatchableError(JSContext *ctx);
@@ -949,6 +951,9 @@ JSValue JS_NewWeakRef(JSContext* ctx, JSValueConst v);
 JSValue JS_GetWeakRef(JSContext* ctx, JSValueConst w);
 int JS_StrictEqual(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 
+BOOL JS_SameValue(JSContext *ctx, JSValueConst op1, JSValueConst op2);
+BOOL JS_SameValueZero(JSContext *ctx, JSValueConst op1, JSValueConst op2);
+
 JS_BOOL JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
 int JS_ToInt32(JSContext *ctx, int32_t *pres, JSValueConst val);
 static inline int JS_ToUint32(JSContext *ctx, uint32_t *pres, JSValueConst val)
@@ -998,6 +1003,7 @@ JSValue JS_NewArray(JSContext *ctx);
 BOOL JS_IsArray(JSContext *ctx, JSValueConst val);
 
 JSValue JS_NewDate(JSContext *ctx, double epoch_ms);
+int JS_ToDate(JSContext *ctx, double *pres, JSValueConst val);
 
 JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
                                JSAtom prop, JSValueConst receiver,
