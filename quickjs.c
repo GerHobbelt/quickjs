@@ -5798,10 +5798,16 @@ void __JS_FreeValueRT(JSRuntime *rt, JSValue v)
         {
             JSGCObjectHeader *p = JS_VALUE_GET_PTR(v);
             if (rt->gc_phase != JS_GC_PHASE_REMOVE_CYCLES) {
-                list_del(&p->link);
-                list_add(&p->link, &rt->gc_zero_ref_count_list);
-                if (rt->gc_phase == JS_GC_PHASE_NONE) {
-                    free_zero_refcount(rt);
+                struct list_head *el = &p->link;
+                if (el->prev == NULL || el->next == NULL) {
+                    el->prev = NULL; /* fail safe */
+                    el->next = NULL; /* fail safe */
+                } else {
+                    list_del(el);
+                    list_add(el, &rt->gc_zero_ref_count_list);
+                    if (rt->gc_phase == JS_GC_PHASE_NONE) {
+                        free_zero_refcount(rt);
+                    }
                 }
             }
         }
@@ -5986,6 +5992,10 @@ static void mark_children(JSRuntime *rt, JSGCObjectHeader *gp,
 static void gc_decref_child(JSRuntime *rt, JSGCObjectHeader *p)
 {
     QJS_ASSERT(p->ref_count > 0);
+    if (p->ref_count <= 0) {
+        return;
+    }
+
     p->ref_count--;
     if (p->ref_count == 0 && p->mark == 1) {
         list_del(&p->link);
@@ -17771,7 +17781,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                             pc -= 9;
                             JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
                             goto exception;
-                        } else if(pc[-8] == OP_get_field2) {
+                        } else if(pc[-6] == OP_push_const && pc[-8] == OP_get_field2) {
                             pc -= 7;
                             JS_ThrowTypeErrorNotAFunction(ctx, get_u32(pc));
                             goto exception;
@@ -57449,7 +57459,9 @@ JSValue JS_GetPromiseState(JSContext *ctx, JSValueConst promise) {
     return ret;
 }
 
+#if !defined(_MSC_VER)
 #pragma mark QJSExport
+#endif
 
 int QJS_CLASS_MAP = JS_CLASS_MAP;
 int QJS_ATOM_next = JS_ATOM_next;
