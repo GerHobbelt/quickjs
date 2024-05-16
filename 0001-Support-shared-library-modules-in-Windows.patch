@@ -1,17 +1,14 @@
-From 3ce565c65cc1dcb89f9636232cb4dcb93be39ea0 Mon Sep 17 00:00:00 2001
+From 6566bf602d96527731a1de7bc5487cfa69812c32 Mon Sep 17 00:00:00 2001
 From: tqfx <tqfx@tqfx.org>
 Date: Sun, 28 May 2023 20:38:50 +0800
 Subject: [PATCH 1/2] Support shared library modules in Windows
 
----
- quickjs-libc.c | 46 ++++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 44 insertions(+), 2 deletions(-)
 
 diff --git a/quickjs-libc.c b/quickjs-libc.c
-index 01c9db4..2ed5c7b 100644
+index d4f4d67..8220f39 100644
 --- a/quickjs-libc.c
 +++ b/quickjs-libc.c
-@@ -466,8 +466,50 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
+@@ -457,8 +457,50 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
  static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                          const char *module_name)
  {
@@ -65,5 +62,5 @@ index 01c9db4..2ed5c7b 100644
  #else
  static JSModuleDef *js_module_loader_so(JSContext *ctx,
 -- 
-2.43.2
+2.45.0
 
