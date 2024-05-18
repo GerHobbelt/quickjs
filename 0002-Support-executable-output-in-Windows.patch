@@ -1,11 +1,3 @@
-From 8a4c822737fba18011c1360ee569cc3f35f64b46 Mon Sep 17 00:00:00 2001
-From: tqfx <tqfx@tqfx.org>
-Date: Sun, 31 Dec 2023 22:10:53 +0800
-Subject: [PATCH 2/2] Support executable output in Windows
-
-
-diff --git a/qjsc.c b/qjsc.c
-index f8e60b3..4b14c7a 100644
 --- a/qjsc.c
 +++ b/qjsc.c
 @@ -463,6 +463,121 @@ static int output_executable(const char *out_filename, const char *cfilename,
@@ -142,6 +134,3 @@ index f8e60b3..4b14c7a 100644
          } else {
              out_filename = "out.c";
          }
--- 
-2.45.0
-
