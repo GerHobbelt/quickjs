@@ -1774,6 +1774,9 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque)
         goto fail;
 
     rt->stack_size = JS_DEFAULT_STACK_SIZE;
+#ifdef __ASAN__
+    rt->stack_size *= 2; // stack frames are bigger under AddressSanitizer
+#endif
     JS_UpdateStackTop(rt);
 
     rt->current_exception = JS_NULL;
@@ -1801,7 +1804,8 @@ static void *js_def_malloc(JSMallocState *s, size_t size)
     /* Do not allocate zero bytes: behavior is platform dependent */
     QJS_ASSERT(size != 0);
 
-    if (unlikely(s->malloc_size + size > s->malloc_limit))
+    /* When malloc_limit is 0 (unlimited), malloc_limit - 1 will be SIZE_MAX. */
+    if (unlikely(s->malloc_size + size > s->malloc_limit - 1))
         return NULL;
 
     ptr = qjs_port_malloc(size);
@@ -1839,7 +1843,8 @@ static void *js_def_realloc(JSMallocState *s, void *ptr, size_t size)
         qjs_port_free(ptr);
         return NULL;
     }
-    if (s->malloc_size + size - old_size > s->malloc_limit)
+    /* When malloc_limit is 0 (unlimited), malloc_limit - 1 will be SIZE_MAX. */
+    if (s->malloc_size + size - old_size > s->malloc_limit - 1)
         return NULL;
 
     ptr = qjs_port_realloc(ptr, size);
@@ -7386,6 +7391,13 @@ static JS_BOOL JS_SetPrototypeInternal(JSContext *ctx, JSValueConst obj,
     sh = p->shape;
     if (sh->proto == proto)
         return QJSB_TRUE;
+    if (p == JS_VALUE_GET_OBJ(ctx->class_proto[JS_CLASS_OBJECT])) {
+        if (throw_flag) {
+            JS_ThrowTypeError(ctx, "immutable prototype object 'Object.prototype' cannot have its prototype set");
+            return QJSB_EXCEPTION;
+        }
+        return QJSB_FALSE;
+    }
     if (!p->extensible) {
         if (throw_flag) {
             JS_ThrowTypeError(ctx, "object is not extensible");
@@ -13149,7 +13161,7 @@ int JS_IsArray(JSContext *ctx, JSValueConst val)
     }
 }
 
-static double js_pow(double a, double b)
+static double js_math_pow(double a, double b)
 {
     if (unlikely(!isfinite(b)) && fabs(a) == 1) {
         /* not compatible with IEEE 754 */
@@ -14604,7 +14616,7 @@ static no_inline __exception JS_BOOL js_binary_arith_slow(JSContext *ctx, JSValu
             break;
         case OP_pow:
             if (!is_math_mode(ctx)) {
-                sp[-2] = JS_NewFloat64(ctx, js_pow(v1, v2));
+                sp[-2] = JS_NewFloat64(ctx, js_math_pow(v1, v2));
                 return QJSB_FALSE;
             } else {
                 goto handle_bigint;
@@ -14663,7 +14675,7 @@ static no_inline __exception JS_BOOL js_binary_arith_slow(JSContext *ctx, JSValu
             break;
 #endif
         case OP_pow:
-            dr = js_pow(d1, d2);
+            dr = js_math_pow(d1, d2);
             break;
         default:
             QJS_ABORT();
@@ -44772,101 +44784,69 @@ static JSValue js_math_random(JSContext *ctx, JSValueConst this_val,
     return __JS_NewFloat64(ctx, u.d - 1.0);
 }
 
-static double js_floor(double a)
-{
-    return floor(a);
-}
-
-static double js_ceil(double a)
-{
-    return ceil(a);
-}
-
-static double js_asinh(double a)
-{
-    if (a == 0) {
-        return a;
-    }
-    return asinh(a);
-}
-
-static double js_atanh(double a)
-{
-    if (a == 0) {
-        return a;
-    }
-    return atanh(a);
-}
-
-// MSVC: warning C4232 : nonstandard extension used : 'f_f' : address of dllimport 'trunc' is not static, identity not guaranteed
-static double js_trunc(double a)
-{
-	return trunc(a);
-}
-
-static double js_acos(double a)
-{
-	return acos(a);
-}
-
-static double js_acosh(double a)
-{
-	return acosh(a);
-}
-
-static double js_expm1(double a)
-{
-	return expm1(a);
-}
-
-static double js_log1p(double a)
-{
-	return log1p(a);
-}
-
-static double js_log2(double a)
-{
-	return log2(a);
-}
-
-static double js_cbrt(double a)
-{
-	return cbrt(a);
-}
+/* use local wrappers for math functions to
+   - avoid initializing data with dynamic library entry points.
+   - avoid some overhead if the call can be inlined at compile or link time.
+ */
+static double js_math_fabs(double d) { return fabs(d); }
+static double js_math_floor(double d) { return floor(d); }
+static double js_math_ceil(double d) { return ceil(d); }
+static double js_math_sqrt(double d) { return sqrt(d); }
+static double js_math_acos(double d) { return acos(d); }
+static double js_math_asin(double d) { return asin(d); }
+static double js_math_atan(double d) { return atan(d); }
+static double js_math_atan2(double a, double b) { return atan2(a, b); }
+static double js_math_cos(double d) { return cos(d); }
+static double js_math_exp(double d) { return exp(d); }
+static double js_math_log(double d) { return log(d); }
+static double js_math_sin(double d) { return sin(d); }
+static double js_math_tan(double d) { return tan(d); }
+static double js_math_trunc(double d) { return trunc(d); }
+static double js_math_cosh(double d) { return cosh(d); }
+static double js_math_sinh(double d) { return sinh(d); }
+static double js_math_tanh(double d) { return tanh(d); }
+static double js_math_acosh(double d) { return acosh(d); }
+static double js_math_asinh(double d) { return asinh(d); }
+static double js_math_atanh(double d) { return atanh(d); }
+static double js_math_expm1(double d) { return expm1(d); }
+static double js_math_log1p(double d) { return log1p(d); }
+static double js_math_log2(double d) { return log2(d); }
+static double js_math_log10(double d) { return log10(d); }
+static double js_math_cbrt(double d) { return cbrt(d); }
 
 static const JSCFunctionListEntry js_math_funcs[] = {
     JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
     JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max, 1 ),
-    JS_CFUNC_SPECIAL_DEF("abs", 1, f_f, fabs ),
-    JS_CFUNC_SPECIAL_DEF("floor", 1, f_f, js_floor ),
-    JS_CFUNC_SPECIAL_DEF("ceil", 1, f_f, js_ceil ),
+    JS_CFUNC_SPECIAL_DEF("abs", 1, f_f, js_math_fabs ),
+    JS_CFUNC_SPECIAL_DEF("floor", 1, f_f, js_math_floor ),
+    JS_CFUNC_SPECIAL_DEF("ceil", 1, f_f, js_math_ceil ),
     JS_CFUNC_SPECIAL_DEF("round", 1, f_f, js_math_round ),
-    JS_CFUNC_SPECIAL_DEF("sqrt", 1, f_f, sqrt ),
+    JS_CFUNC_SPECIAL_DEF("sqrt", 1, f_f, js_math_sqrt ),
 
-    JS_CFUNC_SPECIAL_DEF("acos", 1, f_f, js_acos ),
-    JS_CFUNC_SPECIAL_DEF("asin", 1, f_f, asin ),
-    JS_CFUNC_SPECIAL_DEF("atan", 1, f_f, atan ),
-    JS_CFUNC_SPECIAL_DEF("atan2", 2, f_f_f, atan2 ),
-    JS_CFUNC_SPECIAL_DEF("cos", 1, f_f, cos ),
-    JS_CFUNC_SPECIAL_DEF("exp", 1, f_f, exp ),
-    JS_CFUNC_SPECIAL_DEF("log", 1, f_f, log ),
-    JS_CFUNC_SPECIAL_DEF("pow", 2, f_f_f, js_pow ),
-    JS_CFUNC_SPECIAL_DEF("sin", 1, f_f, sin ),
-    JS_CFUNC_SPECIAL_DEF("tan", 1, f_f, tan ),
+    JS_CFUNC_SPECIAL_DEF("acos", 1, f_f, js_math_acos ),
+    JS_CFUNC_SPECIAL_DEF("asin", 1, f_f, js_math_asin ),
+    JS_CFUNC_SPECIAL_DEF("atan", 1, f_f, js_math_atan ),
+    JS_CFUNC_SPECIAL_DEF("atan2", 2, f_f_f, js_math_atan2 ),
+    JS_CFUNC_SPECIAL_DEF("cos", 1, f_f, js_math_cos ),
+    JS_CFUNC_SPECIAL_DEF("exp", 1, f_f, js_math_exp ),
+    JS_CFUNC_SPECIAL_DEF("log", 1, f_f, js_math_log ),
+    JS_CFUNC_SPECIAL_DEF("pow", 2, f_f_f, js_math_pow ),
+    JS_CFUNC_SPECIAL_DEF("sin", 1, f_f, js_math_sin ),
+    JS_CFUNC_SPECIAL_DEF("tan", 1, f_f, js_math_tan ),
     /* ES6 */
-    JS_CFUNC_SPECIAL_DEF("trunc", 1, f_f, js_trunc ),
+    JS_CFUNC_SPECIAL_DEF("trunc", 1, f_f, js_math_trunc ),
     JS_CFUNC_SPECIAL_DEF("sign", 1, f_f, js_math_sign ),
-    JS_CFUNC_SPECIAL_DEF("cosh", 1, f_f, cosh ),
-    JS_CFUNC_SPECIAL_DEF("sinh", 1, f_f, sinh ),
-    JS_CFUNC_SPECIAL_DEF("tanh", 1, f_f, tanh ),
-    JS_CFUNC_SPECIAL_DEF("acosh", 1, f_f, js_acosh ),
-    JS_CFUNC_SPECIAL_DEF("asinh", 1, f_f, js_asinh ),
-    JS_CFUNC_SPECIAL_DEF("atanh", 1, f_f, js_atanh ),
-    JS_CFUNC_SPECIAL_DEF("expm1", 1, f_f, js_expm1 ),
-    JS_CFUNC_SPECIAL_DEF("log1p", 1, f_f, js_log1p ),
-    JS_CFUNC_SPECIAL_DEF("log2", 1, f_f, js_log2 ),
-    JS_CFUNC_SPECIAL_DEF("log10", 1, f_f, log10 ),
-    JS_CFUNC_SPECIAL_DEF("cbrt", 1, f_f, js_cbrt ),
+    JS_CFUNC_SPECIAL_DEF("cosh", 1, f_f, js_math_cosh ),
+    JS_CFUNC_SPECIAL_DEF("sinh", 1, f_f, js_math_sinh ),
+    JS_CFUNC_SPECIAL_DEF("tanh", 1, f_f, js_math_tanh ),
+    JS_CFUNC_SPECIAL_DEF("acosh", 1, f_f, js_math_acosh ),
+    JS_CFUNC_SPECIAL_DEF("asinh", 1, f_f, js_math_asinh ),
+    JS_CFUNC_SPECIAL_DEF("atanh", 1, f_f, js_math_atanh ),
+    JS_CFUNC_SPECIAL_DEF("expm1", 1, f_f, js_math_expm1 ),
+    JS_CFUNC_SPECIAL_DEF("log1p", 1, f_f, js_math_log1p ),
+    JS_CFUNC_SPECIAL_DEF("log2", 1, f_f, js_math_log2 ),
+    JS_CFUNC_SPECIAL_DEF("log10", 1, f_f, js_math_log10 ),
+    JS_CFUNC_SPECIAL_DEF("cbrt", 1, f_f, js_math_cbrt ),
     JS_CFUNC_DEF("hypot", 2, js_math_hypot ),
     JS_CFUNC_DEF("random", 0, js_math_random ),
     JS_CFUNC_SPECIAL_DEF("fround", 1, f_f, js_math_fround ),
@@ -44888,6 +44868,7 @@ static const JSCFunctionListEntry js_math_obj[] = {
 };
 
 /* Date */
+
 /* OS dependent. d = argv[0] is in ms from 1970. Return the difference
    between UTC time and local time 'd' in minutes */
 static int getTimezoneOffset(int64_t time) {
