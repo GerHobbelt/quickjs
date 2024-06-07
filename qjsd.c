@@ -27,7 +27,7 @@ int main(int argc, const char** argv)
 	JSRuntime* rt = JS_NewRuntime();
     JSContext* ctx = JS_NewContext(rt);
 
-    if (argc != 2) {
+    if (argc != 2 || !strcmp(argv[1], "-h") || !strcmp(argv[1], "-?")) {
         printf("Usage: ./qjsd <input.bin>\n\nExecute compiled QuickJS function / binary code blob.\n");
 		rv = 1;
         goto fail;
