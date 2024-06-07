@@ -949,8 +949,8 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
 #define QUICK_JS_HAS_SCRIPTX_PATCH
 JSValue JS_NewWeakRef(JSContext* ctx, JSValueConst v);
 JSValue JS_GetWeakRef(JSContext* ctx, JSValueConst w);
-int JS_StrictEqual(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 
+BOOL JS_StrictEq(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 BOOL JS_SameValue(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 BOOL JS_SameValueZero(JSContext *ctx, JSValueConst op1, JSValueConst op2);
 

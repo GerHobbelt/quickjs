@@ -128,6 +128,7 @@ ifdef CONFIG_CLANG
       AR=$(CROSS_PREFIX)ar
     endif
   endif
+  LIB_FUZZING_ENGINE ?= "-fsanitize=fuzzer"
 else ifdef CONFIG_COSMO
   CONFIG_LTO=
   HOST_CC=gcc
@@ -158,6 +159,11 @@ DEFINES+=-DCONFIG_BIGNUM
 endif
 ifdef CONFIG_WIN32
 DEFINES+=-D__USE_MINGW_ANSI_STDIO # for standard snprintf behavior
+endif
+ifndef CONFIG_WIN32
+ifeq ($(shell $(CC) -o /dev/null compat/test-closefrom.c 2>/dev/null && echo 1),1)
+DEFINES+=-DHAVE_CLOSEFROM
+endif
 endif
 
 CFLAGS+=$(DEFINES)
@@ -285,6 +291,17 @@ qjsc$(EXE): $(OBJDIR)/qjsc.o $(QJS_LIB_OBJS)
 qjsd$(EXE): $(OBJDIR)/qjsd.o $(QJS_LIB_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+fuzz_eval: $(OBJDIR)/fuzz_eval.o $(OBJDIR)/fuzz_common.o libquickjs.fuzz.a
+	$(CC) $(CFLAGS_OPT) $^ -o fuzz_eval $(LIB_FUZZING_ENGINE)
+
+fuzz_compile: $(OBJDIR)/fuzz_compile.o $(OBJDIR)/fuzz_common.o libquickjs.fuzz.a
+	$(CC) $(CFLAGS_OPT) $^ -o fuzz_compile $(LIB_FUZZING_ENGINE)
+
+fuzz_regexp: $(OBJDIR)/fuzz_regexp.o $(OBJDIR)/libregexp.fuzz.o $(OBJDIR)/cutils.fuzz.o $(OBJDIR)/libunicode.fuzz.o
+	$(CC) $(CFLAGS_OPT) $^ -o fuzz_regexp $(LIB_FUZZING_ENGINE)
+
+libfuzzer: fuzz_eval fuzz_compile fuzz_regexp
+
 ifneq ($(CROSS_PREFIX),)
 
 $(QJSC): $(OBJDIR)/qjsc.host.o \
@@ -326,6 +343,9 @@ libquickjs.a: $(patsubst %.o, %.nolto.o, $(QJS_LIB_OBJS))
 	$(AR) rcs $@ $^
 endif # CONFIG_LTO
 
+libquickjs.fuzz.a: $(patsubst %.o, %.fuzz.o, $(QJS_LIB_OBJS))
+	$(AR) rcs $@ $^
+
 repl.c: $(QJSC) repl.js
 	$(QJSC) -c -o $@ -m repl.js
 
@@ -354,6 +374,9 @@ run-test262-32: $(patsubst %.o, %.m32.o, $(OBJDIR)/run-test262.o $(QJS_LIB_OBJS)
 $(OBJDIR)/%.o: %.c | $(OBJDIR)
 	$(CC) $(CFLAGS_OPT) -c -o $@ $<
 
+$(OBJDIR)/fuzz_%.o: fuzz/fuzz_%.c | $(OBJDIR)
+	$(CC) $(CFLAGS_OPT) -c -I. -o $@ $<
+
 $(OBJDIR)/%.host.o: %.c | $(OBJDIR)
 	$(HOST_CC) $(CFLAGS_OPT) -c -o $@ $<
 
@@ -372,6 +395,9 @@ $(OBJDIR)/%.m32s.o: %.c | $(OBJDIR)
 $(OBJDIR)/%.debug.o: %.c | $(OBJDIR)
 	$(CC) $(CFLAGS_DEBUG) -c -o $@ $<
 
+$(OBJDIR)/%.fuzz.o: %.c | $(OBJDIR)
+	$(CC) $(CFLAGS_OPT) -fsanitize=fuzzer-no-link -c -o $@ $<
+
 $(OBJDIR)/%.check.o: %.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -DCONFIG_CHECK_JSVALUE -c -o $@ $<
 
@@ -383,7 +409,7 @@ unicode_gen: $(OBJDIR)/unicode_gen.host.o $(OBJDIR)/cutils.host.o libunicode.c u
 
 clean:
 	rm -f repl.c qjscalc.c out.c
-	rm -f *.a *.o *.d *~ unicode_gen regexp_test $(PROGS)
+	rm -f *.a *.o *.d *~ unicode_gen regexp_test fuzz_eval fuzz_compile fuzz_regexp $(PROGS)
 	rm -f hello.c test_fib.c
 	rm -f examples/*.so tests/*.so
 	rm -rf $(OBJDIR)/ *.dSYM/ qjs-debug
