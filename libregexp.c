@@ -1935,7 +1935,11 @@ typedef struct REExecState {
     size_t count; /* only used for RE_EXEC_STATE_GREEDY_QUANT */
     const uint8_t *cptr;
     const uint8_t *pc;
+#ifdef STRICT_R_HEADERS
+    void *buf[];
+#else
     void *buf[0];
+#endif
 } REExecState;
 
 typedef struct {

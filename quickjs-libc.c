@@ -534,6 +534,9 @@ static JSModuleDef *js_module_loader_so(JSContext *ctx,
 #if defined(_WIN32)
     init = (JSInitModuleFunc*)GetProcAddress(hd, "js_init_module");
 #else
+#ifdef STRICT_R_HEADERS
+    *(void **)(&init) = dlsym(hd, "js_init_module");
+#else
     init = dlsym(hd, "js_init_module");
 #endif
     if (!init) {
@@ -3245,7 +3248,11 @@ typedef struct {
 
 typedef struct {
     int ref_count;
+#ifdef STRICT_R_HEADERS
+    uint64_t buf[];
+#else
     uint64_t buf[0];
+#endif
 } JSSABHeader;
 
 static JSClassID js_worker_class_id;
