@@ -17,7 +17,7 @@
 #define FILETIME_1970        116444736000000000ull /* seconds between 1/1/1601 and 1/1/1970 */
 #define HECTONANOSEC_PER_SEC 10000000ull
 
-int getntptimeofday(struct timespec *tp, struct timezone *z)
+static int getntptimeofday(struct timespec *tp, struct timezone *z)
 {
 	int res = 0;
 	union {
@@ -53,7 +53,7 @@ int getntptimeofday(struct timespec *tp, struct timezone *z)
 	return res;
 }
 
-int gettimeofday(struct timeval *p, struct timezone *z)
+int qjsport_gettimeofday(struct timeval *p, struct timezone *z)
 {
 	struct timespec tp;
 

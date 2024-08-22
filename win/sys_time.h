@@ -19,6 +19,10 @@ struct timezone {
 	int tz_dsttime;         /* type of DST correction */
 };
 
-int gettimeofday(struct timeval *tv, struct timezone *tz);
+#if defined(_MSC_VER)
+#define gettimeofday		qjsport_gettimeofday
+
+int qjsport_gettimeofday(struct timeval *tv, struct timezone *tz);
+#endif
 
 #endif
