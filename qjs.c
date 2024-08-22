@@ -36,7 +36,7 @@
 #elif defined(__FreeBSD__)
 #include <malloc_np.h> // for malloc_usable_size
 #include <unistd.h>
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__GLIBC__)
 #include <malloc.h>
 #include <unistd.h>
 #elif defined(__FreeBSD__)

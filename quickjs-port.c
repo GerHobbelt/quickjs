@@ -18,7 +18,7 @@
 #include <ftw.h>
 #include <dirent.h>
 #include <unistd.h>
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__GLIBC__)
 #include <malloc.h>
 #include <sys/time.h>
 #include <dirent.h>
@@ -181,7 +181,7 @@ int qjs_gettimezoneoffset(int64_t time)
 
 int64_t qjs_get_time_ms(void)
 {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__GLIBC__)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
@@ -195,7 +195,7 @@ int64_t qjs_get_time_ms(void)
 
 int64_t qjs_get_time_ns(void)
 {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__GLIBC__)
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (int64_t)ts.tv_sec * 1000000000 + (ts.tv_nsec);
@@ -431,7 +431,7 @@ extern force_inline size_t qjs_port_malloc_usable_size(const void *ptr)
     return _msize((void *)ptr);
 #elif defined(EMSCRIPTEN)
     return 0;
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__GLIBC__)
     return malloc_usable_size((void*)ptr);
 #else
     /* change this to `return 0;` if compilation fails */

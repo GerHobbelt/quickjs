@@ -115,6 +115,10 @@ typedef sig_t sighandler_t;
 
 JSModuleLoaderFunc* js_std_get_module_loader_func();
 
+#if !defined(PATH_MAX)
+#define PATH_MAX 4096
+#endif
+
 /* TODO:
    - add socket calls
 */
@@ -618,7 +622,7 @@ JS_BOOL js_module_set_import_meta(JSContext *ctx, JSValueConst func_val,
 #define NATIVE_LIBRARY_SUFFIX ".dll"
 #elif defined(__APPLE__)
 #define NATIVE_LIBRARY_SUFFIX ".dylib"
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__GLIBC__)
 #define NATIVE_LIBRARY_SUFFIX ".so"
 #endif
 JSModuleDef *js_module_loader(JSContext *ctx,
@@ -1149,7 +1153,7 @@ static JSValue js_std_file_tell(JSContext *ctx, JSValueConst this_val,
     int64_t pos;
     if (!f)
         return JS_EXCEPTION;
-#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24)
+#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24) || defined(__GLIBC__)
     pos = ftello(f);
 #else
     pos = ftell(f);
@@ -1172,7 +1176,7 @@ static JSValue js_std_file_seek(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     if (JS_ToInt32(ctx, &whence, argv[1]))
         return JS_EXCEPTION;
-#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24)
+#if defined(__linux__) && (!defined(ANDROID) || __ANDROID_API__ >= 24) || defined(__GLIBC__)
     ret = fseeko(f, pos, whence);
 #else
     ret = fseek(f, pos, whence);
