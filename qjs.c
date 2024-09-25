@@ -50,7 +50,7 @@
 
 #include "monolithic_examples.h"
 
-JSModuleLoaderFunc* js_std_get_module_loader_func();
+JSModuleLoaderFunc* js_std_get_module_loader_func(void);
 
 #define malloc(s) malloc_is_forbidden(s)
 #define free(p) free_is_forbidden(p)

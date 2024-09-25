@@ -89,7 +89,7 @@ void js_std_set_module_loader_func(JSModuleLoaderFunc*func) {
 module_loader_path = func;
 }
 
-JSModuleLoaderFunc* js_std_get_module_loader_func() {
+JSModuleLoaderFunc* js_std_get_module_loader_func(void) {
  return module_loader_path;
 }
 
