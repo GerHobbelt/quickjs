@@ -113,7 +113,7 @@ typedef sig_t sighandler_t;
 #define USE_WORKER  1
 #endif
 
-JSModuleLoaderFunc* js_std_get_module_loader_func();
+JSModuleLoaderFunc* js_std_get_module_loader_func(void);
 
 #if !defined(PATH_MAX)
 #define PATH_MAX 4096

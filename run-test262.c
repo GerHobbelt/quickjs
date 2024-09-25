@@ -1533,7 +1533,7 @@ void update_stats(JSRuntime *rt, const char *filename) {
 #undef update
 }
 
-static void run_test262_initialize() {
+static void run_test262_initialize(void) {
     JS_Initialize();
 #ifdef CONFIG_AGENT
     qjs_mutex_init(&agent_mutex);
@@ -1542,7 +1542,7 @@ static void run_test262_initialize() {
 #endif
 }
 
-static void run_test262_finalize() {
+static void run_test262_finalize(void) {
     JS_Finalize();
 #ifdef CONFIG_AGENT
     qjs_mutex_destroy(&agent_mutex);
