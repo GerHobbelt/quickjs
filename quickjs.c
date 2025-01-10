@@ -38,7 +38,11 @@
 #if defined(HAVE_UNISTD_H)
 #include <unistd.h>
 #endif
-#if defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#elif defined(__linux__) || defined(__CYGWIN__)
+#include <malloc.h>
+#elif defined(__FreeBSD__)
 #include <malloc_np.h> // for malloc_usable_size
 #elif defined(__OpenBSD__)
 #define malloc_usable_size js_malloc_usable_size_unknown

@@ -101,6 +101,11 @@ typedef sig_t sighandler_t;
 #endif
 #endif /* __APPLE__ */
 
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+extern char **environ;
+typedef sig_t sighandler_t;
+#endif
+
 #endif
 
 #include "cutils.h"
