@@ -36,6 +36,10 @@ jobs:
       - name: Run microbench
         run: |
           make microbench
+      - name: Run test262
+        run: |
+          make test2-bootstrap
+          make test2
 
   linux-lto:
     name: Linux LTO
@@ -214,6 +218,7 @@ jobs:
           submodules: true
       - name: Install MinGW and Wine
         run: |
+          sudo apt update
           sudo apt install -y wine mingw-w64
           cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll .
       - name: Setup Wine

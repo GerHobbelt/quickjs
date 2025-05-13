@@ -464,6 +464,10 @@ stats: qjs$(EXE)
 microbench: qjs$(EXE)
 	$(WINE) ./qjs$(EXE) --std tests/microbench.js
 
+test2-bootstrap:
+	git clone --depth 1 https://github.com/tc39/test262.git
+	(cd test262 && patch -p1 < ../tests/test262.patch && cd ..)
+
 ifeq ($(wildcard test262o/tests.txt),)
 test2o test2o-update:
 	@echo test262o tests not installed
