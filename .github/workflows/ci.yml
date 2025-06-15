@@ -36,6 +36,10 @@ jobs:
       - name: Run microbench
         run: |
           make microbench
+      - name: Run test262
+        run: |
+          make test2-bootstrap
+          make test2
 
   linux-lto:
     name: Linux LTO
@@ -55,6 +59,10 @@ jobs:
       - name: Run microbench
         run: |
           make microbench
+      - name: Run test262
+        run: |
+          make test2-bootstrap
+          make test2
 
   linux-32bit:
     name: Linux 32bit
@@ -138,6 +146,10 @@ jobs:
       - name: Run built-in tests
         run: |
           make test
+      - name: Run test262
+        run: |
+          make test2-bootstrap
+          make test2
 
   macos-asan:
     runs-on: macos-latest
@@ -202,6 +214,10 @@ jobs:
       - name: Run built-in tests
         run: |
           make CONFIG_COSMO=y test
+      - name: Run test262
+        run: |
+          make test2-bootstrap
+          make CONFIG_COSMO=y test2
 
   mingw-windows:
     name: MinGW Windows target
@@ -214,6 +230,7 @@ jobs:
           submodules: true
       - name: Install MinGW and Wine
         run: |
+          sudo apt update
           sudo apt install -y wine mingw-w64
           cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll .
       - name: Setup Wine
@@ -257,7 +274,6 @@ jobs:
       - name: Run microbench
         run: |
           make microbench
-
 
   qemu-alpine:
     runs-on: ubuntu-latest
