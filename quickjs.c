@@ -5354,6 +5354,10 @@ static JSValue JS_NewCFunction3(JSContext *ctx, JSCFunction *func,
     if (!name)
         name = "";
     name_atom = JS_NewAtom(ctx, name);
+    if (name_atom == JS_ATOM_NULL) {
+        JS_FreeValue(ctx, func_obj);
+        return JS_EXCEPTION;
+    }
     js_function_set_properties(ctx, func_obj, name_atom, length);
     JS_FreeAtom(ctx, name_atom);
     return func_obj;
@@ -6884,6 +6888,9 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
     const char *str1;
     JSObject *p;
 
+    if (!JS_IsObject(error_obj))
+        return; /* protection in the out of memory case */
+    
     js_dbuf_init(ctx, &dbuf);
     if (filename) {
         dbuf_printf(&dbuf, "    at %s", filename);
@@ -6891,13 +6898,17 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
             dbuf_printf(&dbuf, ":%d:%d", line_num, col_num);
         dbuf_putc(&dbuf, '\n');
         str = JS_NewString(ctx, filename);
+        if (JS_IsException(str))
+            return;
         /* Note: SpiderMonkey does that, could update once there is a standard */
-        JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_fileName, str,
-                               JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-        JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_lineNumber, JS_NewInt32(ctx, line_num),
-                               JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-        JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_columnNumber, JS_NewInt32(ctx, col_num),
-                               JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
+        if (JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_fileName, str,
+                                   JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE) < 0 ||
+            JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_lineNumber, JS_NewInt32(ctx, line_num),
+                                   JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE) < 0 ||
+            JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_columnNumber, JS_NewInt32(ctx, col_num),
+                                   JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE) < 0) {
+            return;
+        }
     }
     for(sf = ctx->rt->current_stack_frame; sf != NULL; sf = sf->prev_frame) {
         if (sf->js_mode & JS_MODE_BACKTRACE_BARRIER)
@@ -6982,9 +6993,9 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
         JS_DefinePropertyValue(ctx, obj, JS_ATOM_message,
                                JS_NewString(ctx, buf),
                                JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    }
-    if (add_backtrace) {
-        build_backtrace(ctx, obj, NULL, 0, 0, 0);
+        if (add_backtrace) {
+            build_backtrace(ctx, obj, NULL, 0, 0, 0);
+        }
     }
     ret = JS_Throw(ctx, obj);
     return ret;
@@ -8456,6 +8467,8 @@ JSValue JS_GetPropertyStr(JSContext *ctx, JSValueConst this_obj,
     JSAtom atom;
     JSValue ret;
     atom = JS_NewAtom(ctx, prop);
+    if (atom == JS_ATOM_NULL)
+        return JS_EXCEPTION;
     ret = JS_GetProperty(ctx, this_obj, atom);
     JS_FreeAtom(ctx, atom);
     return ret;
@@ -9275,6 +9288,10 @@ int JS_SetPropertyStr(JSContext *ctx, JSValueConst this_obj,
     JSAtom atom;
     int ret;
     atom = JS_NewAtom(ctx, prop);
+    if (atom == JS_ATOM_NULL) {
+        JS_FreeValue(ctx, val);
+        return -1;
+    }
     ret = JS_SetPropertyInternal(ctx, this_obj, atom, val, this_obj, JS_PROP_THROW);
     JS_FreeAtom(ctx, atom);
     return ret;
@@ -9831,6 +9848,10 @@ int JS_DefinePropertyValueStr(JSContext *ctx, JSValueConst this_obj,
     JSAtom atom;
     int ret;
     atom = JS_NewAtom(ctx, prop);
+    if (atom == JS_ATOM_NULL) {
+        JS_FreeValue(ctx, val);
+        return -1;
+    }
     ret = JS_DefinePropertyValue(ctx, this_obj, atom, val, flags);
     JS_FreeAtom(ctx, atom);
     return ret;
@@ -10543,6 +10564,15 @@ static inline js_limb_t js_limb_clz(js_limb_t a)
     return clz64(a);
 }
 #endif
+
+/* handle a = 0 too */
+static inline js_limb_t js_limb_safe_clz(js_limb_t a)
+{
+    if (a == 0)
+        return JS_LIMB_BITS;
+    else
+        return js_limb_clz(a);
+}
 
 static js_limb_t mp_add(js_limb_t *res, const js_limb_t *op1, const js_limb_t *op2,
                      js_limb_t n, js_limb_t carry)
@@ -11892,7 +11922,7 @@ static JSValue js_bigint_to_string1(JSContext *ctx, JSValueConst val, int radix)
             r = tmp;
         }
         log2_radix = 31 - clz32(radix); /* floor(log2(radix)) */
-        n_bits = r->len * JS_LIMB_BITS - js_limb_clz(r->tab[r->len - 1]);
+        n_bits = r->len * JS_LIMB_BITS - js_limb_safe_clz(r->tab[r->len - 1]);
         /* n_digits is exact only if radix is a power of
            two. Otherwise it is >= the exact number of digits */
         n_digits = (n_bits + log2_radix - 1) / log2_radix;
@@ -20973,6 +21003,7 @@ static __exception int js_parse_template_part(JSParseState *s, const uint8_t *p)
 {
     uint32_t c;
     StringBuffer b_s, *b = &b_s;
+    JSValue str;
 
     /* p points to the first byte of the template part */
     if (string_buffer_init(s->ctx, b, 32))
@@ -21015,9 +21046,12 @@ static __exception int js_parse_template_part(JSParseState *s, const uint8_t *p)
         if (string_buffer_putc(b, c))
             goto fail;
     }
+    str = string_buffer_end(b);
+    if (JS_IsException(str))
+        return -1;
     s->token.val = TOK_TEMPLATE;
     s->token.u.str.sep = c;
-    s->token.u.str.str = string_buffer_end(b);
+    s->token.u.str.str = str;
     s->buf_ptr = p;
     return 0;
 
@@ -21036,7 +21070,8 @@ static __exception int js_parse_string(JSParseState *s, int sep,
     uint32_t c;
     StringBuffer b_s, *b = &b_s;
     const uint8_t *p_escape;
-    
+    JSValue str;
+
     /* string */
     if (string_buffer_init(s->ctx, b, 32))
         goto fail;
@@ -21143,9 +21178,12 @@ static __exception int js_parse_string(JSParseState *s, int sep,
         if (string_buffer_putc(b, c))
             goto fail;
     }
+    str = string_buffer_end(b);
+    if (JS_IsException(str))
+        return -1;
     token->val = TOK_STRING;
     token->u.str.sep = c;
-    token->u.str.str = string_buffer_end(b);
+    token->u.str.str = str;
     *pp = p;
     return 0;
 
@@ -21173,6 +21211,7 @@ static __exception int js_parse_regexp(JSParseState *s)
     StringBuffer b_s, *b = &b_s;
     StringBuffer b2_s, *b2 = &b2_s;
     uint32_t c;
+    JSValue body_str, flags_str;
 
     p = s->buf_ptr;
     p++;
@@ -21254,9 +21293,17 @@ static __exception int js_parse_regexp(JSParseState *s)
         p = p_next;
     }
 
+    body_str = string_buffer_end(b);
+    flags_str = string_buffer_end(b2);
+    if (JS_IsException(body_str) ||
+        JS_IsException(flags_str)) {
+        JS_FreeValue(s->ctx, body_str);
+        JS_FreeValue(s->ctx, flags_str);
+        return -1;
+    }
     s->token.val = TOK_REGEXP;
-    s->token.u.regexp.body = string_buffer_end(b);
-    s->token.u.regexp.flags = string_buffer_end(b2);
+    s->token.u.regexp.body = body_str;
+    s->token.u.regexp.flags = flags_str;
     s->buf_ptr = p;
     return 0;
  fail:
@@ -21826,6 +21873,7 @@ static __exception int next_token(JSParseState *s)
 }
 
 /* 'c' is the first character. Return JS_ATOM_NULL in case of error */
+/* XXX: accept unicode identifiers as JSON5 ? */
 static JSAtom json_parse_ident(JSParseState *s, const uint8_t **pp, int c)
 {
     const uint8_t *p;
@@ -21901,11 +21949,22 @@ static int json_parse_string(JSParseState *s, const uint8_t **pp, int sep)
                     c = (c << 4) | h;
                 }
                 break;
+            case '\n':
+                if (s->ext_json)
+                    continue;
+                goto bad_escape;
+            case 'v':
+                if (s->ext_json) {
+                    c = '\v';
+                    break;
+                }
+                goto bad_escape;
             default:
                 if (c == sep)
                     break;
                 if (p > s->buf_end)
                     goto end_of_input;
+            bad_escape:
                 js_parse_error_pos(s, p - 1, "Bad escaped character");
                 goto fail;
             }
@@ -21945,8 +22004,23 @@ static int json_parse_number(JSParseState *s, const uint8_t **pp)
     if (*p == '+' || *p == '-')
         p++;
 
-    if (!is_digit(*p))
-        return js_parse_error_pos(s, p, "Unexpected token '%c'", *p_start);
+    if (!is_digit(*p)) {
+        if (s->ext_json) {
+            if (strstart((const char *)p, "Infinity", (const char **)&p)) {
+                d = 1.0 / 0.0;
+                if (*p_start == '-')
+                    d = -d;
+                goto done;
+            } else if (strstart((const char *)p, "NaN", (const char **)&p)) {
+                d = NAN;
+                goto done;
+            } else if (*p != '.') {
+                goto unexpected_token;
+            }
+        } else {
+            goto unexpected_token;
+        }
+    }
 
     if (p[0] == '0') {
         if (s->ext_json) {
@@ -21964,8 +22038,10 @@ static int json_parse_number(JSParseState *s, const uint8_t **pp)
             }
             if (radix != 10) {
                 /* prefix is present */
-                if (to_digit(*p) >= radix)
+                if (to_digit(*p) >= radix) {
+                unexpected_token:
                     return js_parse_error_pos(s, p, "Unexpected token '%c'", *p);
+                }
                 d = js_atod((const char *)p_start, (const char **)&p, 0,
                             JS_ATOD_INT_ONLY | JS_ATOD_ACCEPT_BIN_OCT, &atod_mem);
                 goto done;
@@ -22124,7 +22200,6 @@ static __exception int json_next_token(JSParseState *s)
     case 'Y': case 'Z':
     case '_':
     case '$':
-        /* identifier : only pure ascii characters are accepted */
         p++;
         atom = json_parse_ident(s, &p, c);
         if (atom == JS_ATOM_NULL)
@@ -22135,17 +22210,16 @@ static __exception int json_next_token(JSParseState *s)
         s->token.val = TOK_IDENT;
         break;
     case '+':
-        if (!s->ext_json || !is_digit(p[1]))
+        if (!s->ext_json)
             goto def_token;
         goto parse_number;
-    case '0':
-        if (is_digit(p[1]))
+    case '.':
+        if (s->ext_json && is_digit(p[1]))
+            goto parse_number;
+        else
             goto def_token;
-        goto parse_number;
     case '-':
-        if (!is_digit(p[1]))
-            goto def_token;
-        goto parse_number;
+    case '0':
     case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8':
     case '9':
@@ -22337,7 +22411,7 @@ BOOL JS_DetectModule(const char *input, size_t input_len)
 }
 
 static inline int get_prev_opcode(JSFunctionDef *fd) {
-    if (fd->last_opcode_pos < 0)
+    if (fd->last_opcode_pos < 0 || dbuf_error(&fd->byte_code))
         return OP_invalid;
     else
         return fd->byte_code.buf[fd->last_opcode_pos];
@@ -22402,7 +22476,11 @@ static void emit_op(JSParseState *s, uint8_t val)
 
 static void emit_atom(JSParseState *s, JSAtom name)
 {
-    emit_u32(s, JS_DupAtom(s->ctx, name));
+    DynBuf *bc = &s->cur_func->byte_code;
+    if (dbuf_realloc(bc, bc->size + 4))
+        return; /* not enough memory : don't duplicate the atom */
+    put_u32(bc->buf + bc->size, JS_DupAtom(s->ctx, name));
+    bc->size += 4;
 }
 
 static int update_label(JSFunctionDef *s, int label, int delta)
@@ -22416,29 +22494,33 @@ static int update_label(JSFunctionDef *s, int label, int delta)
     return ls->ref_count;
 }
 
-static int new_label_fd(JSFunctionDef *fd, int label)
+static int new_label_fd(JSFunctionDef *fd)
 {
+    int label;
     LabelSlot *ls;
 
-    if (label < 0) {
-        if (js_resize_array(fd->ctx, (void *)&fd->label_slots,
-                            sizeof(fd->label_slots[0]),
-                            &fd->label_size, fd->label_count + 1))
-            return -1;
-        label = fd->label_count++;
-        ls = &fd->label_slots[label];
-        ls->ref_count = 0;
-        ls->pos = -1;
-        ls->pos2 = -1;
-        ls->addr = -1;
-        ls->first_reloc = NULL;
-    }
+    if (js_resize_array(fd->ctx, (void *)&fd->label_slots,
+                        sizeof(fd->label_slots[0]),
+                        &fd->label_size, fd->label_count + 1))
+        return -1;
+    label = fd->label_count++;
+    ls = &fd->label_slots[label];
+    ls->ref_count = 0;
+    ls->pos = -1;
+    ls->pos2 = -1;
+    ls->addr = -1;
+    ls->first_reloc = NULL;
     return label;
 }
 
 static int new_label(JSParseState *s)
 {
-    return new_label_fd(s->cur_func, -1);
+    int label;
+    label = new_label_fd(s->cur_func);
+    if (unlikely(label < 0)) {
+        dbuf_set_error(&s->cur_func->byte_code);
+    }
+    return label;
 }
 
 /* don't update the last opcode and don't emit line number info */
@@ -22466,8 +22548,11 @@ static int emit_label(JSParseState *s, int label)
 static int emit_goto(JSParseState *s, int opcode, int label)
 {
     if (js_is_live_code(s)) {
-        if (label < 0)
+        if (label < 0) {
             label = new_label(s);
+            if (label < 0)
+                return -1;
+        }
         emit_op(s, opcode);
         emit_u32(s, label);
         s->cur_func->label_slots[label].ref_count++;
@@ -24508,6 +24593,8 @@ static __exception int get_lvalue(JSParseState *s, int *popcode, int *pscope,
         switch(opcode) {
         case OP_scope_get_var:
             label = new_label(s);
+            if (label < 0)
+                return -1;
             emit_op(s, OP_scope_make_ref);
             emit_atom(s, name);
             emit_u32(s, label);
@@ -24540,6 +24627,8 @@ static __exception int get_lvalue(JSParseState *s, int *popcode, int *pscope,
         switch(opcode) {
         case OP_scope_get_var:
             label = new_label(s);
+            if (label < 0)
+                return -1;
             emit_op(s, OP_scope_make_ref);
             emit_atom(s, name);
             emit_u32(s, label);
@@ -25582,6 +25671,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
         BOOL has_optional_chain = FALSE;
 
         if (s->token.val == TOK_QUESTION_MARK_DOT) {
+            if ((parse_flags & PF_POSTFIX_CALL) == 0)
+                return js_parse_error(s, "new keyword cannot be used with an optional chain");
             op_token_ptr = s->token.ptr;
             /* optional chaining */
             if (next_token(s))
@@ -28313,6 +28404,8 @@ JSModuleDef *JS_NewCModule(JSContext *ctx, const char *name_str,
     if (name == JS_ATOM_NULL)
         return NULL;
     m = js_new_module_def(ctx, name);
+    if (!m)
+        return NULL;
     m->init_func = func;
     return m;
 }
@@ -30616,6 +30709,8 @@ static void free_bytecode_atoms(JSRuntime *rt,
         case OP_FMT_atom_u16:
         case OP_FMT_atom_label_u8:
         case OP_FMT_atom_label_u16:
+            if ((pos + 1 + 4) > bc_len)
+                break; /* may happen if there is not enough memory when emiting bytecode */
             atom = get_u32(bc_buf + pos + 1);
             JS_FreeAtomRT(rt, atom);
             break;
@@ -31405,7 +31500,13 @@ static void var_object_test(JSContext *ctx, JSFunctionDef *s,
 {
     dbuf_putc(bc, get_with_scope_opcode(op));
     dbuf_put_u32(bc, JS_DupAtom(ctx, var_name));
-    *plabel_done = new_label_fd(s, *plabel_done);
+    if (*plabel_done < 0) {
+        *plabel_done = new_label_fd(s);
+        if (*plabel_done < 0) {
+            dbuf_set_error(bc);
+            return;
+        }
+    }
     dbuf_put_u32(bc, *plabel_done);
     dbuf_putc(bc, is_with);
     update_label(s, *plabel_done, 1);
@@ -32450,8 +32551,11 @@ static void instantiate_hoisted_definitions(JSContext *ctx, JSFunctionDef *s, Dy
        evaluating the module so that the exported functions are
        visible if there are cyclic module references */
     if (s->module) {
-        label_next = new_label_fd(s, -1);
-
+        label_next = new_label_fd(s);
+        if (label_next < 0) {
+            dbuf_set_error(bc);
+            return;
+        }
         /* if 'this' is true, initialize the global variables and return */
         dbuf_putc(bc, OP_push_this);
         dbuf_putc(bc, OP_if_false);
@@ -35262,7 +35366,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
     push_scope(s);  /* enter body scope */
     fd->body_scope = fd->scope_level;
 
-    if (s->token.val == TOK_ARROW) {
+    if (s->token.val == TOK_ARROW && func_type == JS_PARSE_FUNC_ARROW) {
         if (next_token(s))
             goto fail;
 
@@ -36301,6 +36405,8 @@ static int JS_WriteModule(BCWriterState *s, JSValueConst obj)
     for(i = 0; i < m->req_module_entries_count; i++) {
         JSReqModuleEntry *rme = &m->req_module_entries[i];
         bc_put_atom(s, rme->module_name);
+        if (JS_WriteObjectRec(s, rme->attributes))
+            goto fail;
     }
 
     bc_put_leb128(s, m->export_entries_count);
@@ -37300,8 +37406,13 @@ static JSValue JS_ReadModule(BCReaderState *s)
             goto fail;
         for(i = 0; i < m->req_module_entries_count; i++) {
             JSReqModuleEntry *rme = &m->req_module_entries[i];
+            JSValue val;
             if (bc_get_atom(s, &rme->module_name))
                 goto fail;
+            val = JS_ReadObjectRec(s);
+            if (JS_IsException(val))
+                goto fail;
+            rme->attributes = val;
         }
     }
 
@@ -37969,17 +38080,22 @@ static int JS_InstantiateFunctionListItem(JSContext *ctx, JSValueConst obj,
     return 0;
 }
 
-void JS_SetPropertyFunctionList(JSContext *ctx, JSValueConst obj,
-                                const JSCFunctionListEntry *tab, int len)
+int JS_SetPropertyFunctionList(JSContext *ctx, JSValueConst obj,
+                               const JSCFunctionListEntry *tab, int len)
 {
-    int i;
+    int i, ret;
 
     for (i = 0; i < len; i++) {
         const JSCFunctionListEntry *e = &tab[i];
         JSAtom atom = find_atom(ctx, e->name);
-        JS_InstantiateFunctionListItem(ctx, obj, atom, e);
+        if (atom == JS_ATOM_NULL)
+            return -1;
+        ret = JS_InstantiateFunctionListItem(ctx, obj, atom, e);
         JS_FreeAtom(ctx, atom);
+        if (ret)
+            return -1;
     }
+    return 0;
 }
 
 int JS_AddModuleExportList(JSContext *ctx, JSModuleDef *m,
@@ -44397,9 +44513,13 @@ static int getTimezoneOffset(int64_t time)
         time_t gm_ti, loc_ti;
 
         tm = gmtime(&ti);
+        if (!tm)
+            return 0;
         gm_ti = mktime(tm);
 
         tm = localtime(&ti);
+        if (!tm)
+            return 0;
         loc_ti = mktime(tm);
 
         res = (gm_ti - loc_ti) / 60;
@@ -45371,7 +45491,7 @@ static JSValue js_regexp_Symbol_match(JSContext *ctx, JSValueConst this_val,
             if (JS_IsException(matchStr))
                 goto exception;
             isEmpty = JS_IsEmptyString(matchStr);
-            if (JS_SetPropertyInt64(ctx, A, n++, matchStr) < 0)
+            if (JS_DefinePropertyValueInt64(ctx, A, n++, matchStr, JS_PROP_C_W_E | JS_PROP_THROW) < 0)
                 goto exception;
             if (isEmpty) {
                 int64_t thisIndex, nextIndex;
@@ -46189,6 +46309,12 @@ static JSValue json_parse_value(JSParseState *s)
             val = JS_NewBool(ctx, s->token.u.ident.atom == JS_ATOM_true);
         } else if (s->token.u.ident.atom == JS_ATOM_null) {
             val = JS_NULL;
+        } else if (s->token.u.ident.atom == JS_ATOM_NaN && s->ext_json) {
+            /* Note: json5 identifier handling is ambiguous e.g. is 
+               '{ NaN: 1 }' a valid JSON5 production ? */ 
+            val = JS_NewFloat64(s->ctx, NAN);
+        } else if (s->token.u.ident.atom == JS_ATOM_Infinity && s->ext_json) {
+            val = JS_NewFloat64(s->ctx, INFINITY);
         } else {
             goto def_token;
         }
