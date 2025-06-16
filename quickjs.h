@@ -1281,6 +1281,22 @@ typedef union JSCFunctionType {
                              int argc, JSValueConst *argv, int *pdone, int magic);
 } JSCFunctionType;
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4191) /* zero-sized array in struct */
+#endif
+
+// quick fix inline helper function(s) to help fix warning C4191: 'type cast': unsafe conversion from 'JSCFunctionMagic (__cdecl *)' to 'JSCFunction (__cdecl *)'
+
+static inline JSCFunction *JS_CastMagicToFunction(JSCFunctionMagic *func)
+{
+	return (JSCFunction *)func;
+}
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
 JSValue JS_NewCFunction2(JSContext *ctx, JSCFunction *func,
                          const char *name,
                          int length, JSCFunctionEnum cproto, int magic);
@@ -1301,7 +1317,7 @@ static inline JSValue JS_NewCFunctionMagic(JSContext *ctx, JSCFunctionMagic *fun
                                            const char *name,
                                            int length, JSCFunctionEnum cproto, int magic)
 {
-    return JS_NewCFunction2(ctx, (JSCFunction *)func, name, length, cproto, magic);
+    return JS_NewCFunction2(ctx, JS_CastMagicToFunction(func), name, length, cproto, magic);
 }
 void JS_SetConstructor(JSContext *ctx, JSValueConst func_obj,
                        JSValueConst proto);
