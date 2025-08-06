@@ -209,7 +209,7 @@ enum {
 
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT  (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
-static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];
+static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT] = { 0 };
 #define typed_array_size_log2(classid)  (typed_array_size_log2[(classid)- JS_CLASS_UINT8C_ARRAY])
 
 typedef enum JSErrorEnum {
@@ -1343,10 +1343,10 @@ static void _JS_AddIntrinsicCallSite(JSContext *ctx);
 
 static void JS_SetOpaqueInternal(JSValueConst obj, void *opaque);
 
-static const JSClassExoticMethods js_arguments_exotic_methods;
-static const JSClassExoticMethods js_string_exotic_methods;
-static const JSClassExoticMethods js_proxy_exotic_methods;
-static const JSClassExoticMethods js_module_ns_exotic_methods;
+static const JSClassExoticMethods js_arguments_exotic_methods = {NULL};
+static const JSClassExoticMethods js_string_exotic_methods = {NULL};
+static const JSClassExoticMethods js_proxy_exotic_methods = {NULL};
+static const JSClassExoticMethods js_module_ns_exotic_methods = {NULL};
 
 static inline bool double_is_int32(double d)
 {
