@@ -60,6 +60,7 @@ try_eval_module(
           return context.eval(code, "<eval>", JS_EVAL_TYPE_MODULE);
       } catch( const qjs::exception& ex)
       {
+		  (void)ex;
             //js_std_dump_error(ctx);
             auto exc = context.getException();
             std::cerr << (exc.isError() ? "Error: " : "Throw: ") << exc.toJSON() << std::endl;
@@ -137,6 +138,7 @@ int main(int argc, const char** argv)
          context.eval(str); //, "", JS_EVAL_TYPE_MODULE);
     } catch( const qjs::exception& ex)
     {
+		  (void)ex;
           //js_std_dump_error(ctx);
           auto exc = context.getException();
           std::cerr << (exc.isError() ? "Error: " : "Throw: ") << exc.toJSON() << std::endl;
