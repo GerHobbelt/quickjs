@@ -7,6 +7,60 @@
 #include "quickjs.h"
 #include "cutils.h"
 
+static JSValue eval(JSContext *ctx, const char *code)
+{
+    return JS_Eval(ctx, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+}
+
+static void cfunctions(void)
+{
+    uint32_t length;
+    const char *s;
+    JSValue ret;
+
+    JSRuntime *rt = JS_NewRuntime();
+    JSContext *ctx = JS_NewContext(rt);
+    JSValue cfunc = JS_NewCFunction(ctx, NULL, "cfunc", 42);
+    JSValue cfuncdata =
+        JS_NewCFunctionData2(ctx, NULL, "cfuncdata", /*length*/1337, /*magic*/0,
+                             /*data_len*/0, NULL);
+    JSValue global = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, global, "cfunc", cfunc);
+    JS_SetPropertyStr(ctx, global, "cfuncdata", cfuncdata);
+    JS_FreeValue(ctx, global);
+
+    ret = eval(ctx, "cfunc.name");
+    assert(!JS_IsException(ret));
+    assert(JS_IsString(ret));
+    s = JS_ToCString(ctx, ret);
+    JS_FreeValue(ctx, ret);
+    assert(s);
+    assert(!strcmp(s, "cfunc"));
+    JS_FreeCString(ctx, s);
+    ret = eval(ctx, "cfunc.length");
+    assert(!JS_IsException(ret));
+    assert(JS_IsNumber(ret));
+    assert(0 == JS_ToUint32(ctx, &length, ret));
+    assert(length == 42);
+
+    ret = eval(ctx, "cfuncdata.name");
+    assert(!JS_IsException(ret));
+    assert(JS_IsString(ret));
+    s = JS_ToCString(ctx, ret);
+    JS_FreeValue(ctx, ret);
+    assert(s);
+    assert(!strcmp(s, "cfuncdata"));
+    JS_FreeCString(ctx, s);
+    ret = eval(ctx, "cfuncdata.length");
+    assert(!JS_IsException(ret));
+    assert(JS_IsNumber(ret));
+    assert(0 == JS_ToUint32(ctx, &length, ret));
+    assert(length == 1337);
+
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+}
+
 #define MAX_TIME 10
 
 static int timeout_interrupt_handler(JSRuntime *rt, void *opaque)
@@ -30,7 +84,7 @@ static void sync_call(void)
     JSContext *ctx = JS_NewContext(rt);
     int time = 0;
     JS_SetInterruptHandler(rt, timeout_interrupt_handler, &time);
-    JSValue ret = JS_Eval(ctx, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+    JSValue ret = eval(ctx, code);
     assert(time > MAX_TIME);
     assert(JS_IsException(ret));
     JS_FreeValue(ctx, ret);
@@ -57,7 +111,7 @@ static void async_call(void)
     JSContext *ctx = JS_NewContext(rt);
     int time = 0;
     JS_SetInterruptHandler(rt, timeout_interrupt_handler, &time);
-    JSValue ret = JS_Eval(ctx, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+    JSValue ret = eval(ctx, code);
     assert(!JS_IsException(ret));
     JS_FreeValue(ctx, ret);
     assert(JS_IsJobPending(rt));
@@ -104,7 +158,7 @@ static void async_call_stack_overflow(void)
     JSValue global = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global, "save_value", JS_NewCFunction(ctx, save_value, "save_value", 1));
     JS_FreeValue(ctx, global);
-    JSValue ret = JS_Eval(ctx, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+    JSValue ret = eval(ctx, code);
     assert(!JS_IsException(ret));
     JS_FreeValue(ctx, ret);
     assert(JS_IsJobPending(rt));
@@ -127,20 +181,17 @@ static void raw_context_global_var(void)
     JSContext *ctx = JS_NewContextRaw(rt);
     JS_AddIntrinsicEval(ctx);
     {
-        static const char code[] = "globalThis";
-        JSValue ret = JS_Eval(ctx, code, strlen(code), "*", JS_EVAL_TYPE_GLOBAL);
+        JSValue ret = eval(ctx, "globalThis");
         assert(JS_IsException(ret));
         JS_FreeValue(ctx, ret);
     }
     {
-        static const char code[] = "var x = 42";
-        JSValue ret = JS_Eval(ctx, code, strlen(code), "*", JS_EVAL_TYPE_GLOBAL);
+        JSValue ret = eval(ctx, "var x = 42");
         assert(JS_IsUndefined(ret));
         JS_FreeValue(ctx, ret);
     }
     {
-        static const char code[] = "function f() {}";
-        JSValue ret = JS_Eval(ctx, code, strlen(code), "*", JS_EVAL_TYPE_GLOBAL);
+        JSValue ret = eval(ctx, "function f() {}");
         assert(JS_IsUndefined(ret));
         JS_FreeValue(ctx, ret);
     }
@@ -153,15 +204,13 @@ static void is_array(void)
     JSRuntime *rt = JS_NewRuntime();
     JSContext *ctx = JS_NewContext(rt);
     {
-        static const char code[] = "[]";
-        JSValue ret = JS_Eval(ctx, code, strlen(code), "*", JS_EVAL_TYPE_GLOBAL);
+        JSValue ret = eval(ctx, "[]");
         assert(!JS_IsException(ret));
         assert(JS_IsArray(ret));
         JS_FreeValue(ctx, ret);
     }
     {
-        static const char code[] = "new Proxy([], {})";
-        JSValue ret = JS_Eval(ctx, code, strlen(code), "*", JS_EVAL_TYPE_GLOBAL);
+        JSValue ret = eval(ctx, "new Proxy([], {})");
         assert(!JS_IsException(ret));
         assert(!JS_IsArray(ret));
         assert(JS_IsProxy(ret));
@@ -285,17 +334,17 @@ function addItem() { \
     JSRuntime *rt = JS_NewRuntime();
     JSContext *ctx = JS_NewContext(rt);
 
-    JSValue ret = JS_Eval(ctx, init_code, strlen(init_code), "<input>", JS_EVAL_TYPE_GLOBAL);
+    JSValue ret = eval(ctx, init_code);
     assert(!JS_IsException(ret));
 
-    JSValue ret_test = JS_Eval(ctx, test_code, strlen(test_code), "<input>", JS_EVAL_TYPE_GLOBAL);
+    JSValue ret_test = eval(ctx, test_code);
     assert(!JS_IsException(ret_test));
     JS_RunGC(rt);
     JSMemoryUsage memory_usage;
     JS_ComputeMemoryUsage(rt, &memory_usage);
 
     for (int i = 0; i < 3; i++) {
-        JSValue ret_test2 = JS_Eval(ctx, test_code, strlen(test_code), "<input>", JS_EVAL_TYPE_GLOBAL);
+        JSValue ret_test2 = eval(ctx, test_code);
         assert(!JS_IsException(ret_test2));
         JS_RunGC(rt);
         JSMemoryUsage memory_usage2;
@@ -545,8 +594,111 @@ static void new_errors(void)
     JS_FreeRuntime(rt);
 }
 
+static int gop_get_own_property(JSContext *ctx, JSPropertyDescriptor *desc,
+                                JSValueConst obj, JSAtom prop)
+{
+    const char *name;
+    int found;
+
+    found = 0;
+    name = JS_AtomToCString(ctx, prop);
+    if (!name)
+        return -1;
+    if (!strcmp(name, "answer")) {
+        found = 1;
+        *desc = (JSPropertyDescriptor){
+            .value = JS_NewInt32(ctx, 42),
+            .flags = JS_PROP_C_W_E | JS_PROP_HAS_VALUE,
+        };
+    }
+    JS_FreeCString(ctx, name);
+    return found;
+}
+
+static void global_object_prototype(void)
+{
+    static const char code[] = "answer";
+    JSValue global_object, proto, ret;
+    JSClassID class_id;
+    JSRuntime *rt;
+    JSContext *ctx;
+    int32_t answer;
+    int res;
+
+    {
+        rt = JS_NewRuntime();
+        ctx = JS_NewContext(rt);
+        proto = JS_NewObject(ctx);
+        assert(JS_IsObject(proto));
+        JSCFunctionListEntry prop = JS_PROP_INT32_DEF("answer", 42, JS_PROP_C_W_E);
+        JS_SetPropertyFunctionList(ctx, proto, &prop, 1);
+        global_object = JS_GetGlobalObject(ctx);
+        res = JS_SetPrototype(ctx, global_object, proto);
+        assert(res == true);
+        JS_FreeValue(ctx, global_object);
+        JS_FreeValue(ctx, proto);
+        ret = eval(ctx, code);
+        assert(!JS_IsException(ret));
+        assert(JS_IsNumber(ret));
+        res = JS_ToInt32(ctx, &answer, ret);
+        assert(res == 0);
+        assert(answer == 42);
+        JS_FreeValue(ctx, ret);
+        JS_FreeContext(ctx);
+        JS_FreeRuntime(rt);
+    }
+    {
+        JSClassExoticMethods exotic = (JSClassExoticMethods){
+            .get_own_property = gop_get_own_property,
+        };
+        JSClassDef def = (JSClassDef){
+            .class_name = "Global Object",
+            .exotic = &exotic,
+        };
+        rt = JS_NewRuntime();
+        class_id = 0;
+        JS_NewClassID(rt, &class_id);
+        res = JS_NewClass(rt, class_id, &def);
+        assert(res == 0);
+        ctx = JS_NewContext(rt);
+        proto = JS_NewObjectClass(ctx, class_id);
+        assert(JS_IsObject(proto));
+        global_object = JS_GetGlobalObject(ctx);
+        res = JS_SetPrototype(ctx, global_object, proto);
+        assert(res == true);
+        JS_FreeValue(ctx, global_object);
+        JS_FreeValue(ctx, proto);
+        ret = eval(ctx, code);
+        assert(!JS_IsException(ret));
+        assert(JS_IsNumber(ret));
+        res = JS_ToInt32(ctx, &answer, ret);
+        assert(res == 0);
+        assert(answer == 42);
+        JS_FreeValue(ctx, ret);
+        JS_FreeContext(ctx);
+        JS_FreeRuntime(rt);
+    }
+}
+
+// https://github.com/quickjs-ng/quickjs/issues/1178
+static void slice_string_tocstring(void)
+{
+    JSRuntime *rt = JS_NewRuntime();
+    JSContext *ctx = JS_NewContext(rt);
+    JSValue ret = eval(ctx, "'.'.repeat(16384).slice(1, -1)");
+    assert(!JS_IsException(ret));
+    assert(JS_IsString(ret));
+    const char *str = JS_ToCString(ctx, ret);
+    assert(strlen(str) == 16382);
+    JS_FreeCString(ctx, str);
+    JS_FreeValue(ctx, ret);
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+}
+
 int main(void)
 {
+    cfunctions();
     sync_call();
     async_call();
     async_call_stack_overflow();
@@ -558,5 +710,7 @@ int main(void)
     promise_hook();
     dump_memory_usage();
     new_errors();
+    global_object_prototype();
+    slice_string_tocstring();
     return 0;
 }
