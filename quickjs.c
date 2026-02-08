@@ -40,7 +40,6 @@
 #include <intrin.h>
 #endif
 #include <time.h>
-#include <fenv.h>
 #include <math.h>
 
 #ifdef _MSC_VER
@@ -88,7 +87,7 @@
 // atomic_store etc. are completely busted in recent versions of tcc;
 // somehow the compiler forgets to load |ptr| into %rdi when calling
 // the __atomic_*() helpers in its lib/stdatomic.c and lib/atomic.S
-#if !defined(__TINYC__) && !defined(EMSCRIPTEN) && !defined(__wasi__) && !__STDC_NO_ATOMICS__
+#if !defined(__TINYC__) && !defined(EMSCRIPTEN) && !defined(__wasi__) && !__STDC_NO_ATOMICS__ && !defined(__DJGPP)
 #include "quickjs-c-atomics.h"
 #define CONFIG_ATOMICS
 #endif
@@ -4252,6 +4251,33 @@ JSValue JS_NewAtomString(JSContext *ctx, const char *str)
     return val;
 }
 
+static JSValue js_force_tostring(JSContext *ctx, JSValueConst val1)
+{
+    JSObject *p;
+    JSValue val;
+
+    if (JS_VALUE_GET_TAG(val1) == JS_TAG_STRING)
+        return js_dup(val1);
+    val = JS_ToString(ctx, val1);
+    if (!JS_IsException(val))
+        return val;
+    // Stringification can fail when there is an exception pending,
+    // e.g. a stack overflow InternalError. Special-case exception
+    // objects to make debugging easier, look up the .message property
+    // and stringify that.
+    if (JS_VALUE_GET_TAG(val1) != JS_TAG_OBJECT)
+        return JS_EXCEPTION;
+    p = JS_VALUE_GET_OBJ(val1);
+    if (p->class_id != JS_CLASS_ERROR)
+        return JS_EXCEPTION;
+    val = JS_GetProperty(ctx, val1, JS_ATOM_message);
+    if (JS_VALUE_GET_TAG(val) != JS_TAG_STRING) {
+        JS_FreeValue(ctx, val);
+        return JS_EXCEPTION;
+    }
+    return val;
+}
+
 /* return (NULL, 0) if exception. */
 /* return pointer into a JSString with a live ref_count */
 /* cesu8 determines if non-BMP1 codepoints are encoded as 1 or 2 utf-8 sequences */
@@ -4261,36 +4287,11 @@ const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1,
     JSValue val;
     JSString *str, *str_new;
     int pos, len, c, c1;
-    JSObject *p;
     uint8_t *q;
 
-    if (JS_VALUE_GET_TAG(val1) == JS_TAG_STRING) {
-        val = js_dup(val1);
-        goto go;
-    }
-
-    val = JS_ToString(ctx, val1);
-    if (!JS_IsException(val))
-        goto go;
-
-    // Stringification can fail when there is an exception pending,
-    // e.g. a stack overflow InternalError. Special-case exception
-    // objects to make debugging easier, look up the .message property
-    // and stringify that.
-    if (JS_VALUE_GET_TAG(val1) != JS_TAG_OBJECT)
+    val = js_force_tostring(ctx, val1);
+    if (JS_IsException(val))
         goto fail;
-
-    p = JS_VALUE_GET_OBJ(val1);
-    if (p->class_id != JS_CLASS_ERROR)
-        goto fail;
-
-    val = JS_GetProperty(ctx, val1, JS_ATOM_message);
-    if (JS_VALUE_GET_TAG(val) != JS_TAG_STRING) {
-        JS_FreeValue(ctx, val);
-        goto fail;
-    }
-
-go:
     str = JS_VALUE_GET_STRING(val);
     len = str->len;
     if (!str->is_wide_char) {
@@ -4366,26 +4367,68 @@ go:
     if (plen)
         *plen = str_new->len;
     return (const char *)str8(str_new);
- fail:
+fail:
     if (plen)
         *plen = 0;
     return NULL;
 }
 
-void JS_FreeCString(JSContext *ctx, const char *ptr)
+const uint16_t *JS_ToCStringTwoByteLen(JSContext *ctx, size_t *plen,
+                                       JSValueConst val1)
 {
-    if (!ptr)
-        return;
-    /* purposely removing constness */
-    JS_FreeValue(ctx, JS_MKPTR(JS_TAG_STRING, (JSString *)ptr - 1));
+    JSString *p, *q;
+    uint32_t i;
+    JSValue v;
+
+    v = js_force_tostring(ctx, val1);
+    if (JS_IsException(v))
+        goto fail;
+    p = JS_VALUE_GET_STRING(v);
+    if (!p->is_wide_char) {
+        q = js_alloc_string(ctx, p->len, /*is_wide_char*/true);
+        if (!q)
+            goto fail;
+        for (i = 0; i < p->len; i++)
+            str16(q)[i] = str8(p)[i];
+        JS_FreeValue(ctx, v);
+        p = q;
+    }
+    if (plen)
+        *plen = p->len;
+    return str16(p);
+fail:
+    JS_FreeValue(ctx, v);
+    if (plen)
+        *plen = 0;
+    return NULL;
 }
 
-void JS_FreeCStringRT(JSRuntime *rt, const char *ptr)
+static void js_free_cstring(JSRuntime *rt, const void *ptr)
 {
     if (!ptr)
         return;
     /* purposely removing constness */
     JS_FreeValueRT(rt, JS_MKPTR(JS_TAG_STRING, (JSString *)ptr - 1));
+}
+
+void JS_FreeCString(JSContext *ctx, const char *ptr)
+{
+    return js_free_cstring(ctx->rt, ptr);
+}
+
+void JS_FreeCStringRT(JSRuntime *rt, const char *ptr)
+{
+    return js_free_cstring(rt, ptr);
+}
+
+void JS_FreeCStringTwoByte(JSContext *ctx, const uint16_t *ptr)
+{
+    return js_free_cstring(ctx->rt, ptr);
+}
+
+void JS_FreeCStringTwoByteRT(JSRuntime *rt, const uint16_t *ptr)
+{
+    return js_free_cstring(rt, ptr);
 }
 
 static int memcmp16_8(const uint16_t *src1, const uint8_t *src2, int len)
@@ -12342,7 +12385,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
         if (!(flags & ATOD_INT_ONLY) &&
             (atod_type == ATOD_TYPE_FLOAT64) &&
             js__strstart(p, "Infinity", &p)) {
-            double d = INF;
+            double d = INFINITY;
             if (is_neg)
                 d = -d;
             val = js_float64(d);
@@ -42874,12 +42917,14 @@ static const JSCFunctionListEntry js_number_funcs[] = {
     JS_CFUNC_DEF("isSafeInteger", 1, js_number_isSafeInteger ),
     JS_PROP_DOUBLE_DEF("MAX_VALUE", 1.7976931348623157e+308, 0 ),
     JS_PROP_DOUBLE_DEF("MIN_VALUE", 5e-324, 0 ),
-    JS_PROP_U2D_DEF("NaN", 0x7FF8ull<<48, 0 ), // workaround for msvc
-    JS_PROP_DOUBLE_DEF("NEGATIVE_INFINITY", -INFINITY, 0 ),
-    JS_PROP_DOUBLE_DEF("POSITIVE_INFINITY", INFINITY, 0 ),
     JS_PROP_DOUBLE_DEF("EPSILON", 2.220446049250313e-16, 0 ), /* ES6 */
     JS_PROP_DOUBLE_DEF("MAX_SAFE_INTEGER", 9007199254740991.0, 0 ), /* ES6 */
     JS_PROP_DOUBLE_DEF("MIN_SAFE_INTEGER", -9007199254740991.0, 0 ), /* ES6 */
+    // workarounds for msvc & djgpp where NAN and INFINITY
+    // are not compile-time expressions
+    JS_PROP_U2D_DEF("NaN",               0x7FF8ull<<48, 0 ),
+    JS_PROP_U2D_DEF("NEGATIVE_INFINITY", 0xFFF0ull<<48, 0 ),
+    JS_PROP_U2D_DEF("POSITIVE_INFINITY", 0x7FF0ull<<48, 0 ),
 };
 
 static JSValue js_thisNumberValue(JSContext *ctx, JSValueConst this_val)
@@ -44865,7 +44910,7 @@ static double js_fmin(double a, double b)
         a1.u64 |= b1.u64;
         return a1.d;
     } else {
-        return fmin(a, b);
+        return a < b ? a : b;
     }
 }
 
@@ -44879,7 +44924,7 @@ static double js_fmax(double a, double b)
         a1.u64 &= b1.u64;
         return a1.d;
     } else {
-        return fmax(a, b);
+        return a < b ? b : a;
     }
 }
 
@@ -44892,7 +44937,7 @@ static JSValue js_math_min_max(JSContext *ctx, JSValueConst this_val,
     uint32_t tag;
 
     if (unlikely(argc == 0)) {
-        return js_float64(is_max ? NEG_INF : INF);
+        return js_float64(is_max ? -INFINITY : INFINITY);
     }
 
     tag = JS_VALUE_GET_TAG(argv[0]);
