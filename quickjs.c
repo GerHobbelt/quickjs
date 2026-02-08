@@ -2860,7 +2860,7 @@ static int JS_InitAtoms(JSRuntime *rt)
     return 0;
 }
 
-static JSAtom JS_DupAtomRT(JSRuntime *rt, JSAtom v)
+JSAtom JS_DupAtomRT(JSRuntime *rt, JSAtom v)
 {
     JSAtomStruct *p;
 
@@ -4378,6 +4378,14 @@ void JS_FreeCString(JSContext *ctx, const char *ptr)
         return;
     /* purposely removing constness */
     JS_FreeValue(ctx, JS_MKPTR(JS_TAG_STRING, (JSString *)ptr - 1));
+}
+
+void JS_FreeCStringRT(JSRuntime *rt, const char *ptr)
+{
+    if (!ptr)
+        return;
+    /* purposely removing constness */
+    JS_FreeValueRT(rt, JS_MKPTR(JS_TAG_STRING, (JSString *)ptr - 1));
 }
 
 static int memcmp16_8(const uint16_t *src1, const uint8_t *src2, int len)
@@ -48715,23 +48723,19 @@ static const JSClassExoticMethods js_proxy_exotic_methods = {
     .set_property = js_proxy_set,
 };
 
-static JSValue js_proxy_constructor(JSContext *ctx, JSValueConst this_val,
-                                    int argc, JSValueConst *argv)
+JSValue JS_NewProxy(JSContext *ctx, JSValueConst target, JSValueConst handler)
 {
-    JSValueConst target, handler;
-    JSValue obj;
     JSProxyData *s;
+    JSValue obj;
 
-    target = argv[0];
-    handler = argv[1];
     if (JS_VALUE_GET_TAG(target) != JS_TAG_OBJECT ||
-        JS_VALUE_GET_TAG(handler) != JS_TAG_OBJECT)
+        JS_VALUE_GET_TAG(handler) != JS_TAG_OBJECT) {
         return JS_ThrowTypeErrorNotAnObject(ctx);
-
+    }
     obj = JS_NewObjectProtoClass(ctx, JS_NULL, JS_CLASS_PROXY);
     if (JS_IsException(obj))
         return obj;
-    s = js_malloc(ctx, sizeof(JSProxyData));
+    s = js_malloc(ctx, sizeof(*s));
     if (!s) {
         JS_FreeValue(ctx, obj);
         return JS_EXCEPTION;
@@ -48743,6 +48747,12 @@ static JSValue js_proxy_constructor(JSContext *ctx, JSValueConst this_val,
     JS_SetOpaqueInternal(obj, s);
     JS_SetConstructorBit(ctx, obj, JS_IsConstructor(ctx, target));
     return obj;
+}
+
+static JSValue js_proxy_constructor(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    return JS_NewProxy(ctx, argv[0], argv[1]);
 }
 
 static JSValue js_proxy_revoke(JSContext *ctx, JSValueConst this_val,
@@ -50568,7 +50578,7 @@ JSPromiseStateEnum JS_PromiseState(JSContext *ctx, JSValueConst promise)
 {
     JSPromiseData *s = JS_GetOpaque(promise, JS_CLASS_PROMISE);
     if (!s)
-        return -1;
+        return JS_PROMISE_NOT_A_PROMISE;
     return s->promise_state;
 }
 

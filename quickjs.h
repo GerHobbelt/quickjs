@@ -542,6 +542,7 @@ JS_EXTERN JSAtom JS_NewAtomLen(JSContext *ctx, const char *str, size_t len);
 JS_EXTERN JSAtom JS_NewAtom(JSContext *ctx, const char *str);
 JS_EXTERN JSAtom JS_NewAtomUInt32(JSContext *ctx, uint32_t n);
 JS_EXTERN JSAtom JS_DupAtom(JSContext *ctx, JSAtom v);
+JS_EXTERN JSAtom JS_DupAtomRT(JSRuntime *rt, JSAtom v);
 JS_EXTERN void JS_FreeAtom(JSContext *ctx, JSAtom v);
 JS_EXTERN void JS_FreeAtomRT(JSRuntime *rt, JSAtom v);
 JS_EXTERN JSValue JS_AtomToValue(JSContext *ctx, JSAtom atom);
@@ -819,6 +820,7 @@ static inline const char *JS_ToCString(JSContext *ctx, JSValueConst val1)
     return JS_ToCStringLen2(ctx, NULL, val1, 0);
 }
 JS_EXTERN void JS_FreeCString(JSContext *ctx, const char *ptr);
+JS_EXTERN void JS_FreeCStringRT(JSRuntime *rt, const char *ptr);
 
 JS_EXTERN JSValue JS_NewObjectProtoClass(JSContext *ctx, JSValueConst proto,
                                          JSClassID class_id);
@@ -861,6 +863,8 @@ JS_EXTERN bool JS_IsArray(JSValueConst val);
 JS_EXTERN bool JS_IsProxy(JSValueConst val);
 JS_EXTERN JSValue JS_GetProxyTarget(JSContext *ctx, JSValueConst proxy);
 JS_EXTERN JSValue JS_GetProxyHandler(JSContext *ctx, JSValueConst proxy);
+JS_EXTERN JSValue JS_NewProxy(JSContext *ctx, JSValueConst target,
+                              JSValueConst handler);
 
 JS_EXTERN JSValue JS_NewDate(JSContext *ctx, double epoch_ms);
 JS_EXTERN bool JS_IsDate(JSValueConst v);
@@ -1009,7 +1013,9 @@ typedef struct {
 JS_EXTERN void JS_SetSharedArrayBufferFunctions(JSRuntime *rt, const JSSharedArrayBufferFunctions *sf);
 
 typedef enum JSPromiseStateEnum {
-    JS_PROMISE_PENDING,
+    // argument to JS_PromiseState() was not in fact a promise
+    JS_PROMISE_NOT_A_PROMISE = -1,
+    JS_PROMISE_PENDING       =  0,
     JS_PROMISE_FULFILLED,
     JS_PROMISE_REJECTED,
 } JSPromiseStateEnum;
