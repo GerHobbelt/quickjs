@@ -18348,6 +18348,18 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 sp--;
             }
             BREAK;
+        CASE(OP_set_loc_check):
+            {
+                int idx;
+                idx = get_u16(pc);
+                pc += 2;
+                if (unlikely(JS_IsUninitialized(var_buf[idx]))) {
+                    JS_ThrowReferenceErrorUninitialized2(ctx, b, idx, FALSE);
+                    goto exception;
+                }
+                set_value(ctx, &var_buf[idx], JS_DupValue(ctx, sp[-1]));
+            }
+            BREAK;
         CASE(OP_put_loc_check_init):
             {
                 int idx;
@@ -23366,8 +23378,10 @@ static int cpool_add(JSParseState *s, JSValue val)
     JSFunctionDef *fd = s->cur_func;
 
     if (js_resize_array(s->ctx, (void *)&fd->cpool, sizeof(fd->cpool[0]),
-                        &fd->cpool_size, fd->cpool_count + 1))
+                        &fd->cpool_size, fd->cpool_count + 1)) {
+        JS_FreeValue(s->ctx, val);
         return -1;
+    }
     fd->cpool[fd->cpool_count++] = val;
     return fd->cpool_count - 1;
 }
@@ -29957,6 +29971,7 @@ static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
 
     if (JS_IsException(func_obj))
         return -1;
+    m->func_obj = func_obj;
     b = JS_VALUE_GET_PTR(bfunc);
     func_obj = js_closure2(ctx, func_obj, b, NULL, NULL, TRUE, m);
     if (JS_IsException(func_obj)) {
@@ -29964,7 +29979,6 @@ static int js_create_module_bytecode_function(JSContext *ctx, JSModuleDef *m)
         JS_FreeValue(ctx, func_obj);
         return -1;
     }
-    m->func_obj = func_obj;
     return 0;
 }
 
@@ -34757,7 +34771,7 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
                 /* Transformation: dup put_x(n) drop -> put_x(n) */
                 int op1, line2 = -1;
                 /* Transformation: dup put_x(n) -> set_x(n) */
-                if (code_match(&cc, pos_next, M3(OP_put_loc, OP_put_arg, OP_put_var_ref), -1, -1)) {
+                if (code_match(&cc, pos_next, M4(OP_put_loc, OP_put_loc_check, OP_put_arg, OP_put_var_ref), -1, -1)) {
                     if (cc.line_num >= 0) line_num = cc.line_num;
                     op1 = cc.op + 1;  /* put_x -> set_x */
                     pos_next = cc.pos;
@@ -34865,6 +34879,7 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
             goto no_change;
 #endif
         case OP_put_loc:
+        case OP_put_loc_check:
         case OP_put_arg:
         case OP_put_var_ref:
             if (OPTIMIZE) {
@@ -45142,7 +45157,7 @@ static JSValue js_string_match(JSContext *ctx, JSValueConst this_val,
     if (JS_IsUndefined(O) || JS_IsNull(O))
         return JS_ThrowTypeError(ctx, "cannot convert to object");
 
-    if (!JS_IsUndefined(regexp) && !JS_IsNull(regexp)) {
+    if (JS_IsObject(regexp)) {
         matcher = JS_GetProperty(ctx, regexp, atom);
         if (JS_IsException(matcher))
             return JS_EXCEPTION;
@@ -45322,7 +45337,7 @@ static JSValue js_string_replace(JSContext *ctx, JSValueConst this_val,
     replaceValue_str = JS_UNDEFINED;
     repl_str = JS_UNDEFINED;
 
-    if (!JS_IsUndefined(searchValue) && !JS_IsNull(searchValue)) {
+    if (JS_IsObject(searchValue)) {
         JSValue replacer;
         if (is_replaceAll) {
             if (check_regexp_g_flag(ctx, searchValue) < 0)
@@ -45433,7 +45448,7 @@ static JSValue js_string_split(JSContext *ctx, JSValueConst this_val,
     A = JS_UNDEFINED;
     R = JS_UNDEFINED;
 
-    if (!JS_IsUndefined(separator) && !JS_IsNull(separator)) {
+    if (JS_IsObject(separator)) {
         JSValue splitter;
         splitter = JS_GetProperty(ctx, separator, JS_ATOM_Symbol_split);
         if (JS_IsException(splitter))
