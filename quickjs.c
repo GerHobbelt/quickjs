@@ -1178,8 +1178,8 @@ static int JS_ToUint8ClampFree(JSContext *ctx, int32_t *pres, JSValue val);
 static JSValue js_new_string8_len(JSContext *ctx, const char *buf, int len);
 static JSValue js_compile_regexp(JSContext *ctx, JSValueConst pattern,
                                  JSValueConst flags);
-static JSValue js_regexp_constructor_internal(JSContext *ctx, JSValueConst ctor,
-                                              JSValue pattern, JSValue bc);
+static JSValue js_regexp_set_internal(JSContext *ctx, JSValue obj,
+                                      JSValue pattern, JSValue bc);
 static void gc_decref(JSRuntime *rt);
 static int JS_NewClass1(JSRuntime *rt, JSClassID class_id,
                         const JSClassDef *class_def, JSAtom name);
@@ -5240,7 +5240,7 @@ static JSValue JS_NewObjectFromShape(JSContext *ctx, JSShape *sh, JSClassID clas
     case JS_CLASS_REGEXP:
         p->u.regexp.pattern = NULL;
         p->u.regexp.bytecode = NULL;
-        goto set_exotic;
+        break;
     default:
     set_exotic:
         if (ctx->rt->class_array[class_id].exotic) {
@@ -13428,6 +13428,11 @@ static void js_print_regexp(JSPrintValueState *s, JSObject *p1)
     int i, n, c, c2, bra, flags;
     static const char regexp_flags[] = { 'g', 'i', 'm', 's', 'u', 'y', 'd', 'v' };
 
+    if (!re->pattern || !re->bytecode) {
+        /* the regexp fields are zeroed at init */
+        js_puts(s, "[uninitialized_regexp]");
+        return;
+    }
     p = re->pattern;
     js_putc(s, '/');
     if (p->len == 0) {
@@ -17640,8 +17645,13 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
         CASE(OP_regexp):
             {
-                sp[-2] = js_regexp_constructor_internal(ctx, JS_UNDEFINED,
-                                                        sp[-2], sp[-1]);
+                JSValue obj;
+                obj = JS_NewObjectClass(ctx, JS_CLASS_REGEXP);
+                if (JS_IsException(obj))
+                    goto exception;
+                sp[-2] = js_regexp_set_internal(ctx, obj, sp[-2], sp[-1]);
+                if (JS_IsException(sp[-2]))
+                    goto exception;
                 sp--;
             }
             BREAK;
@@ -30251,20 +30261,20 @@ static JSValue js_async_module_execution_rejected(JSContext *ctx, JSValueConst t
     module->status = JS_MODULE_STATUS_EVALUATED;
     module->async_evaluation = FALSE;
 
-    for(i = 0; i < module->async_parent_modules_count; i++) {
-        JSModuleDef *m = module->async_parent_modules[i];
-        JSValue m_obj = JS_NewModuleValue(ctx, m);
-        js_async_module_execution_rejected(ctx, JS_UNDEFINED, 1, &error, 0,
-                                           &m_obj);
-        JS_FreeValue(ctx, m_obj);
-    }
-
     if (!JS_IsUndefined(module->promise)) {
         JSValue ret_val;
         assert(module->cycle_root == module);
         ret_val = JS_Call(ctx, module->resolving_funcs[1], JS_UNDEFINED,
                           1, &error);
         JS_FreeValue(ctx, ret_val);
+    }
+
+    for(i = 0; i < module->async_parent_modules_count; i++) {
+        JSModuleDef *m = module->async_parent_modules[i];
+        JSValue m_obj = JS_NewModuleValue(ctx, m);
+        js_async_module_execution_rejected(ctx, JS_UNDEFINED, 1, &error, 0,
+                                           &m_obj);
+        JS_FreeValue(ctx, m_obj);
     }
     return JS_UNDEFINED;
 }
@@ -41535,6 +41545,31 @@ static JSValue js_array_push(JSContext *ctx, JSValueConst this_val,
     int i;
     int64_t len, from, newLen;
 
+    if (likely(JS_VALUE_GET_TAG(this_val) == JS_TAG_OBJECT && !unshift)) {
+        JSObject *p = JS_VALUE_GET_OBJ(this_val);
+        if (likely(p->class_id == JS_CLASS_ARRAY && p->fast_array &&
+                   p->extensible &&
+                   p->shape->proto == JS_VALUE_GET_OBJ(ctx->class_proto[JS_CLASS_ARRAY]) &&
+                   ctx->std_array_prototype &&
+                   JS_VALUE_GET_TAG(p->prop[0].u.value) == JS_TAG_INT &&
+                   JS_VALUE_GET_INT(p->prop[0].u.value) == p->u.array.count &&
+                   (get_shape_prop(p->shape)->flags & JS_PROP_WRITABLE) != 0)) {
+            /* fast case */
+            uint32_t new_len;
+            new_len = p->u.array.count + argc;
+            if (likely(new_len <= INT32_MAX)) {
+                if (unlikely(new_len > p->u.array.u1.size)) {
+                    if (expand_fast_array(ctx, p, new_len))
+                        return JS_EXCEPTION;
+                }
+                for(i = 0; i < argc; i++)
+                    p->u.array.u.values[p->u.array.count + i] = JS_DupValue(ctx, argv[i]);
+                p->prop[0].u.value = JS_NewInt32(ctx, new_len);
+                p->u.array.count = new_len;
+                return JS_NewInt32(ctx, new_len);
+            }
+        }
+    }
     obj = JS_ToObject(ctx, this_val);
     if (js_get_length64(ctx, &len, obj))
         goto exception;
@@ -46082,8 +46117,10 @@ static void js_regexp_finalizer(JSRuntime *rt, JSValue val)
 {
     JSObject *p = JS_VALUE_GET_OBJ(val);
     JSRegExp *re = &p->u.regexp;
-    JS_FreeValueRT(rt, JS_MKPTR(JS_TAG_STRING, re->bytecode));
-    JS_FreeValueRT(rt, JS_MKPTR(JS_TAG_STRING, re->pattern));
+    if (re->bytecode != NULL)
+        JS_FreeValueRT(rt, JS_MKPTR(JS_TAG_STRING, re->bytecode));
+    if (re->pattern != NULL)
+        JS_FreeValueRT(rt, JS_MKPTR(JS_TAG_STRING, re->pattern));
 }
 
 /* create a string containing the RegExp bytecode */
@@ -46165,32 +46202,29 @@ static JSValue js_compile_regexp(JSContext *ctx, JSValueConst pattern,
     return ret;
 }
 
-/* create a RegExp object from a string containing the RegExp bytecode
-   and the source pattern */
-static JSValue js_regexp_constructor_internal(JSContext *ctx, JSValueConst ctor,
-                                              JSValue pattern, JSValue bc)
+/* set the RegExp fields */
+static JSValue js_regexp_set_internal(JSContext *ctx,
+                                      JSValue obj,
+                                      JSValue pattern, JSValue bc)
 {
-    JSValue obj;
     JSObject *p;
     JSRegExp *re;
 
     /* sanity check */
-    if (JS_VALUE_GET_TAG(bc) != JS_TAG_STRING ||
-        JS_VALUE_GET_TAG(pattern) != JS_TAG_STRING) {
+    if (unlikely(JS_VALUE_GET_TAG(bc) != JS_TAG_STRING ||
+                 JS_VALUE_GET_TAG(pattern) != JS_TAG_STRING)) {
         JS_ThrowTypeError(ctx, "string expected");
-    fail:
+        JS_FreeValue(ctx, obj);
         JS_FreeValue(ctx, bc);
         JS_FreeValue(ctx, pattern);
         return JS_EXCEPTION;
     }
 
-    obj = js_create_from_ctor(ctx, ctor, JS_CLASS_REGEXP);
-    if (JS_IsException(obj))
-        goto fail;
     p = JS_VALUE_GET_OBJ(obj);
     re = &p->u.regexp;
     re->pattern = JS_VALUE_GET_STRING(pattern);
     re->bytecode = JS_VALUE_GET_STRING(bc);
+    /* Note: cannot fail because the field is preallocated */
     JS_DefinePropertyValue(ctx, obj, JS_ATOM_lastIndex, JS_NewInt32(ctx, 0),
                            JS_PROP_WRITABLE);
     return obj;
@@ -46227,7 +46261,7 @@ static int js_is_regexp(JSContext *ctx, JSValueConst obj)
 static JSValue js_regexp_constructor(JSContext *ctx, JSValueConst new_target,
                                      int argc, JSValueConst *argv)
 {
-    JSValue pattern, flags, bc, val;
+    JSValue pattern, flags, bc, val, obj = JS_UNDEFINED;
     JSValueConst pat, flags1;
     JSRegExp *re;
     int pat_is_regexp;
@@ -46253,18 +46287,19 @@ static JSValue js_regexp_constructor(JSContext *ctx, JSValueConst new_target,
         }
     }
     re = js_get_regexp(ctx, pat, FALSE);
+    flags = JS_UNDEFINED;
     if (re) {
         pattern = JS_DupValue(ctx, JS_MKPTR(JS_TAG_STRING, re->pattern));
         if (JS_IsUndefined(flags1)) {
             bc = JS_DupValue(ctx, JS_MKPTR(JS_TAG_STRING, re->bytecode));
+            obj = js_create_from_ctor(ctx, new_target, JS_CLASS_REGEXP);
+            if (JS_IsException(obj))
+                goto fail;
             goto no_compilation;
         } else {
-            flags = JS_ToString(ctx, flags1);
-            if (JS_IsException(flags))
-                goto fail;
+            flags = JS_DupValue(ctx, flags1);
         }
     } else {
-        flags = JS_UNDEFINED;
         if (pat_is_regexp) {
             pattern = JS_GetProperty(ctx, pat, JS_ATOM_source);
             if (JS_IsException(pattern))
@@ -46290,15 +46325,19 @@ static JSValue js_regexp_constructor(JSContext *ctx, JSValueConst new_target,
                 goto fail;
         }
     }
+    obj = js_create_from_ctor(ctx, new_target, JS_CLASS_REGEXP);
+    if (JS_IsException(obj))
+        goto fail;
     bc = js_compile_regexp(ctx, pattern, flags);
     if (JS_IsException(bc))
         goto fail;
     JS_FreeValue(ctx, flags);
  no_compilation:
-    return js_regexp_constructor_internal(ctx, new_target, pattern, bc);
+    return js_regexp_set_internal(ctx, obj, pattern, bc);
  fail:
     JS_FreeValue(ctx, pattern);
     JS_FreeValue(ctx, flags);
+    JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
 
