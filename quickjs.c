@@ -7328,6 +7328,22 @@ static JSValue JS_ThrowTypeErrorNotAnObject(JSContext *ctx)
     return JS_ThrowTypeError(ctx, "not an object");
 }
 
+static JSValue JS_ThrowTypeErrorNotAConstructor(JSContext *ctx,
+                                                JSValueConst func_obj)
+{
+    const char *name;
+    if (!JS_IsFunction(ctx, func_obj))
+        goto fail;
+    name = get_prop_string(ctx, func_obj, JS_ATOM_name);
+    if (!name) {
+    fail:
+        return JS_ThrowTypeError(ctx, "not a constructor");
+    }
+    JS_ThrowTypeError(ctx, "%s is not a constructor", name);
+    JS_FreeCString(ctx, name);
+    return JS_EXCEPTION;
+}
+
 static JSValue JS_ThrowTypeErrorNotASymbol(JSContext *ctx)
 {
     return JS_ThrowTypeError(ctx, "not a symbol");
@@ -16659,9 +16675,14 @@ static JSVarRef *js_closure_define_global_var(JSContext *ctx, JSClosureVar *cv,
         if (is_direct_or_indirect_eval)
             flags |= JS_PROP_CONFIGURABLE;
 
+    retry:
         prs = find_own_property(&pr, p, cv->var_name);
         if (prs) {
-            if ((prs->flags & JS_PROP_TMASK) != JS_PROP_VARREF) {
+            if (unlikely((prs->flags & JS_PROP_TMASK) == JS_PROP_AUTOINIT)) {
+                if (JS_AutoInitProperty(ctx, p, cv->var_name, pr, prs))
+                    return NULL;
+                goto retry;
+            } else if ((prs->flags & JS_PROP_TMASK) != JS_PROP_VARREF) {
                 var_ref = js_global_object_get_uninitialized_var(ctx, p, cv->var_name);
                 if (!var_ref)
                     return NULL;
@@ -17997,14 +18018,15 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                         }
                         ret = JS_SetPropertyInternal(ctx, ctx->global_obj, cv->var_name, sp[-1],
                                                      ctx->global_obj, JS_PROP_THROW_STRICT);
+                        sp--;
                         if (ret < 0)
                             goto exception;
                     }
                 } else {
                 put_var_ok:
                    set_value(ctx, var_ref->pvalue, sp[-1]);
+                   sp--;
                 }
-                sp--;
             }
             BREAK;
         CASE(OP_get_loc):
@@ -20088,7 +20110,7 @@ static JSValue JS_CallConstructorInternal(JSContext *ctx,
         goto not_a_function;
     p = JS_VALUE_GET_OBJ(func_obj);
     if (unlikely(!p->is_constructor))
-        return JS_ThrowTypeError(ctx, "not a constructor");
+        return JS_ThrowTypeErrorNotAConstructor(ctx, func_obj);
     if (unlikely(p->class_id != JS_CLASS_BYTECODE_FUNCTION)) {
         JSClassCall *call_func;
         call_func = ctx->rt->class_array[p->class_id].call;
@@ -29715,6 +29737,7 @@ static JSValue js_build_module_ns(JSContext *ctx, JSModuleDef *m)
                                           en->export_name,
                                           JS_AUTOINIT_ID_MODULE_NS,
                                           m, JS_PROP_ENUMERABLE | JS_PROP_WRITABLE) < 0)
+                goto fail;
             break;
         default:
             break;
@@ -39949,8 +39972,9 @@ static JSValue JS_SpeciesConstructor(JSContext *ctx, JSValueConst obj,
     if (JS_IsUndefined(species) || JS_IsNull(species))
         return JS_DupValue(ctx, defaultConstructor);
     if (!JS_IsConstructor(ctx, species)) {
+        JS_ThrowTypeErrorNotAConstructor(ctx, species);
         JS_FreeValue(ctx, species);
-        return JS_ThrowTypeError(ctx, "not a constructor");
+        return JS_EXCEPTION;
     }
     return species;
 }
@@ -48793,7 +48817,7 @@ static JSValue js_reflect_construct(JSContext *ctx, JSValueConst this_val,
     if (argc > 2) {
         new_target = argv[2];
         if (!JS_IsConstructor(ctx, new_target))
-            return JS_ThrowTypeError(ctx, "not a constructor");
+            return JS_ThrowTypeErrorNotAConstructor(ctx, new_target);
     } else {
         new_target = func;
     }
@@ -49712,7 +49736,7 @@ static JSValue js_proxy_call_constructor(JSContext *ctx, JSValueConst func_obj,
     if (!s)
         return JS_EXCEPTION;
     if (!JS_IsConstructor(ctx, s->target))
-        return JS_ThrowTypeError(ctx, "not a constructor");
+        return JS_ThrowTypeErrorNotAConstructor(ctx, s->target);
     if (JS_IsUndefined(method))
         return JS_CallConstructor2(ctx, s->target, new_target, argc, argv);
     arg_array = js_create_array(ctx, argc, argv);
@@ -49938,7 +49962,7 @@ static JSValue js_symbol_constructor(JSContext *ctx, JSValueConst new_target,
     JSString *p;
 
     if (!JS_IsUndefined(new_target))
-        return JS_ThrowTypeError(ctx, "not a constructor");
+        return JS_ThrowTypeErrorNotAConstructor(ctx, new_target);
     if (argc == 0 || JS_IsUndefined(argv[0])) {
         p = NULL;
     } else {
@@ -54600,7 +54624,7 @@ static JSValue js_bigint_constructor(JSContext *ctx,
                                      int argc, JSValueConst *argv)
 {
     if (!JS_IsUndefined(new_target))
-        return JS_ThrowTypeError(ctx, "not a constructor");
+        return JS_ThrowTypeErrorNotAConstructor(ctx, new_target);
     return JS_ToBigIntCtorFree(ctx, JS_DupValue(ctx, argv[0]));
 }
 
@@ -55628,7 +55652,7 @@ static JSValue js_array_buffer_slice(JSContext *ctx,
         goto fail;
     }
     /* must test again because of side effects */
-    if (abuf->detached) {
+    if (abuf->detached || abuf->byte_length < start + new_len) {
         JS_ThrowTypeErrorDetachedArrayBuffer(ctx);
         goto fail;
     }
