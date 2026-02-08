@@ -8916,6 +8916,57 @@ static JSValue js_allocate_fast_array(JSContext *ctx, int64_t len)
     return arr;
 }
 
+static JSValue js_create_array(JSContext *ctx, int len, JSValueConst *tab)
+{
+    JSValue obj;
+    JSObject *p;
+    int i;
+
+    obj = JS_NewArray(ctx);
+    if (JS_IsException(obj))
+        return JS_EXCEPTION;
+    if (len > 0) {
+        p = JS_VALUE_GET_OBJ(obj);
+        if (expand_fast_array(ctx, p, len) < 0) {
+            JS_FreeValue(ctx, obj);
+            return JS_EXCEPTION;
+        }
+        p->u.array.count = len;
+        for(i = 0; i < len; i++) 
+            p->u.array.u.values[i] = JS_DupValue(ctx, tab[i]);
+        /* update the 'length' field */
+        set_value(ctx, &p->prop[0].u.value, JS_NewInt32(ctx, len));
+    }
+    return obj;
+}
+
+static JSValue js_create_array_free(JSContext *ctx, int len, JSValue *tab)
+{
+    JSValue obj;
+    JSObject *p;
+    int i;
+
+    obj = JS_NewArray(ctx);
+    if (JS_IsException(obj))
+        goto fail;
+    if (len > 0) {
+        p = JS_VALUE_GET_OBJ(obj);
+        if (expand_fast_array(ctx, p, len) < 0) {
+            JS_FreeValue(ctx, obj);
+        fail:
+            for(i = 0; i < len; i++)
+                JS_FreeValue(ctx, tab[i]);
+            return JS_EXCEPTION;
+        }
+        p->u.array.count = len;
+        for(i = 0; i < len; i++) 
+            p->u.array.u.values[i] = tab[i];
+        /* update the 'length' field */
+        set_value(ctx, &p->prop[0].u.value, JS_NewInt32(ctx, len));
+    }
+    return obj;
+}
+
 static void js_free_desc(JSContext *ctx, JSPropertyDescriptor *desc)
 {
     JS_FreeValue(ctx, desc->getter);
@@ -15622,26 +15673,6 @@ static JSValue js_build_mapped_arguments(JSContext *ctx, int argc,
     return JS_EXCEPTION;
 }
 
-static JSValue js_build_rest(JSContext *ctx, int first, int argc, JSValueConst *argv)
-{
-    JSValue val;
-    int i, ret;
-
-    val = JS_NewArray(ctx);
-    if (JS_IsException(val))
-        return val;
-    for (i = first; i < argc; i++) {
-        ret = JS_DefinePropertyValueUint32(ctx, val, i - first,
-                                           JS_DupValue(ctx, argv[i]),
-                                           JS_PROP_C_W_E);
-        if (ret < 0) {
-            JS_FreeValue(ctx, val);
-            return JS_EXCEPTION;
-        }
-    }
-    return val;
-}
-
 static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)
 {
     JSObject *p, *p1;
@@ -17124,7 +17155,8 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             {
                 int first = get_u16(pc);
                 pc += 2;
-                *sp++ = js_build_rest(ctx, first, argc, (JSValueConst *)argv);
+                first = min_int(first, argc);
+                *sp++ = js_create_array(ctx, argc - first, (JSValueConst *)(argv + first));
                 if (unlikely(JS_IsException(sp[-1])))
                     goto exception;
             }
@@ -17347,27 +17379,13 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             }
             BREAK;
         CASE(OP_array_from):
-            {
-                int i, ret;
-
-                call_argc = get_u16(pc);
-                pc += 2;
-                ret_val = JS_NewArray(ctx);
-                if (unlikely(JS_IsException(ret_val)))
-                    goto exception;
-                call_argv = sp - call_argc;
-                for(i = 0; i < call_argc; i++) {
-                    ret = JS_DefinePropertyValue(ctx, ret_val, __JS_AtomFromUInt32(i), call_argv[i],
-                                                 JS_PROP_C_W_E | JS_PROP_THROW);
-                    call_argv[i] = JS_UNDEFINED;
-                    if (ret < 0) {
-                        JS_FreeValue(ctx, ret_val);
-                        goto exception;
-                    }
-                }
-                sp -= call_argc;
-                *sp++ = ret_val;
-            }
+            call_argc = get_u16(pc);
+            pc += 2;
+            ret_val = js_create_array_free(ctx, call_argc, sp - call_argc);
+            sp -= call_argc;
+            if (unlikely(JS_IsException(ret_val)))
+                goto exception;
+            *sp++ = ret_val;
             BREAK;
 
         CASE(OP_apply):
@@ -42106,23 +42124,6 @@ static void js_array_iterator_mark(JSRuntime *rt, JSValueConst val,
     }
 }
 
-static JSValue js_create_array(JSContext *ctx, int len, JSValueConst *tab)
-{
-    JSValue obj;
-    int i;
-
-    obj = JS_NewArray(ctx);
-    if (JS_IsException(obj))
-        return JS_EXCEPTION;
-    for(i = 0; i < len; i++) {
-        if (JS_CreateDataPropertyUint32(ctx, obj, i, JS_DupValue(ctx, tab[i]), 0) < 0) {
-            JS_FreeValue(ctx, obj);
-            return JS_EXCEPTION;
-        }
-    }
-    return obj;
-}
-
 static JSValue js_create_array_iterator(JSContext *ctx, JSValueConst this_val,
                                         int argc, JSValueConst *argv, int magic)
 {
@@ -45460,47 +45461,59 @@ static JSValue js_math_clz32(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, r);
 }
 
-/* we add one extra limb to avoid having to test for overflows during the sum */
-#define SUM_PRECISE_ACC_LEN 34
-
 typedef enum {
-    SUM_PRECISE_STATE_MINUS_ZERO,
     SUM_PRECISE_STATE_FINITE,
     SUM_PRECISE_STATE_INFINITY,
     SUM_PRECISE_STATE_MINUS_INFINITY, /* must be after SUM_PRECISE_STATE_INFINITY */
     SUM_PRECISE_STATE_NAN, /* must be after SUM_PRECISE_STATE_MINUS_INFINITY */
 } SumPreciseStateEnum;
 
+#define SP_LIMB_BITS 56
+#define SP_RND_BITS (SP_LIMB_BITS - 53)
+/* we add one extra limb to avoid having to test for overflows during the sum */
+#define SUM_PRECISE_ACC_LEN 39
+
+#define SUM_PRECISE_COUNTER_INIT 250
+
 typedef struct {
-    uint64_t acc[SUM_PRECISE_ACC_LEN];
-    int n_limbs; /* acc is not necessarily normalized */
     SumPreciseStateEnum state;
+    uint32_t counter;
+    int n_limbs; /* 'acc' contains n_limbs and is not necessarily
+                    acc[n_limb - 1] may be 0. 0 indicates minus zero
+                    result when state = SUM_PRECISE_STATE_FINITE */
+    int64_t acc[SUM_PRECISE_ACC_LEN];
 } SumPreciseState;
 
 static void sum_precise_init(SumPreciseState *s)
 {
-    s->state = SUM_PRECISE_STATE_MINUS_ZERO;
-    s->acc[0] = 0;
-    s->n_limbs = 1;
+    memset(s->acc, 0, sizeof(s->acc));
+    s->state = SUM_PRECISE_STATE_FINITE;
+    s->counter = SUM_PRECISE_COUNTER_INIT;
+    s->n_limbs = 0;
 }
 
-#define ADDC64(res, carry_out, op1, op2, carry_in)      \
-do {                                                    \
-    uint64_t __v, __a, __k, __k1;                       \
-    __v = (op1);                                        \
-    __a = __v + (op2);                                  \
-    __k1 = __a < __v;                                   \
-    __k = (carry_in);                                   \
-    __a = __a + __k;                                    \
-    carry_out = (__a < __k) | __k1;                     \
-    res = __a;                                          \
-} while (0)
+static void sum_precise_renorm(SumPreciseState *s)
+{
+    int64_t v, carry;
+    int i;
+    
+    carry = 0;
+    for(i = 0; i < s->n_limbs; i++) {
+        v = s->acc[i] + carry;
+        s->acc[i] = v & (((uint64_t)1 << SP_LIMB_BITS) - 1);
+        carry = v >> SP_LIMB_BITS;
+    }
+    /* we add a failsafe but it should be never reached in a
+       reasonnable amount of time */
+    if (carry != 0 && s->n_limbs < SUM_PRECISE_ACC_LEN)
+        s->acc[s->n_limbs++] = carry;
+}
 
 static void sum_precise_add(SumPreciseState *s, double d)
 {
-    uint64_t a, m, a0, carry, acc_sign, a_sign;
-    int sgn, e, p, n, i;
-    unsigned shift;
+    uint64_t a, m, a0, a1;
+    int sgn, e, p;
+    unsigned int shift;
     
     a = float64_as_uint64(d);
     sgn = a >> 63;
@@ -45523,8 +45536,8 @@ static void sum_precise_add(SumPreciseState *s, double d)
     } else if (e == 0) {
         if (likely(m == 0)) {
             /* zero */
-            if (s->state == SUM_PRECISE_STATE_MINUS_ZERO && !sgn)
-                s->state = SUM_PRECISE_STATE_FINITE;
+            if (s->n_limbs == 0 && !sgn)
+                s->n_limbs = 1;
         } else {
             /* subnormal */
             p = 0;
@@ -45532,69 +45545,41 @@ static void sum_precise_add(SumPreciseState *s, double d)
             goto add;
         }
     } else {
+        /* Note: we sum even if state != SUM_PRECISE_STATE_FINITE to
+           avoid tests */
         m |= (uint64_t)1 << 52;
         shift = e - 1;
-        p = shift / 64;
-        /* 'p' is the position of a0 in acc */
-        shift %= 64;
+        /* 'p' is the position of a0 in acc. The division is normally
+           implementation as a multiplication by the compiler. */
+        p = shift / SP_LIMB_BITS;
+        shift %= SP_LIMB_BITS;
     add:
-        if (s->state >= SUM_PRECISE_STATE_INFINITY)
-            return;
-        s->state = SUM_PRECISE_STATE_FINITE;
-        n = s->n_limbs;
-
-        acc_sign = (int64_t)s->acc[n - 1] >> 63;
-
-        /* sign extend acc */
-        for(i = n; i <= p; i++)
-            s->acc[i] = acc_sign;
-        
-        carry = sgn;
-        a_sign = -sgn;
-        a0 = m << shift;
-        ADDC64(s->acc[p], carry, s->acc[p], a0 ^ a_sign, carry);
-        if (shift >= 12) {
-            p++;
-            if (p >= n)
-                s->acc[p] = acc_sign;
-            a0 = m >> (64 - shift);
-            ADDC64(s->acc[p], carry, s->acc[p], a0 ^ a_sign, carry);
-        }
-        p++;
-        if (p >= n) {
-            n = p;
+        a0 = (m << shift) & (((uint64_t)1 << SP_LIMB_BITS) - 1);
+        a1 = m >> (SP_LIMB_BITS - shift);
+        if (!sgn) {
+            s->acc[p] += a0;
+            s->acc[p + 1] += a1;
         } else {
-            /* carry */
-            for(i = p; i < n; i++) {
-                /* if 'a' positive: stop condition: carry = 0.
-                   if 'a' negative: stop condition: carry = 1. */
-                if (carry == sgn)
-                    goto done;
-                ADDC64(s->acc[i], carry, s->acc[i], a_sign, carry);
-            }
+            s->acc[p] -= a0;
+            s->acc[p + 1] -= a1;
         }
-        
-        /* extend the accumulator if needed */
-        a0 = carry + acc_sign + a_sign;
-        /* -1 <= a0 <= 1 (if both acc and a are negative, carry is set) */
-        if (a0 != ((int64_t)s->acc[n - 1] >> 63)) {
-            s->acc[n++] = a0;
+        s->n_limbs = max_int(s->n_limbs, p + 2);
+
+        if (unlikely(--s->counter == 0)) {
+            s->counter = SUM_PRECISE_COUNTER_INIT;
+            sum_precise_renorm(s);
         }
-    done:
-        s->n_limbs = n;
     }
 }
 
 static double sum_precise_get_result(SumPreciseState *s)
 {
-    int n, shift, e, p, is_neg, i;
-    uint64_t m, addend, carry;
+    int n, shift, e, p, is_neg;
+    uint64_t m, addend;
         
     if (s->state != SUM_PRECISE_STATE_FINITE) {
         switch(s->state) {
         default:
-        case SUM_PRECISE_STATE_MINUS_ZERO:
-            return -0.0;
         case SUM_PRECISE_STATE_INFINITY:
             return INFINITY;
         case SUM_PRECISE_STATE_MINUS_INFINITY:
@@ -45604,38 +45589,53 @@ static double sum_precise_get_result(SumPreciseState *s)
         }
     }
 
+    sum_precise_renorm(s);
+
     /* extract the sign and absolute value */
-    n = s->n_limbs;
-    is_neg = s->acc[n - 1] >> 63;
-    if (is_neg) {
-        /* acc = -acc */
-        carry = 1;
-        for(i = 0; i < n; i++) {
-            ADDC64(s->acc[i], carry, ~s->acc[i], 0, carry);
-        }
-    }
-    /* normalize */
-    while (n > 0 && s->acc[n - 1] == 0)
-        n--;
 #if 0
     {
-        printf("res=");
-        for(i = n - 1; i >= 0; i--)
-            printf(" %016lx", s->acc[i]);
+        int i;
+        printf("len=%d:", s->n_limbs);
+        for(i = s->n_limbs - 1; i >= 0; i--)
+            printf(" %014lx", s->acc[i]);
         printf("\n");
     }
 #endif
+    n = s->n_limbs;
+    /* minus zero result */
+    if (n == 0)
+        return -0.0;
+    
+    /* normalize */
+    while (n > 0 && s->acc[n - 1] == 0)
+        n--;
     /* zero result. The spec tells it is always positive in the finite case */
     if (n == 0)
         return 0.0;
+    is_neg = (s->acc[n - 1] < 0);
+    if (is_neg) {
+        uint64_t v, carry;
+        int i;
+        /* negate */
+        /* XXX: do it only when needed */
+        carry = 1;
+        for(i = 0; i < n - 1; i++) {
+            v = (((uint64_t)1 << SP_LIMB_BITS) - 1) - s->acc[i] + carry;
+            carry = v >> SP_LIMB_BITS;
+            s->acc[i] = v & (((uint64_t)1 << SP_LIMB_BITS) - 1);
+        }
+        s->acc[n - 1] = -s->acc[n - 1] + carry - 1;
+        while (n > 1 && s->acc[n - 1] == 0)
+            n--;
+    }
     /* subnormal case */
     if (n == 1 && s->acc[0] < ((uint64_t)1 << 52))
         return uint64_as_float64(((uint64_t)is_neg << 63) | s->acc[0]); 
     /* normal case */
-    e = n * 64;
+    e = n * SP_LIMB_BITS;
     p = n - 1;
     m = s->acc[p];
-    shift = clz64(m);
+    shift = clz64(m) - (64 - SP_LIMB_BITS);
     e = e - shift - 52;
     if (shift != 0) {
         m <<= shift;
@@ -45643,12 +45643,12 @@ static double sum_precise_get_result(SumPreciseState *s)
             int shift1;
             uint64_t nz;
             p--;
-            shift1 = 64 - shift;
+            shift1 = SP_LIMB_BITS - shift;
             nz = s->acc[p] & (((uint64_t)1 << shift1) - 1);
             m = m | (s->acc[p] >> shift1) | (nz != 0);
         }
     }
-    if ((m & ((1 << 10) - 1)) == 0) {
+    if ((m & ((1 << SP_RND_BITS) - 1)) == (1 << (SP_RND_BITS - 1))) {
         /* see if the LSB part is non zero for the final rounding  */
         while (p > 0) {
             p--;
@@ -45659,10 +45659,10 @@ static double sum_precise_get_result(SumPreciseState *s)
         }
     }
     /* rounding to nearest with ties to even */
-    addend = (1 << 10) - 1 + ((m >> 11) & 1);
-    m = (m + addend) >> 11;
+    addend = (1 << (SP_RND_BITS - 1)) - 1 + ((m >> SP_RND_BITS) & 1);
+    m = (m + addend) >> SP_RND_BITS;
     /* handle overflow in the rounding */
-    if (m == 0)
+    if (m == ((uint64_t)1 << 53))
         e++;
     if (unlikely(e >= 2047)) {
         /* infinity */
@@ -51670,16 +51670,29 @@ static JSValue js_promise_withResolvers(JSContext *ctx,
     if (JS_IsException(result_promise))
         return result_promise;
     obj = JS_NewObject(ctx);
-    if (JS_IsException(obj)) {
-        JS_FreeValue(ctx, resolving_funcs[0]);
-        JS_FreeValue(ctx, resolving_funcs[1]);
-        JS_FreeValue(ctx, result_promise);
-        return JS_EXCEPTION;
+    if (JS_IsException(obj))
+        goto exception;
+    if (JS_DefinePropertyValue(ctx, obj, JS_ATOM_promise, result_promise,
+                               JS_PROP_C_W_E) < 0) {
+        goto exception;
     }
-    JS_DefinePropertyValue(ctx, obj, JS_ATOM_promise, result_promise, JS_PROP_C_W_E);
-    JS_DefinePropertyValue(ctx, obj, JS_ATOM_resolve, resolving_funcs[0], JS_PROP_C_W_E);
-    JS_DefinePropertyValue(ctx, obj, JS_ATOM_reject, resolving_funcs[1], JS_PROP_C_W_E);
+    result_promise = JS_UNDEFINED;
+    if (JS_DefinePropertyValue(ctx, obj, JS_ATOM_resolve, resolving_funcs[0],
+                               JS_PROP_C_W_E) < 0) {
+        goto exception;
+    }
+    resolving_funcs[0] = JS_UNDEFINED;
+    if (JS_DefinePropertyValue(ctx, obj, JS_ATOM_reject, resolving_funcs[1],
+                               JS_PROP_C_W_E) < 0) {
+        goto exception;
+    }
     return obj;
+exception:
+    JS_FreeValue(ctx, resolving_funcs[0]);
+    JS_FreeValue(ctx, resolving_funcs[1]);
+    JS_FreeValue(ctx, result_promise);
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
 }
 
 static JSValue js_promise_try(JSContext *ctx, JSValueConst this_val,
