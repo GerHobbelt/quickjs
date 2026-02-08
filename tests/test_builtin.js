@@ -392,10 +392,11 @@ function test_math()
     assert(Math.imul((-2)**31, (-2)**31), 0);
     assert(Math.imul(2**31-1, 2**31-1), 1);
     assert(Math.fround(0.1), 0.10000000149011612);
-    assert(Math.hypot() == 0);
-    assert(Math.hypot(-2) == 2);
-    assert(Math.hypot(3, 4) == 5);
+    assert(Math.hypot(), 0);
+    assert(Math.hypot(-2), 2);
+    assert(Math.hypot(3, 4), 5);
     assert(Math.abs(Math.hypot(3, 4, 5) - 7.0710678118654755) <= 1e-15);
+    assert(Math.sumPrecise([1,Number.EPSILON/2,Number.MIN_VALUE]), 1.0000000000000002);
 }
 
 function test_number()
@@ -908,6 +909,77 @@ function test_weak_map()
     /* the WeakMap should be empty here */
 }
 
+function test_set()
+{
+    const iter = {
+        a: [4, 5, 6],
+        nextCalls: 0,
+        returnCalls: 0,
+        next() {
+            const done = this.nextCalls >= this.a.length
+            const value = this.a[this.nextCalls]
+            this.nextCalls++
+            return {done, value}
+        },
+        return() {
+            this.returnCalls++
+            return this
+        },
+    }
+    const setlike = {
+        size: iter.a.length,
+        has(v) { return iter.a.includes(v) },
+        keys() { return iter },
+    }
+    // set must be bigger than iter.a to hit iter.next and iter.return
+    assert(new Set([4,5,6,7]).isSupersetOf(setlike), true)
+    assert(iter.nextCalls, 4)
+    assert(iter.returnCalls, 0)
+    iter.nextCalls = iter.returnCalls = 0
+    assert(new Set([0,1,2,3]).isSupersetOf(setlike), false)
+    assert(iter.nextCalls, 1)
+    assert(iter.returnCalls, 1)
+    iter.nextCalls = iter.returnCalls = 0
+    // set must be bigger than iter.a to hit iter.next and iter.return
+    assert(new Set([4,5,6,7]).isDisjointFrom(setlike), false)
+    assert(iter.nextCalls, 1)
+    assert(iter.returnCalls, 1)
+    iter.nextCalls = iter.returnCalls = 0
+    assert(new Set([0,1,2,3]).isDisjointFrom(setlike), true)
+    assert(iter.nextCalls, 4)
+    assert(iter.returnCalls, 0)
+    iter.nextCalls = iter.returnCalls = 0
+    function expectException(klass, sizes) {
+        for (const size of sizes) {
+            let ex
+            try {
+                new Set([]).union({size})
+            } catch (e) {
+                ex = e
+            }
+            assert(ex instanceof klass)
+            assert(typeof ex.message, "string")
+            assert(ex.message.includes(".size"))
+        }
+    }
+    expectException(RangeError, [-1, -(Number.MAX_SAFE_INTEGER+1), -Infinity])
+    expectException(TypeError, [NaN])
+    const legal = [
+        0, -0, 1, 2,
+        Number.MAX_SAFE_INTEGER + 1,
+        Number.MAX_SAFE_INTEGER + 2,
+        Number.MAX_SAFE_INTEGER + 3,
+        Infinity
+    ]
+    for (const size of legal) {
+        new Set([]).union({
+            size,
+            has() { return false },
+            keys() { return [].values() },
+        })
+    }
+}
+
 function test_weak_set()
 {
     var a, e;
@@ -1103,6 +1175,7 @@ test_regexp();
 test_symbol();
 test_map();
 test_weak_map();
+test_set();
 test_weak_set();
 test_generator();
 test_proxy_iter();
