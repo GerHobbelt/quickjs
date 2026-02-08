@@ -210,6 +210,7 @@ endmacro()
 
 set(qjs_sources
     cutils.c
+    dtoa.c
     libregexp.c
     libunicode.c
     quickjs.c
