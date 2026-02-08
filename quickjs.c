@@ -231,6 +231,9 @@ typedef enum JSErrorEnum {
 #define JS_MAX_LOCAL_VARS 65535
 #define JS_STACK_SIZE_MAX 65534
 #define JS_STRING_LEN_MAX ((1 << 30) - 1)
+// 1,024 bytes is about the cutoff point where it starts getting
+// more profitable to ref slice than to copy
+#define JS_STRING_SLICE_LEN_MAX 1024 // in bytes
 
 #define __exception __attribute__((warn_unused_result))
 
@@ -565,7 +568,12 @@ typedef enum {
     JS_ATOM_KIND_PRIVATE,
 } JSAtomKindEnum;
 
-#define JS_ATOM_HASH_MASK  ((1 << 30) - 1)
+typedef enum {
+    JS_STRING_KIND_NORMAL,
+    JS_STRING_KIND_SLICE,
+} JSStringKind;
+
+#define JS_ATOM_HASH_MASK  ((1 << 29) - 1)
 
 struct JSString {
     JSRefCountHeader header; /* must come first, 32-bit */
@@ -574,7 +582,8 @@ struct JSString {
     /* for JS_ATOM_TYPE_SYMBOL: hash = 0, atom_type = 3,
        for JS_ATOM_TYPE_PRIVATE: hash = 1, atom_type = 3
        XXX: could change encoding to have one more bit in hash */
-    uint32_t hash : 30;
+    uint32_t hash : 29;
+    uint8_t kind : 1;
     uint8_t atom_type : 2; /* != 0 if atom, JS_ATOM_TYPE_x */
     uint32_t hash_next; /* atom_index for JS_ATOM_TYPE_SYMBOL */
     JSWeakRefRecord *first_weak_ref;
@@ -583,14 +592,39 @@ struct JSString {
 #endif
 };
 
+typedef struct JSStringSlice {
+    JSString *parent;
+    uint32_t start; // in characters, not bytes
+} JSStringSlice;
+
 static inline uint8_t *str8(JSString *p)
 {
-    return (void *)(p + 1);
+    JSStringSlice *slice;
+
+    switch (p->kind) {
+    case JS_STRING_KIND_NORMAL:
+        return (void *)&p[1];
+    case JS_STRING_KIND_SLICE:
+        slice = (void *)&p[1];
+        return str8(slice->parent) + slice->start;
+    }
+    abort();
+    return NULL;
 }
 
 static inline uint16_t *str16(JSString *p)
 {
-    return (void *)(p + 1);
+    JSStringSlice *slice;
+
+    switch (p->kind) {
+    case JS_STRING_KIND_NORMAL:
+        return (void *)&p[1];
+    case JS_STRING_KIND_SLICE:
+        slice = (void *)&p[1];
+        return str16(slice->parent) + slice->start;
+    }
+    abort();
+    return NULL;
 }
 
 typedef struct JSClosureVar {
@@ -2069,6 +2103,7 @@ static JSString *js_alloc_string_rt(JSRuntime *rt, int max_len, int is_wide_char
     str->header.ref_count = 1;
     str->is_wide_char = is_wide_char;
     str->len = max_len;
+    str->kind = JS_STRING_KIND_NORMAL;
     str->atom_type = 0;
     str->hash = 0;          /* optional but costless */
     str->hash_next = 0;     /* optional */
@@ -2089,18 +2124,28 @@ static JSString *js_alloc_string(JSContext *ctx, int max_len, int is_wide_char)
     return p;
 }
 
+static inline void js_free_string0(JSRuntime *rt, JSString *str);
+
 /* same as JS_FreeValueRT() but faster */
 static inline void js_free_string(JSRuntime *rt, JSString *str)
 {
-    if (--str->header.ref_count <= 0) {
-        if (str->atom_type) {
-            JS_FreeAtomStruct(rt, str);
-        } else {
+    if (--str->header.ref_count <= 0)
+        js_free_string0(rt, str);
+}
+
+static inline void js_free_string0(JSRuntime *rt, JSString *str)
+{
+    if (str->atom_type) {
+        JS_FreeAtomStruct(rt, str);
+    } else {
 #ifdef ENABLE_DUMPS // JS_DUMP_LEAKS
-            list_del(&str->link);
+        list_del(&str->link);
 #endif
-            js_free_rt(rt, str);
+        if (str->kind == JS_STRING_KIND_SLICE) {
+            JSStringSlice *slice = (void *)&str[1];
+            js_free_string(rt, slice->parent); // safe, recurses only 1 level
         }
+        js_free_rt(rt, str);
     }
 }
 
@@ -2982,6 +3027,7 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
             p->header.ref_count = 1;
             p->is_wide_char = str->is_wide_char;
             p->len = str->len;
+            p->kind = JS_STRING_KIND_NORMAL;
 #ifdef ENABLE_DUMPS // JS_DUMP_LEAKS
             list_add_tail(&p->link, &rt->string_list);
 #endif
@@ -2996,6 +3042,7 @@ static JSAtom __JS_NewAtom(JSRuntime *rt, JSString *str, int atom_type)
         p->header.ref_count = 1;
         p->is_wide_char = 1;    /* Hack to represent NULL as a JSString */
         p->len = 0;
+        p->kind = JS_STRING_KIND_NORMAL;
 #ifdef ENABLE_DUMPS // JS_DUMP_LEAKS
         list_add_tail(&p->link, &rt->string_list);
 #endif
@@ -3700,12 +3747,36 @@ static JSValue js_new_string_char(JSContext *ctx, uint16_t c)
 
 static JSValue js_sub_string(JSContext *ctx, JSString *p, int start, int end)
 {
-    int len = end - start;
+    JSStringSlice *slice;
+    JSString *q;
+    int len;
+
+    len = end - start;
     if (start == 0 && end == p->len) {
         return js_dup(JS_MKPTR(JS_TAG_STRING, p));
     }
     if (len <= 0) {
         return js_empty_string(ctx->rt);
+    }
+    if (len > (JS_STRING_SLICE_LEN_MAX >> p->is_wide_char)) {
+        if (p->kind == JS_STRING_KIND_SLICE) {
+            slice = (void *)&p[1];
+            p = slice->parent;
+            start += slice->start;
+        }
+        // allocate as 16 bit wide string to avoid wastage;
+        // js_alloc_string allocates 1 byte extra for 8 bit strings;
+        q = js_alloc_string(ctx, sizeof(*slice)/2, /*is_wide_char*/true);
+        if (!q)
+            return JS_EXCEPTION;
+        q->is_wide_char = p->is_wide_char;
+        q->kind = JS_STRING_KIND_SLICE;
+        q->len = len;
+        slice = (void *)&q[1];
+        slice->parent = p;
+        slice->start = start;
+        p->header.ref_count++;
+        return JS_MKPTR(JS_TAG_STRING, q);
     }
     if (p->is_wide_char) {
         JSString *str;
@@ -5181,21 +5252,26 @@ JSValue JS_NewArrayFrom(JSContext *ctx, int count, const JSValue *values)
 {
     JSObject *p;
     JSValue obj;
+    int i;
 
     obj = JS_NewArray(ctx);
     if (JS_IsException(obj))
-        return JS_EXCEPTION;
+        goto exception;
     if (count > 0) {
         p = JS_VALUE_GET_OBJ(obj);
         if (expand_fast_array(ctx, p, count)) {
             JS_FreeValue(ctx, obj);
-            return JS_EXCEPTION;
+            goto exception;
         }
         p->u.array.count = count;
         p->prop[0].u.value = js_int32(count);
         memcpy(p->u.array.u.values, values, count * sizeof(*values));
     }
     return obj;
+exception:
+    for (i = 0; i < count; i++)
+        JS_FreeValue(ctx, values[i]);
+    return JS_EXCEPTION;
 }
 
 JSValue JS_NewObject(JSContext *ctx)
@@ -5770,17 +5846,7 @@ static void js_free_value_rt(JSRuntime *rt, JSValue v)
 
     switch(tag) {
     case JS_TAG_STRING:
-        {
-            JSString *p = JS_VALUE_GET_STRING(v);
-            if (p->atom_type) {
-                JS_FreeAtomStruct(rt, p);
-            } else {
-#ifdef ENABLE_DUMPS // JS_DUMP_LEAKS
-                list_del(&p->link);
-#endif
-                js_free_rt(rt, p);
-            }
-        }
+        js_free_string0(rt, JS_VALUE_GET_STRING(v));
         break;
     case JS_TAG_OBJECT:
     case JS_TAG_FUNCTION_BYTECODE:
@@ -11719,6 +11785,7 @@ static JSBigInt *js_bigint_from_string(JSContext *ctx,
                                        const char *str, int radix)
 {
     const char *p = str;
+    size_t n_digits1;
     int is_neg, n_digits, n_limbs, len, log2_radix, n_bits, i;
     JSBigInt *r;
     js_limb_t v, c, h;
@@ -11730,10 +11797,16 @@ static JSBigInt *js_bigint_from_string(JSContext *ctx,
     }
     while (*p == '0')
         p++;
-    n_digits = strlen(p);
+    n_digits1 = strlen(p);
+    /* the real check for overflox is done js_bigint_new(). Here
+       we just avoid integer overflow */
+    if (n_digits1 > JS_BIGINT_MAX_SIZE * JS_LIMB_BITS) {
+        JS_ThrowRangeError(ctx, "BigInt is too large to allocate");
+        return NULL;
+    }
+    n_digits = n_digits1;
     log2_radix = 32 - clz32(radix - 1); /* ceil(log2(radix)) */
     /* compute the maximum number of limbs */
-    /* XXX: overflow */
     if (radix == 10) {
         n_bits = (n_digits * 27 + 7) / 8; /* >= ceil(n_digits * log2(10)) */
     } else {
@@ -11953,11 +12026,10 @@ static JSValue js_bigint_to_string1(JSContext *ctx, JSValueConst val, int radix)
                 bit_pos = i * log2_radix;
                 pos = bit_pos / JS_LIMB_BITS;
                 shift = bit_pos % JS_LIMB_BITS;
-                if (likely((shift + log2_radix) <= JS_LIMB_BITS)) {
-                    c = r->tab[pos] >> shift;
-                } else {
-                    c = (r->tab[pos] >> shift) |
-                        (r->tab[pos + 1] << (JS_LIMB_BITS - shift));
+                c = r->tab[pos] >> shift;
+                if ((shift + log2_radix) > JS_LIMB_BITS &&
+                    (pos + 1) < r->len) {
+                    c |= r->tab[pos + 1] << (JS_LIMB_BITS - shift);
                 }
                 c &= (radix - 1);
                 *--q = digits[c];
@@ -16589,9 +16661,9 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 pc += 2;
                 call_argv = sp - call_argc;
                 ret_val = JS_NewArrayFrom(ctx, call_argc, call_argv);
+                sp -= call_argc;
                 if (unlikely(JS_IsException(ret_val)))
                     goto exception;
-                sp -= call_argc;
                 *sp++ = ret_val;
             }
             BREAK;
@@ -39956,8 +40028,10 @@ done:
             goto exception;
         args[0] = ret;
         res = JS_Invoke(ctx, arr, JS_ATOM_set, 1, args);
-        if (check_exception_free(ctx, res))
+        if (check_exception_free(ctx, res)) {
+            JS_FreeValue(ctx, arr);
             goto exception;
+        }
         JS_FreeValue(ctx, ret);
         ret = arr;
     }
@@ -54957,22 +55031,12 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
     if (special == special_lastIndexOf) {
         k = len - 1;
         if (argc > 1) {
-            if (JS_ToFloat64(ctx, &d, argv[1]))
+            int64_t k1;
+            if (JS_ToInt64Clamp(ctx, &k1, argv[1], -1, len - 1, len))
                 goto exception;
-            if (isnan(d)) {
-                k = 0;
-            } else {
-                if (d >= 0) {
-                    if (d < k) {
-                        k = d;
-                    }
-                } else {
-                    d += len;
-                    if (d < 0)
-                        goto done;
-                    k = d;
-                }
-            }
+            k = k1;
+            if (k < 0)
+                goto done;
         }
         stop = -1;
         inc = -1;
@@ -58059,6 +58123,13 @@ uintptr_t js_std_cmd(int cmd, ...) {
         pv = va_arg(ap, JSValue *);
         *pv = ctx->error_back_trace;
         ctx->error_back_trace = JS_UNDEFINED;
+        break;
+    case 3: // GetStringKind
+        ctx = va_arg(ap, JSContext *);
+        pv = va_arg(ap, JSValue *);
+        rv = -1;
+        if (JS_IsString(*pv))
+            rv = JS_VALUE_GET_STRING(*pv)->kind;
         break;
     default:
         rv = -1;
