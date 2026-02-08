@@ -1263,6 +1263,8 @@ static JSValue js_promise_resolve(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv, int magic);
 static JSValue js_promise_then(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv);
+static BOOL js_string_eq(JSContext *ctx,
+                         const JSString *p1, const JSString *p2);
 static int js_string_compare(JSContext *ctx,
                              const JSString *p1, const JSString *p2);
 static JSValue JS_ToNumber(JSContext *ctx, JSValueConst val);
@@ -3228,9 +3230,9 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)
         JS_FreeValue(ctx, num);
         return str;
     }
-    ret = js_string_compare(ctx, p, JS_VALUE_GET_STRING(str));
+    ret = js_string_eq(ctx, p, JS_VALUE_GET_STRING(str));
     JS_FreeValue(ctx, str);
-    if (ret == 0) {
+    if (ret) {
         return num;
     } else {
         JS_FreeValue(ctx, num);
@@ -4130,6 +4132,16 @@ static int js_string_memcmp(const JSString *p1, int pos1, const JSString *p2,
             res = memcmp16(p1->u.str16 + pos1, p2->u.str16 + pos2, len);
     }
     return res;
+}
+
+static BOOL js_string_eq(JSContext *ctx,
+                         const JSString *p1, const JSString *p2)
+{
+    if (p1->len != p2->len)
+        return FALSE;
+    if (p1 == p2)
+        return TRUE;
+    return js_string_memcmp(p1, 0, p2, 0, p1->len) == 0;
 }
 
 /* return < 0, 0 or > 0 */
@@ -15267,8 +15279,8 @@ static BOOL js_strict_eq2(JSContext *ctx, JSValue op1, JSValue op2,
             if (!tag_is_string(tag2)) {
                 res = FALSE;
             } else if (tag1 == JS_TAG_STRING && tag2 == JS_TAG_STRING) {
-                res = (js_string_compare(ctx, JS_VALUE_GET_STRING(op1),
-                                         JS_VALUE_GET_STRING(op2)) == 0);
+                res = js_string_eq(ctx, JS_VALUE_GET_STRING(op1),
+                                   JS_VALUE_GET_STRING(op2));
             } else {
                 res = (js_string_rope_compare(ctx, op1, op2, TRUE) == 0);
             }
@@ -17122,18 +17134,6 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
         CASE(OP_push_empty_string):
             *sp++ = JS_AtomToString(ctx, JS_ATOM_empty_string);
             BREAK;
-        CASE(OP_get_length):
-            {
-                JSValue val;
-
-                sf->cur_pc = pc;
-                val = JS_GetProperty(ctx, sp[-1], JS_ATOM_length);
-                if (unlikely(JS_IsException(val)))
-                    goto exception;
-                JS_FreeValue(ctx, sp[-1]);
-                sp[-1] = val;
-            }
-            BREAK;
 #endif
         CASE(OP_push_atom_value):
             *sp++ = JS_AtomToValue(ctx, get_u32(pc));
@@ -18307,7 +18307,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             }
             BREAK;
 
-#define GET_FIELD_INLINE(name, keep)                                    \
+#define GET_FIELD_INLINE(name, keep, is_length)                         \
             {                                                           \
                 JSValue val, obj;                                       \
                 JSAtom atom;                                            \
@@ -18315,8 +18315,12 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 JSProperty *pr;                                         \
                 JSShapeProperty *prs;                                   \
                                                                         \
-                atom = get_u32(pc);                                     \
-                pc += 4;                                                \
+                if (is_length) {                                        \
+                    atom = JS_ATOM_length;                              \
+                } else {                                                \
+                    atom = get_u32(pc);                                 \
+                    pc += 4;                                            \
+                }                                                       \
                                                                         \
                 obj = sp[-1];                                           \
                 if (likely(JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT)) {   \
@@ -18360,13 +18364,19 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
 
             
         CASE(OP_get_field):
-            GET_FIELD_INLINE(get_field, 0);
+            GET_FIELD_INLINE(get_field, 0, 0);
             BREAK;
 
         CASE(OP_get_field2):
-            GET_FIELD_INLINE(get_field2, 1);
+            GET_FIELD_INLINE(get_field2, 1, 0);
             BREAK;
 
+#if SHORT_OPCODES
+        CASE(OP_get_length):
+            GET_FIELD_INLINE(get_length, 0, 1);
+            BREAK;
+#endif
+            
         CASE(OP_put_field):
             {
                 int ret;
@@ -22837,7 +22847,7 @@ static void emit_op(JSParseState *s, uint8_t val)
 static void emit_atom(JSParseState *s, JSAtom name)
 {
     DynBuf *bc = &s->cur_func->byte_code;
-    if (dbuf_realloc(bc, bc->size + 4))
+    if (dbuf_claim(bc, 4))
         return; /* not enough memory : don't duplicate the atom */
     put_u32(bc->buf + bc->size, JS_DupAtom(s->ctx, name));
     bc->size += 4;
@@ -27753,7 +27763,7 @@ static __exception int js_parse_for_in_of(JSParseState *s, int label_name,
         int chunk_size = pos_expr - pos_next;
         int offset = bc->size - pos_next;
         int i;
-        dbuf_realloc(bc, bc->size + chunk_size);
+        dbuf_claim(bc, chunk_size);
         dbuf_put(bc, bc->buf + pos_next, chunk_size);
         memset(bc->buf + pos_next, OP_nop, chunk_size);
         /* `next` part ends with a goto */
@@ -28159,7 +28169,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
                 int chunk_size = pos_body - pos_cont;
                 int offset = bc->size - pos_cont;
                 int i;
-                dbuf_realloc(bc, bc->size + chunk_size);
+                dbuf_claim(bc, chunk_size);
                 dbuf_put(bc, bc->buf + pos_cont, chunk_size);
                 memset(bc->buf + pos_cont, OP_nop, chunk_size);
                 /* increment part ends with a goto */
@@ -37099,7 +37109,7 @@ static int JS_WriteObjectAtoms(BCWriterState *s)
     /* XXX: could just append dbuf1 data, but it uses more memory if
        dbuf1 is larger than dbuf */
     atoms_size = s->dbuf.size;
-    if (dbuf_realloc(&dbuf1, dbuf1.size + atoms_size))
+    if (dbuf_claim(&dbuf1, atoms_size))
         goto fail;
     memmove(dbuf1.buf + atoms_size, dbuf1.buf, dbuf1.size);
     memcpy(dbuf1.buf, s->dbuf.buf, atoms_size);
@@ -53238,6 +53248,21 @@ static double set_date_fields(double fields[minimum_length(7)], int is_local) {
     return time_clip(tv);
 }
 
+static double set_date_fields_checked(double fields[minimum_length(7)], int is_local)
+{
+    int i;
+    double a;
+    for(i = 0; i < 7; i++) {
+        a = fields[i];
+        if (!isfinite(a))
+            return NAN;
+        fields[i] = trunc(a);
+        if (i == 0 && fields[0] >= 0 && fields[0] < 100)
+            fields[0] += 1900;
+    }
+    return set_date_fields(fields, is_local);
+}
+
 static JSValue get_date_field(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv, int magic)
 {
@@ -53423,7 +53448,7 @@ static JSValue js_date_constructor(JSContext *ctx, JSValueConst new_target,
     // Date(y, mon, d, h, m, s, ms)
     JSValue rv;
     int i, n;
-    double a, val;
+    double val;
 
     if (JS_IsUndefined(new_target)) {
         /* invoked as function */
@@ -53461,15 +53486,10 @@ static JSValue js_date_constructor(JSContext *ctx, JSValueConst new_target,
         if (n > 7)
             n = 7;
         for(i = 0; i < n; i++) {
-            if (JS_ToFloat64(ctx, &a, argv[i]))
+            if (JS_ToFloat64(ctx, &fields[i], argv[i]))
                 return JS_EXCEPTION;
-            if (!isfinite(a))
-                break;
-            fields[i] = trunc(a);
-            if (i == 0 && fields[0] >= 0 && fields[0] < 100)
-                fields[0] += 1900;
         }
-        val = (i == n) ? set_date_fields(fields, 1) : NAN;
+        val = set_date_fields_checked(fields, 1);
     }
 has_val:
 #if 0
@@ -53499,7 +53519,6 @@ static JSValue js_Date_UTC(JSContext *ctx, JSValueConst this_val,
     // UTC(y, mon, d, h, m, s, ms)
     double fields[] = { 0, 0, 1, 0, 0, 0, 0 };
     int i, n;
-    double a;
 
     n = argc;
     if (n == 0)
@@ -53507,15 +53526,10 @@ static JSValue js_Date_UTC(JSContext *ctx, JSValueConst this_val,
     if (n > 7)
         n = 7;
     for(i = 0; i < n; i++) {
-        if (JS_ToFloat64(ctx, &a, argv[i]))
+        if (JS_ToFloat64(ctx, &fields[i], argv[i]))
             return JS_EXCEPTION;
-        if (!isfinite(a))
-            return JS_NAN;
-        fields[i] = trunc(a);
-        if (i == 0 && fields[0] >= 0 && fields[0] < 100)
-            fields[0] += 1900;
     }
-    return JS_NewFloat64(ctx, set_date_fields(fields, 0));
+    return JS_NewFloat64(ctx, set_date_fields_checked(fields, 0));
 }
 
 /* Date string parsing */
@@ -53837,11 +53851,11 @@ static BOOL js_date_parse_otherstring(const uint8_t *sp,
                     *is_local = FALSE;
                 }
             } else {
-                if (p - p_start > 2) {
+                if (p - p_start > 2 && !has_year) {
                     fields[0] = val;
                     has_year = TRUE;
                 } else
-                if (val < 1 || val > 31) {
+                if ((val < 1 || val > 31) && !has_year) {
                     fields[0] = val + (val < 100) * 1900 + (val < 50) * 100;
                     has_year = TRUE;
                 } else {
