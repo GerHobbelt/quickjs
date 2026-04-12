@@ -103,7 +103,11 @@ zip -9 -r quickjs-$(cat version)-win$(echo ${MSYSTEM:0-2})-all.zip ./bin ./doc .
 
 * A method to get a list of QuickJS Javascript Engine API
 ```
-  objdump -p libquickjs.dll > libquickjs_api_list.txt
+  objdump -p libquickjs.dll | sed -n "/\[Ordinal/,/^$/p" | sed "/^$/d" > libquickjs_api_list.txt
+```
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;or
+```
+  objdump -p libquickjs.dll | awk "/\[Ordinal/" RS= > libquickjs_api_list.txt
 ```
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`QuickJS Javascript Engine API list` located in `[Ordinal/Name Pointer] Table`
 
